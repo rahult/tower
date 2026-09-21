@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.remember/
+.DS_Store
+*.sqlite*
+spikes/.tmp/
