@@ -276,6 +276,8 @@ body {
 .prose table {
 	display: block;
 	overflow-x: auto;
+	/* "anywhere" (inherited from .prose, for long paths) lets a column shrink below a word and split it. */
+	overflow-wrap: break-word;
 	border-collapse: collapse;
 	font-size: 0.93em;
 }
