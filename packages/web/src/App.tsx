@@ -1,97 +1,185 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { type FormEvent, useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api/client.ts";
 import { type Connection, useConnection, useEventStream } from "./api/stream.ts";
+import { type Tone, isLive, needsYou } from "./board/status.ts";
+import { Modal } from "./app/bits.tsx";
+import { Palette, useShortcuts } from "./app/palette.tsx";
+import { announceAttention, enableNotifications, notifyEnabled, setNotifyEnabled, setNotifyOpener } from "./app/notifications.ts";
+import { QuickAdd } from "./app/quickadd.tsx";
+import { useRoute, type View } from "./app/route.ts";
 import { Board } from "./board/Board.tsx";
-import { isLive, needsYou } from "./board/status.ts";
 import { Drawer } from "./card/Drawer.tsx";
+import { Focus } from "./focus/Focus.tsx";
+import { formatTokens } from "./projects/Projects.tsx";
+import { Projects } from "./projects/Projects.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
-import { useTheme } from "./theme.ts";
-import { button, monoField } from "./ui.ts";
+import { Usage } from "./usage/Usage.tsx";
+import { useTheme, type Theme } from "./theme.ts";
+import { button } from "./ui.ts";
+
+const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage"];
 
 export function App() {
 	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
-	const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
 	// Refetched with the board, so today's spend keeps up with finished sessions.
 	const usage = useQuery({ queryKey: ["board", "usage"], queryFn: api.usage });
 	const today = usage.data?.byDay.find((row) => row.key === new Date().toLocaleDateString("en-CA"));
-	const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+	const [route, navigate] = useRoute();
 	const [openRunId, setOpenRunId] = useState<string | null>(null);
-	const [showingModels, setShowingModels] = useState(false);
-	const [theme, cycleTheme] = useTheme();
 	useEventStream(openRunId);
 	const connection = useConnection();
 	const onRunOpen = useCallback((runId: string | null) => setOpenRunId(runId), []);
+	const openCard = useCallback((cardId: string) => navigate({ cardId }), [navigate]);
+
+	const [paletteOpen, setPaletteOpen] = useState(false);
+	const [addingWork, setAddingWork] = useState<null | { projectId?: string }>(null);
+	const [modelsOpen, setModelsOpen] = useState(false);
+	const [theme, cycleTheme, setTheme] = useTheme();
+	const [notify, setNotify] = useState(notifyEnabled);
 
 	const projects = board.data?.projects ?? [];
 	const cards = board.data?.cards ?? [];
-	const running = cards.filter(isLive).length;
 	const waiting = cards.filter(needsYou).length;
-	const shortModel = (name?: string) => name?.split("/").pop() ?? "…";
-	const barButton = "cursor-pointer rounded px-2 py-1 text-[13px] text-bar-ink hover:bg-white/10";
+	const running = cards.filter(isLive).length;
+	const names = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
+	const titles = useMemo(() => new Map(cards.map((card) => [card.id, card.title])), [cards]);
+
+	// A pinned tab should say what the board wants, without being opened.
+	useEffect(() => {
+		document.title = waiting > 0 ? `Tower — ${waiting} need${waiting === 1 ? "s" : ""} you` : "Tower";
+	}, [waiting]);
+
+	// System notifications for cards that turn amber while the tab is hidden.
+	const queryClient = useQueryClient();
+	const seen = useRef(new Map<string, Tone>());
+	useEffect(() => {
+		announceAttention(cards, seen.current, notify);
+	}, [cards, notify]);
+	useEffect(() => {
+		setNotifyOpener(openCard);
+	}, [openCard]);
+
+	const startCard = useCallback(
+		(cardId: string) => {
+			void api.enqueue(cardId).then(() => queryClient.invalidateQueries({ queryKey: ["board"] }));
+		},
+		[queryClient],
+	);
+	const toggleNotify = useCallback(() => {
+		if (notify) {
+			setNotifyEnabled(false);
+			setNotify(false);
+		} else {
+			void enableNotifications().then(setNotify);
+		}
+	}, [notify]);
+	const paletteActions = useMemo(
+		() => ({
+			goToView: (view: View) => navigate({ view, cardId: null }),
+			openCard,
+			startCard,
+			addWork: () => setAddingWork({}),
+			openModels: () => setModelsOpen(true),
+			setTheme: (next: Theme) => setTheme(next),
+			toggleNotify,
+		}),
+		[navigate, openCard, startCard, setTheme, toggleNotify],
+	);
+	useShortcuts(
+		useMemo(
+			() => ({
+				palette: () => setPaletteOpen((open) => !open),
+				view: (index: number) => navigate({ view: VIEW_ORDER[index] ?? "focus", cardId: null }),
+				add: () => setAddingWork({}),
+			}),
+			[navigate],
+		),
+	);
 
 	return (
-		// The status bar takes its height; the workspace gets exactly the rest, so the drawer can never outgrow the window.
 		<div className="flex h-dvh flex-col overflow-hidden">
-			<header className="flex flex-wrap items-center gap-x-5 gap-y-1 bg-bar px-4 py-2 text-bar-ink">
-				<h1 className="display text-[22px] leading-none font-extrabold">Tower</h1>
+			<header className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-bar px-4 py-2 text-bar-ink">
+				<button type="button" onClick={() => navigate({ view: "focus", cardId: null })} className="display cursor-pointer text-[22px] leading-none font-extrabold" title="Tower — everything on one board">
+					Tower
+				</button>
 				<ConnectionBadge connection={board.error ? "reconnecting" : connection} />
-				<p className="flex items-baseline gap-4 text-[13px] text-bar-dim">
-					<span>
-						<b className="font-semibold text-bar-ink">{running}</b> running
-					</span>
-					<span className={waiting > 0 ? "font-semibold text-caution" : ""}>
-						<b className={`font-semibold ${waiting > 0 ? "" : "text-bar-ink"}`}>{waiting}</b> {waiting === 1 ? "needs" : "need"} you
-					</span>
-					<span>
-						<b className="font-semibold text-bar-ink">{cards.length}</b> {cards.length === 1 ? "card" : "cards"}
-					</span>
-				</p>
+
+				<nav aria-label="Views" className="flex items-center gap-0.5 rounded-md bg-white/8 p-0.5">
+					{VIEW_ORDER.map((view, index) => (
+						<button
+							key={view}
+							type="button"
+							onClick={() => navigate({ view, cardId: null })}
+							aria-current={route.view === view ? "page" : undefined}
+							className={`flex cursor-pointer items-center gap-1.5 rounded px-2.5 py-1 text-[13px] font-medium capitalize ${route.view === view ? "bg-white/15 text-bar-ink" : "text-bar-dim hover:text-bar-ink"}`}
+							title={`${view} (⌘${index + 1})`}
+						>
+							{view}
+							{view === "focus" && waiting > 0 && <span className="rounded-full bg-caution px-1.5 font-mono text-[11px] font-bold text-caution-ink">{waiting}</span>}
+						</button>
+					))}
+				</nav>
+
 				<div className="ml-auto flex items-center gap-1">
+					<button type="button" onClick={() => setAddingWork({})} className="mr-1 cursor-pointer rounded-md bg-primary px-2.5 py-1 text-[13px] font-bold text-primary-ink hover:brightness-110" title="Add work (n)">
+						+ Add work
+					</button>
+					<button type="button" onClick={() => setPaletteOpen(true)} className={barButton} title="Command palette (⌘K)">
+						<span className="font-mono text-[12px] text-bar-dim">⌘K</span>
+					</button>
 					{today && (
-						<span className="px-2 text-[13px] text-bar-dim" title="Tokens used by sessions started today. Subscription models report no cost.">
-							Today <b className="font-semibold text-bar-ink">{today.tokens >= 1_000_000 ? `${(today.tokens / 1_000_000).toFixed(1)}M` : `${Math.round(today.tokens / 1000)}k`}</b> tokens							{today.costUsd > 0 && (
-								<>
-									, <b className="font-semibold text-bar-ink">${today.costUsd.toFixed(2)}</b>
-								</>
-							)}
-						</span>
+						<button type="button" onClick={() => navigate({ view: "usage" })} className={barButton} title="Tokens used by sessions started today. Subscription models report no cost.">
+							<span className="text-bar-dim">Today </span>
+							<span className="font-mono text-[12px]">{formatTokens(today.tokens)}</span>
+							{today.costUsd > 0 && <span className="font-mono text-[12px]"> · ${today.costUsd.toFixed(2)}</span>}
+						</button>
 					)}
-					<button type="button" onClick={() => setShowingModels((on) => !on)} aria-expanded={showingModels} className={barButton} title="Which model runs each stage">
-						<span className="text-bar-dim">Plans with </span>
-						<span className="font-mono text-[12px]">{shortModel(settings.data?.models.planning.model)}</span>
-						<span className="text-bar-dim">, builds with </span>
-						<span className="font-mono text-[12px]">{shortModel(settings.data?.models.building.model)}</span>
+					<button type="button" onClick={toggleNotify} aria-pressed={notify} className={barButton} title={notify ? "Notifications are on: a card that needs you pings you while the tab is hidden" : "Turn on browser notifications for cards that need you"}>
+						<span aria-hidden>{notify ? "🔔" : "🔕"}</span>
+						<span className="text-bar-dim">{notify ? "On" : "Off"}</span>
+					</button>
+					<button type="button" onClick={() => setModelsOpen(true)} className={barButton} title="Which model runs each stage">
+						<span className="text-bar-dim">Models</span>
 					</button>
 					<button type="button" onClick={cycleTheme} className={barButton} title="Switch between following your system, light and dark">
-						Theme: {theme === "auto" ? "system" : theme}
+						{theme === "auto" ? "Auto" : theme === "light" ? "Light" : "Dark"}
 					</button>
 				</div>
 			</header>
 
-			<div className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] ${selectedCardId ? "lg:grid-cols-[minmax(0,1fr)_minmax(30rem,44vw)]" : ""}`}>
-				<main className={`min-h-0 overflow-y-auto p-4 ${selectedCardId ? "hidden lg:block" : ""}`}>
+			<div className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] ${route.cardId ? "lg:grid-cols-[minmax(0,1fr)_minmax(30rem,44vw)]" : ""}`}>
+				<main className={`min-h-0 overflow-y-auto p-4 ${route.cardId ? "hidden lg:block" : ""}`}>
 					{board.error && (
-						<p className="mb-3 rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-danger">
+						<p className="mx-auto mb-4 max-w-[64rem] rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-danger">
 							Cannot reach Tower's daemon: {board.error.message}. Start it with <span className="font-mono text-[13px]">/tower</span> in pi.
 						</p>
 					)}
-					{showingModels && <ModelSettings onDone={() => setShowingModels(false)} />}
-					<div className="flex flex-col gap-4">
-						{projects.length > 0 && <Board projects={projects} cards={cards} selectedCardId={selectedCardId} onOpen={setSelectedCardId} />}
-						<NewProject first={projects.length === 0 && !board.isPending} />
-					</div>
+					{board.data && route.view === "focus" && <Focus projects={projects} cards={cards} activeRuns={board.data.activeRuns} onOpen={openCard} onAddWork={(projectId) => setAddingWork({ projectId })} />}
+					{board.data && route.view === "board" && <Board projects={projects} cards={cards} selectedCardId={route.cardId} onOpen={openCard} />}
+					{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onOpen={openCard} onAddWork={(projectId) => setAddingWork({ projectId })} />}
+					{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 				</main>
 
-				{selectedCardId && (
+				{route.cardId && (
 					<div className="min-h-0 border-l border-rule">
-						<Drawer key={selectedCardId} cardId={selectedCardId} onClose={() => setSelectedCardId(null)} onRunOpen={onRunOpen} />
+						<Drawer key={route.cardId} cardId={route.cardId} projects={projects} onClose={() => navigate({ cardId: null })} onRunOpen={onRunOpen} />
 					</div>
 				)}
 			</div>
+
+			{paletteOpen && <Palette cards={cards} projectNames={names} actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
+			{addingWork && <QuickAdd projects={projects} presetProjectId={addingWork.projectId} onClose={() => setAddingWork(null)} onOpenCard={openCard} />}
+			{modelsOpen && (
+				<Modal title="Models" onClose={() => setModelsOpen(false)} wide>
+					<ModelSettings onDone={() => setModelsOpen(false)} />
+				</Modal>
+			)}
 		</div>
 	);
 }
+
+const barButton = "cursor-pointer rounded px-2 py-1 text-[13px] text-bar-ink hover:bg-white/10";
 
 function ConnectionBadge({ connection }: { connection: Connection }) {
 	const live = connection === "live";
@@ -100,29 +188,5 @@ function ConnectionBadge({ connection }: { connection: Connection }) {
 			<span aria-hidden className={`size-2 rounded-full ${live ? "bg-ok" : "pulse bg-caution"}`} />
 			<span className={live ? "text-bar-dim" : "font-semibold text-caution"}>{live ? "Live" : connection === "connecting" ? "Connecting" : "Reconnecting"}</span>
 		</span>
-	);
-}
-
-function NewProject({ first }: { first: boolean }) {
-	const [repoPath, setRepoPath] = useState("");
-	const add = useMutation({ mutationFn: () => api.addProject(repoPath.trim()), onSuccess: () => setRepoPath("") });
-	const submit = (event: FormEvent) => {
-		event.preventDefault();
-		if (repoPath.trim()) add.mutate();
-	};
-	return (
-		<form onSubmit={submit} className="max-w-[44rem] rounded-lg border border-dashed border-rule p-3">
-			<label htmlFor="repo-path" className="mb-1.5 block font-semibold">
-				{first ? "Add your first project" : "Add a project"}
-				<span className="block text-[13px] font-normal text-slate">The path to a git repository on this machine. A brand-new one is fine.</span>
-			</label>
-			<div className="flex gap-2">
-				<input id="repo-path" value={repoPath} onChange={(event) => setRepoPath(event.target.value)} placeholder="/Users/you/code/my-project" className={monoField} />
-				<button type="submit" disabled={!repoPath.trim() || add.isPending} className={`${button.primary} whitespace-nowrap`}>
-					Add project
-				</button>
-			</div>
-			{add.error && <p className="mt-1.5 text-[14px] text-danger">{add.error.message}</p>}
-		</form>
 	);
 }

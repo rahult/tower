@@ -44,6 +44,7 @@ const STAGE_LABEL: Record<Card["stage"], string> = {
 	pull_request: "Pull request",
 	done: "Done",
 };
+export { STAGE_LABEL };
 
 export function describeCard(card: Card): { stage: string; status: string; tone: Tone } {
 	const status = STATUS[card.status];

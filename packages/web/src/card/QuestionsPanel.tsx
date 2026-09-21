@@ -13,8 +13,9 @@ const OWN = "__own__";
 /**
  * What the agent needs decided, as questions you answer with a click. The first option is the agent's suggestion.
  * Sending the answers continues the same session, so nothing it has already worked out is lost.
+ * Lives in the card drawer by default; `className` re-homes it, e.g. inside a Focus row.
  */
-export function QuestionsPanel({ cardId, summary, questions }: { cardId: string; summary: string | null; questions: Question[] }) {
+export function QuestionsPanel({ cardId, summary, questions, className }: { cardId: string; summary: string | null; questions: Question[]; className?: string }) {
 	const [picked, setPicked] = useState<Record<number, string>>({});
 	const [own, setOwn] = useState<Record<number, string>>({});
 	const answerTo = (index: number) => (picked[index] === OWN || questions[index]?.options.length === 0 ? (own[index] ?? "").trim() : (picked[index] ?? ""));
@@ -27,11 +28,11 @@ export function QuestionsPanel({ cardId, summary, questions }: { cardId: string;
 				event.preventDefault();
 				if (complete) send.mutate();
 			}}
-			className="flex max-h-[70%] shrink-0 flex-col border-b border-rule"
+			className={className ?? "flex max-h-[70%] shrink-0 flex-col border-b border-rule"}
 		>
-			<p className="shrink-0 bg-caution-soft px-4 py-2 text-[14px]">
-				The agent stopped to ask{questions.length === 1 ? " a question" : ` ${questions.length} questions`}. {summary}
-			</p>
+			{summary && (
+				<p className="shrink-0 bg-caution-soft px-4 py-2 text-[14px]">The agent stopped to ask{questions.length === 1 ? " a question" : ` ${questions.length} questions`}. {summary}</p>
+			)}
 			<div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
 				<ol className="flex flex-col gap-5">
 					{questions.map((q, index) => (

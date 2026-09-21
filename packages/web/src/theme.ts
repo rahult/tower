@@ -18,17 +18,21 @@ export function applyTheme(theme: Theme = read()): void {
 	else document.documentElement.dataset.theme = theme;
 }
 
-export function useTheme(): [Theme, () => void] {
-	const [theme, setTheme] = useState<Theme>(read);
-	const cycle = () => {
-		const next: Theme = theme === "auto" ? "light" : theme === "light" ? "dark" : "auto";
-		try {
-			localStorage.setItem(KEY, next);
-		} catch {
-			// Private windows can refuse storage; the choice then lasts for this visit.
-		}
+function persist(theme: Theme): void {
+	try {
+		localStorage.setItem(KEY, theme);
+	} catch {
+		// Private windows can refuse storage; the choice then lasts for this visit.
+	}
+}
+
+export function useTheme(): [Theme, () => void, (theme: Theme) => void] {
+	const [theme, setThemeState] = useState<Theme>(read);
+	const setTheme = (next: Theme) => {
+		persist(next);
 		applyTheme(next);
-		setTheme(next);
+		setThemeState(next);
 	};
-	return [theme, cycle];
+	const cycle = () => setTheme(theme === "auto" ? "light" : theme === "light" ? "dark" : "auto");
+	return [theme, cycle, setTheme];
 }

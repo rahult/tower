@@ -58,8 +58,8 @@ body {
 	line-height: 1.6;
 }
 
-/* Layout: one reading column; the board and screenshots break out wider. */
-/* Both share one outer width so text and board start on the same left edge. */
+/* Layout: one reading column; the demo and screenshots break out wider. */
+/* Both share one outer width so text and demo start on the same left edge. */
 .wrap,
 .wide {
 	width: min(100% - 2 * var(--gutter), 84rem);
@@ -145,7 +145,7 @@ pre {
 }
 h1 {
 	margin: 0;
-	max-width: 19ch;
+	max-width: 17ch;
 	font-stretch: 66%;
 	font-weight: 800;
 	font-size: clamp(2.75rem, 7.2vw, 5.5rem);
@@ -203,7 +203,7 @@ h1 {
 	color: var(--dust);
 }
 
-/* The simulated board */
+/* The simulated Focus view */
 .demo {
 	margin-bottom: clamp(3rem, 8vw, 6rem);
 }
@@ -237,166 +237,177 @@ h1 {
 .quiet:hover {
 	border-color: var(--chalk);
 }
-.board-scroll {
-	overflow-x: auto;
+.focus-demo {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+	gap: 2rem;
+	padding: 1.25rem;
+	background: var(--rack);
 	border-radius: 6px;
 }
-.board {
-	display: grid;
-	grid-template-columns: 9.5rem repeat(4, minmax(12.5rem, 1fr));
-	gap: 0.5rem 2px;
-	min-width: 62rem;
+.focus-demo section + section {
+	margin-top: 1.5rem;
 }
-.col-head {
-	padding: 0 0.5rem 0.15rem;
-	font-stretch: 75%;
-	font-weight: 600;
-	font-size: 0.9375rem;
-	color: var(--dust);
+.focus-demo section[aria-label="In flight"] {
+	grid-column: 2;
+	grid-row: 1 / span 2;
 }
-.lane-head {
-	position: sticky;
-	left: 0;
-	z-index: 1;
-	background: var(--rack);
-	border-radius: 6px 0 0 6px;
-	padding: 0.75rem;
+.focus-demo section[aria-label="Finished today"] {
+	grid-column: 1;
 }
-.lane-head strong {
-	display: block;
-	line-height: 1.2;
-}
-.lane-head span {
-	display: block;
-	margin-top: 0.25rem;
-	font-size: 0.75rem;
-	line-height: 1.35;
-	color: var(--dust);
-}
-.cell {
-	background: rgb(38 50 59 / 0.6);
-	padding: 0.4rem;
-	min-height: 6.75rem;
-	display: flex;
-	flex-direction: column;
-	gap: 0.4rem;
-}
-.cell:last-child,
-.cell.last {
-	border-radius: 0 6px 6px 0;
+@media (max-width: 48rem) {
+	.focus-demo {
+		grid-template-columns: 1fr;
+	}
+	.focus-demo section[aria-label="In flight"] {
+		grid-column: 1;
+		grid-row: auto;
+	}
 }
 
-.strip {
-	display: flex;
-	border-radius: 3px;
-	color: var(--ink);
-	background: var(--buff);
-	font-size: 0.9375rem;
-	animation: land 0.35s ease-out;
-}
-.strip.sky {
-	background: var(--sky);
-}
-.strip.signal {
-	background: var(--signal);
-}
-.strip.sage {
-	background: var(--sage);
-}
-.strip .holder {
-	flex: none;
-	width: 6px;
-	border-radius: 3px 0 0 3px;
-	background: rgb(26 29 33 / 0.25);
-}
-.strip.working .holder {
-	background: linear-gradient(180deg, transparent, var(--ink) 50%, transparent);
-	background-size: 100% 200%;
-	animation: sweep 1.6s linear infinite;
-}
-.strip .body {
-	flex: 1;
-	min-width: 0;
-	padding: 0.45rem 0.6rem;
-}
-.strip .title {
-	display: block;
-	font-weight: 600;
-	line-height: 1.25;
-}
-.strip .meta {
+.tray-title {
 	display: flex;
 	align-items: baseline;
 	gap: 0.5rem;
-	margin-top: 0.15rem;
+	margin: 0 0 0.6rem;
 	font-stretch: 75%;
+	font-weight: 700;
+	font-size: 0.9375rem;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--chalk);
+}
+.tray-hint {
+	font-weight: 400;
+	letter-spacing: 0;
+	text-transform: none;
+	color: var(--dust);
+}
+.count {
+	color: var(--dust);
+}
+.dot {
+	display: inline-block;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 50%;
+	align-self: center;
+}
+.signal-dot {
+	background: var(--signal);
+}
+.sky-dot {
+	background: var(--sky);
+}
+.sage-dot {
+	background: var(--sage);
+}
+
+.rows {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.row {
+	padding: 0.7rem 0.85rem;
+	border-radius: 4px;
+	background: var(--well);
+	font-size: 0.9375rem;
+	line-height: 1.45;
+	animation: land 0.35s ease-out;
+}
+.row .chips {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	margin: 0 0 0.15rem;
+	color: var(--dust);
 	font-size: 0.8125rem;
 }
-.strip .meta b {
+.row .chip {
+	padding: 0 0.4rem;
+	border-radius: 2px;
 	font-weight: 600;
+	font-size: 0.75rem;
 }
-.strip .meta i {
-	margin-left: auto;
-	font-family: var(--mono);
-	font-style: normal;
-	font-stretch: normal;
-	font-size: 0.6875rem;
-	opacity: 0.6;
+.row .chip.amber {
+	background: var(--signal);
+	color: var(--ink);
 }
-.strip .note {
-	display: block;
-	margin-top: 0.15rem;
+.row .chip.blue {
+	background: var(--sky);
+	color: var(--ink);
+}
+.row .title {
+	margin: 0;
+	font-weight: 650;
+}
+.row .context {
+	margin: 0.1rem 0 0;
+	color: var(--dust);
+	font-size: 0.875rem;
+}
+.row.attention {
+	background: var(--signal);
+	color: var(--ink);
+}
+.row.attention .chips,
+.row.attention .context {
+	color: rgb(26 29 33 / 0.72);
+}
+.row.attention .chip.amber {
+	background: rgb(26 29 33 / 0.85);
+	color: var(--signal);
+}
+.row.done {
+	background: none;
+	border: 1px solid var(--seam);
+	padding-block: 0.45rem;
+}
+.row.done .title {
+	display: inline;
+	font-weight: 500;
+	font-size: 0.875rem;
+}
+.row.done .context {
+	display: inline;
+	margin-left: 0.5rem;
 	font-size: 0.8125rem;
-	line-height: 1.3;
 }
-.strip .act {
-	margin-top: 0.45rem;
-	padding-top: 0.4rem;
-	border-top: 1px solid rgb(26 29 33 / 0.25);
+.mono {
+	font-family: var(--mono);
+	font-size: 0.75rem;
 }
-.strip button {
+.elapsed {
+	font-family: var(--mono);
+	font-size: 0.75rem;
+}
+
+/* The action buttons on a needs-you row. */
+.act {
 	border: 1px solid rgb(26 29 33 / 0.65);
 	background: var(--ink);
 	color: var(--signal);
 	font: inherit;
 	font-stretch: 75%;
 	font-weight: 700;
-	font-size: 0.875rem;
-	padding: 0.2rem 0.6rem;
+	font-size: 0.8125rem;
+	padding: 0.15rem 0.6rem;
 	border-radius: 3px;
 	cursor: pointer;
 }
-.strip button:hover {
+.act:hover {
 	background: none;
 	color: var(--ink);
 }
 
-@keyframes sweep {
-	from {
-		background-position: 0 100%;
-	}
-	to {
-		background-position: 0 -100%;
-	}
-}
 @keyframes land {
 	from {
 		opacity: 0;
 		transform: translateY(-4px);
-	}
-}
-
-/* On a phone, keep the lane labels narrow so the Planning column (where a card waits) peeks into view. */
-@media (max-width: 40rem) {
-	.board {
-		grid-template-columns: 6.25rem repeat(4, 11.5rem);
-		min-width: 0;
-		width: max-content;
-	}
-	.lane-head {
-		padding: 0.6rem 0.5rem;
-		font-size: 0.875rem;
-		overflow-wrap: anywhere;
 	}
 }
 
@@ -418,16 +429,13 @@ h1 {
 	border-radius: 2px;
 	vertical-align: -0.02em;
 }
-.swatch.buff {
-	background: var(--buff);
-}
-.swatch.sky {
+.swatch.sky-swatch {
 	background: var(--sky);
 }
-.swatch.signal {
+.swatch.signal-swatch {
 	background: var(--signal);
 }
-.swatch.sage {
+.swatch.sage-swatch {
 	background: var(--sage);
 }
 
@@ -625,11 +633,7 @@ pre {
 	html {
 		scroll-behavior: auto;
 	}
-	.strip,
-	.strip.working .holder {
+	.row {
 		animation: none;
-	}
-	.strip.working .holder {
-		background: var(--ink);
 	}
 }

@@ -184,9 +184,24 @@ body {
 		opacity: 0.35;
 	}
 }
+
+/* Columns of figures line up, and dialogs arrive without a jolt. */
+.tnum {
+	font-variant-numeric: tabular-nums;
+}
+.pop {
+	animation: pop 140ms ease-out;
+}
+@keyframes pop {
+	from {
+		opacity: 0;
+		transform: translateY(6px) scale(0.985);
+	}
+}
 @media (prefers-reduced-motion: reduce) {
 	.sweep,
-	.pulse {
+	.pulse,
+	.pop {
 		animation: none;
 	}
 }

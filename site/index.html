@@ -3,11 +3,11 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Tower: one board for every coding agent you run</title>
-		<meta name="description" content="Tower is a control board for pi coding-agent sessions. Queue work across projects, let an expensive model plan and a cheap one build, and let your test suite decide what passes." />
-		<meta property="og:title" content="Tower: one board for every coding agent you run" />
-		<meta property="og:description" content="Queue work across projects, let an expensive model plan and a cheap one build, and let your test suite decide what passes." />
-		<meta property="og:image" content="https://tower.rahultrikha.com/assets/session.png" />
+		<title>Tower: hand off the work, keep the decisions</title>
+		<meta name="description" content="Tower is a control board for pi coding-agent sessions. Queue work across projects, let an expensive model plan and a cheap one build, and deal with only the decisions that are yours — one click each." />
+		<meta property="og:title" content="Tower: hand off the work, keep the decisions" />
+		<meta property="og:description" content="Queue work across projects, let an expensive model plan and a cheap one build, and deal with only the decisions that are yours." />
+		<meta property="og:image" content="https://tower.rahultrikha.com/assets/decision.png" />
 		<meta property="og:url" content="https://tower.rahultrikha.com/" />
 		<meta name="twitter:card" content="summary_large_image" />
 		<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
@@ -20,6 +20,7 @@
 		<header class="masthead wrap">
 			<a class="wordmark" href="/">Tower</a>
 			<nav aria-label="Site">
+				<a href="#focus">Focus</a>
 				<a href="#how">How it works</a>
 				<a href="#install">Install</a>
 				<a href="https://github.com/rahult/tower">GitHub</a>
@@ -28,48 +29,77 @@
 
 		<main id="main">
 			<section class="hero wrap">
-				<h1>One board for every coding agent you run.</h1>
+				<h1>Hand off the work. Keep the decisions.</h1>
 				<p class="lede">
-					Tower runs <a href="https://pi.dev">pi</a> sessions across all your projects from a single board. An expensive model plans, a cheap one builds, your test suite decides
-					what passes, and you step in only where the decision is yours.
+					Tower runs <a href="https://pi.dev">pi</a> coding-agent sessions across all your projects from one board. A strong model plans, a cheap one builds, your test suite judges
+					the result — and Tower brings you exactly the decisions that are yours, each answerable where it appears.
 				</p>
 				<div class="install">
 					<code id="install-command">pi install git:github.com/rahult/tower</code>
 					<button type="button" class="copy" data-copy="install-command">Copy</button>
 				</div>
-				<p class="after-install">Then type <code>/tower</code> in any pi session.</p>
+				<p class="after-install">Then type <code>/tower</code> in any pi session. The board opens at <code>127.0.0.1:4700</code>.</p>
 			</section>
 
-			<section class="demo wide" aria-labelledby="demo-title">
+			<section id="focus" class="demo wide" aria-labelledby="demo-title">
 				<div class="demo-bar">
-					<h2 id="demo-title">This is a simulation of the board. One card is waiting for you.</h2>
+					<h2 id="demo-title">The Focus view: what needs you, what is in flight, nothing else. This simulation answers itself.</h2>
 					<button type="button" id="pause" class="quiet" aria-pressed="false">Pause</button>
 				</div>
-				<div class="board-scroll" tabindex="0" role="region" aria-label="Simulated Tower board">
-					<div id="board" class="board"></div>
+				<div class="focus-demo" role="region" aria-label="Simulated Tower Focus view">
+					<section aria-label="Needs you">
+						<h3 class="tray-title"><span class="dot signal-dot"></span>Needs you <span id="need-count" class="count"></span><span class="tray-hint">these decisions block an agent</span></h3>
+						<ul id="needs" class="rows"></ul>
+					</section>
+					<section aria-label="In flight">
+						<h3 class="tray-title"><span class="dot sky-dot"></span>In flight <span id="flight-count" class="count"></span><span class="tray-hint">agents at work; step in only if you must</span></h3>
+						<ul id="flights" class="rows"></ul>
+					</section>
+					<section aria-label="Finished today">
+						<h3 class="tray-title"><span class="dot sage-dot"></span>Finished today <span id="done-count" class="count"></span></h3>
+						<ul id="dones" class="rows"></ul>
+					</section>
 				</div>
 				<p id="announcer" class="visually-hidden" aria-live="polite"></p>
-				<ul class="legend" aria-label="What strip colours mean">
-					<li><span class="swatch buff"></span>Resting</li>
-					<li><span class="swatch sky"></span>An agent is working</li>
-					<li><span class="swatch signal"></span>Needs you</li>
-					<li><span class="swatch sage"></span>Tests passed</li>
+				<ul class="legend" aria-label="What the colours mean">
+					<li><span class="swatch signal-swatch"></span>Needs you</li>
+					<li><span class="swatch sky-swatch"></span>An agent is working</li>
+					<li><span class="swatch sage-swatch"></span>Finished</li>
 				</ul>
 			</section>
 
+			<section class="wrap prose">
+				<h2>One click, right where the question appears</h2>
+				<p>
+					Every decision Tower needs from you lands in one amber tray at the top of the board. Approve a plan, answer an agent's question, or send work back with a note — the
+					controls are on the row itself, so the ordinary path never requires opening anything.
+				</p>
+			</section>
+
+			<figure class="shot wide">
+				<img src="assets/focus.png" width="1600" height="1000" alt="The Tower Focus view. A Needs you tray holds three amber rows: one asking which ORM a migration should target, with the agent's suggested answer first; one with a plan to approve; one with reviewed work to approve. Below, an In flight tray lists two running cards with their stage, elapsed time and model." loading="lazy" />
+				<figcaption>Focus, the view the board opens on. The decisions are rows with buttons; the running work is a quiet list underneath.</figcaption>
+			</figure>
+
+			<figure class="shot wide">
+				<img src="assets/decision.png" width="1600" height="1000" alt="A card's drawer open over the Focus view. The Decision tab shows the plan the planner wrote, rendered with a table of choices and highlighted code, and two buttons: Approve plan and build, and Send back to planner." loading="lazy" />
+				<figcaption>Open a card and the decision is the first tab. A cheaper model will build from this plan alone, so it has to stand on its own.</figcaption>
+			</figure>
+
 			<section id="how" class="wrap prose">
 				<h2>How a card moves</h2>
+				<p>Tell Tower what you want done. From there the card drives itself through seven stages and stops twice, both times for you.</p>
 				<ol class="route">
 					<li>
-						<h3>An expensive model plans</h3>
+						<h3>A strong model plans</h3>
 						<p>
 							The planner explores your repository and writes <code>plan.md</code>. It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a wrong
 							plan is the costliest mistake a cheap builder can inherit.
 						</p>
 					</li>
 					<li>
-						<h3>You approve the plan, or send it back</h3>
-						<p>The card turns amber and waits. Read the plan on the board. Approve it, or write what should change and the planner starts over with your note.</p>
+						<h3>You approve, in one click</h3>
+						<p>The card turns amber in the Needs you tray. Read the plan; approve it, or send it back with a note. If the planner hit a decision that is yours, it asks first — with suggested answers you can click.</p>
 					</li>
 					<li>
 						<h3>A cheap model builds from the plan alone</h3>
@@ -88,28 +118,37 @@
 					<li>
 						<h3>Reviewers who never saw the work</h3>
 						<p>
-							Review flows run in fresh sessions with no edit access: an adversarial review that tries to break the change and shows how, and a SOLID design review. You can add your own,
-							built from a prompt, any pi skill, or one of your agent roles.
+							Review flows run in fresh sessions with no edit access: an adversarial review that tries to break the change, and a SOLID design review. Their findings wait for you,
+							alongside the diff.
 						</p>
 					</li>
 					<li>
-						<h3>You approve the work, and it becomes a pull request</h3>
+						<h3>You approve the work; it becomes a pull request</h3>
 						<p>
-							The findings and the diff wait for you at the feedback gate. Approve, and Tower opens the pull request with <code>gh</code> and watches it: failing CI goes back to a builder,
-							a merge finishes the card. A repository with no remote just finishes, with the branch ready to merge.
+							Approve from the row, and Tower opens the pull request with <code>gh</code> and watches it: failing CI goes back to a builder, a merge finishes the card and it settles,
+							quietly, into Finished today. A repository with no remote just finishes, with the branch ready to merge.
 						</p>
 					</li>
 				</ol>
 			</section>
 
 			<figure class="shot wide">
-				<img src="assets/session.png" width="1600" height="820" alt="The Tower board with three project lanes. A card's drawer is open showing a live session: the agent's reasoning, a file it read, its reply, a test command that is still running, and a box for steering it." loading="lazy" />
-				<figcaption>Every session streams to the board. Steer it after its current tool calls finish, abort it, or read its diff.</figcaption>
+				<img src="assets/session.png" width="1600" height="1000" alt="A running card's drawer beside the Focus view. The session streams live: the agent's reasoning, the files it read, its reply, a test command still running, and an earlier steering note. The Focus view beside it shows the trays, including a card that finished." loading="lazy" />
+				<figcaption>Every session streams to the board. Steer it mid-run, pick any earlier session from the rail above the transcript, or read the diff under Changes.</figcaption>
+			</figure>
+
+			<figure class="shot wide">
+				<img src="assets/board.png" width="1800" height="1000" alt="The Tower board: a swimlane per project, a column per stage from Backlog to Done. Two amber cards wait in Feedback, one runs in Building, one in Planning, and the Done column is folded to a one-line count." loading="lazy" />
+				<figcaption>Prefer the whole picture? The board keeps the swimlanes: a column per stage, a lane per project, done folded away until you want it.</figcaption>
 			</figure>
 
 			<section class="wrap prose">
 				<h2>What it takes care of</h2>
 				<dl class="facts">
+					<div>
+						<dt>Attention, not alarms</dt>
+						<dd>Everything that needs you gathers in one tray, ordered by what blocks an agent. Answer in place, or open the card for the whole story. Away from the tab? Tower can ping you with a browser notification.</dd>
+					</div>
 					<div>
 						<dt>A worktree per card</dt>
 						<dd>pi has no repository locking, so Tower gives every card its own git worktree and branch. Two cards can build in one project at once, and your checkout is never touched.</dd>
@@ -123,38 +162,23 @@
 						<dd>An agent that hits a decision that is yours stops and asks, with options you answer by clicking. Its session continues with your answers, so nothing it learned is thrown away.</dd>
 					</div>
 					<div>
+						<dt>One keyboard</dt>
+						<dd><code>⌘K</code> opens a command palette: add work, jump to any card, switch views, change the theme. <code>n</code> starts a new card, <code>⌘1–4</code> switch views.</dd>
+					</div>
+					<div>
+						<dt>Where the tokens go</dt>
+						<dd>Every run reports its tokens, and a dollar figure when there is a real one. Usage breaks down by day, project, model and card.</dd>
+					</div>
+					<div>
+						<dt>A queue that survives restarts</dt>
+						<dd>Global and per-project caps decide how much runs at once. The queue is stored; sessions cut off by a restart resume where they stopped.</dd>
+					</div>
+					<div>
 						<dt>Locked-down sessions</dt>
 						<dd>pi has no tool-approval step, so stages start with <code>--no-extensions</code> and without project trust. Both are opt-in per project.</dd>
 					</div>
-					<div>
-						<dt>A queue with caps</dt>
-						<dd>A global limit and a per-project limit decide how much runs at once. The queue is stored, so it survives a restart.</dd>
-					</div>
-					<div>
-						<dt>Resume after a restart</dt>
-						<dd>Sessions cut off by a restart are marked interrupted. Resume reopens the same pi session and the transcript carries on where it stopped.</dd>
-					</div>
-					<div>
-						<dt>Tokens first, dollars second</dt>
-						<dd>Subscription models report a cost of zero, so every run shows its tokens, and a dollar figure only when there is a real one.</dd>
-					</div>
 				</dl>
 			</section>
-
-			<figure class="shot wide">
-				<img src="assets/gate.png" width="1600" height="820" alt="A card waiting for approval. The drawer shows the plan the planner wrote, a box for feedback, and two buttons: Approve plan and build, and Send back to planner." loading="lazy" />
-				<figcaption>The plan gate. A cheaper model will build from this plan alone, so it has to stand on its own.</figcaption>
-			</figure>
-
-			<figure class="shot wide">
-				<img src="assets/feedback.png" width="1600" height="820" alt="A card at the feedback gate. The drawer says one review found something blocking, shows the checks as clear, and the adversarial review's finding with the file, an explanation and the command that reproduced it. Below are buttons to approve and open a pull request, or send the work back to the builder." loading="lazy" />
-				<figcaption>The feedback gate. A reviewer that never saw the builder's session reproduced a double payout; one click sends it back with the findings.</figcaption>
-			</figure>
-
-			<figure class="shot wide">
-				<img src="assets/questions.png" width="1600" height="820" alt="A card waiting for your answer. The drawer lists three questions from the agent, each with clickable options; the first option of each is marked Suggested, and one question takes a typed answer." loading="lazy" />
-				<figcaption>When a decision is yours, the agent asks instead of guessing. Answer with a click, and the same session carries on with what it already worked out.</figcaption>
-			</figure>
 
 			<section id="install" class="wrap prose">
 				<h2>Install</h2>
@@ -184,6 +208,10 @@
 						<tr>
 							<th scope="row"><code>/tower status</code></th>
 							<td>What is running, and what is waiting for you</td>
+						</tr>
+						<tr>
+							<th scope="row"><code>/tower settings</code></th>
+							<td>Show or change which model runs each stage</td>
 						</tr>
 						<tr>
 							<th scope="row"><code>/tower stop</code></th>
@@ -248,6 +276,6 @@ export function pickNext(candidates, state) {
 			<p>Tower is open source on <a href="https://github.com/rahult/tower">GitHub</a>. It runs on your machine and binds only to localhost. Tower makes no network requests of its own; the model calls are pi's.</p>
 		</footer>
 
-		<script src="board.js" defer></script>
+		<script src="focus.js" defer></script>
 	</body>
 </html>

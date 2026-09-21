@@ -1,31 +1,37 @@
 import type { Card, Project } from "@tower/core";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { api } from "../api/client.ts";
-import { button, field, monoField } from "../ui.ts";
+import { describeCard, STAGE_COLUMNS } from "./status.ts";
+import { button, field } from "../ui.ts";
+import { ProjectSettings } from "../projects/ProjectSettings.tsx";
 import { Strip, StripButton } from "./Strip.tsx";
-import { STAGE_COLUMNS } from "./status.ts";
 
 interface LaneProps {
 	project: Project;
 	cards: Card[];
 	selectedCardId: string | null;
 	onOpen: (cardId: string) => void;
+	showDone: boolean;
 	last: boolean;
 }
 
 /** A project's swimlane: its header cell, then one cell per stage holding that stage's strips. Renders grid cells only. */
-export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps) {
+export function Lane({ project, cards, selectedCardId, onOpen, showDone, last }: LaneProps) {
 	const [adding, setAdding] = useState(false);
 	const [configuring, setConfiguring] = useState(false);
 	const open = (card: Card) => onOpen(card.id);
-	const start = useMutation({ mutationFn: api.enqueue, onSuccess: open });
-	const retry = useMutation({ mutationFn: (cardId: string) => api.retry(cardId), onSuccess: open });
-	const resume = useMutation({ mutationFn: api.resume, onSuccess: open });
-	const abort = useMutation({ mutationFn: api.abort });
-	const checkPr = useMutation({ mutationFn: api.checkPr });
+	const queryClient = useQueryClient();
+	const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["board"] });
+	const start = useMutation({ mutationFn: api.enqueue, onSuccess: (card) => (invalidate(), open(card)) });
+	const retry = useMutation({ mutationFn: (cardId: string) => api.retry(cardId), onSuccess: (card) => (invalidate(), open(card)) });
+	const resume = useMutation({ mutationFn: api.resume, onSuccess: (card) => (invalidate(), open(card)) });
+	const abort = useMutation({ mutationFn: api.abort, onSuccess: invalidate });
+	const checkPr = useMutation({ mutationFn: api.checkPr, onSuccess: invalidate });
 	const failure = start.error ?? retry.error ?? resume.error ?? abort.error ?? checkPr.error;
 	const edge = last ? "" : "border-b";
+	const running = cards.filter((card) => card.status === "running" || card.status === "verifying").length;
+	const waiting = cards.filter((card) => describeCard(card).tone === "caution").length;
 
 	const actionFor = (card: Card) => {
 		if (card.status === "running" || card.status === "verifying" || card.status === "queued") {
@@ -88,6 +94,13 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 				<p className="truncate font-mono text-[11px] text-slate" title={`${project.repoPath} on ${project.defaultBranch}`}>
 					{project.defaultBranch}
 				</p>
+				{(running > 0 || waiting > 0) && (
+					<p className="text-[12px] leading-snug">
+						{running > 0 && <span className="font-semibold text-primary">{running} running</span>}
+						{running > 0 && waiting > 0 && <span className="text-slate"> · </span>}
+						{waiting > 0 && <span className="font-semibold text-caution-ink">{waiting} need you</span>}
+					</p>
+				)}
 				<p className="text-[12px] leading-snug text-slate">{project.verifyCommand ? "Your verify command judges builds" : "No verify command, so an agent judges builds"}</p>
 				<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
 					<button type="button" onClick={() => setAdding((on) => !on)} className={button.link}>
@@ -106,6 +119,14 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 				</div>
 			) : (
 				STAGE_COLUMNS.map(({ stage, label }) => {
+					if (stage === "done" && !showDone) {
+						const done = cards.filter((card) => card.stage === "done").length;
+						return (
+							<section key={stage} aria-label={`${project.name}, ${label}`} className={`border-l border-rule bg-wash p-1.5 ${edge}`}>
+								{done > 0 && <p className="p-2 text-[12.5px] text-slate">{done} finished — shown on Focus</p>}
+							</section>
+						);
+					}
 					const inStage = cards.filter((card) => card.stage === stage);
 					return (
 						<section key={stage} aria-label={`${project.name}, ${label}`} className={`@container min-h-24 border-l border-rule bg-wash p-1.5 ${edge}`}>
@@ -120,67 +141,6 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 				})
 			)}
 		</>
-	);
-}
-
-function ProjectSettings({ project, onDone }: { project: Project; onDone: () => void }) {
-	const [setupCommand, setSetupCommand] = useState(project.setupCommand ?? "");
-	const [verifyCommand, setVerifyCommand] = useState(project.verifyCommand ?? "");
-	const [concurrencyLimit, setConcurrencyLimit] = useState(project.concurrencyLimit);
-	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
-	const [reviewFlows, setReviewFlows] = useState<string[] | null>(project.reviewFlows);
-	const chosen = reviewFlows ?? flows.data?.defaults ?? [];
-	const save = useMutation({ mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, concurrencyLimit, reviewFlows }), onSuccess: onDone });
-	return (
-		<form
-			onSubmit={(event: FormEvent) => {
-				event.preventDefault();
-				save.mutate();
-			}}
-			className="flex max-w-[60ch] flex-col gap-4"
-		>
-			<label className="block font-semibold">
-				Verify command
-				<span className="block text-[13px] font-normal text-slate">Runs in the card's worktree after each build. Its exit code decides whether testing passes; failures go back to the builder.</span>
-				<input value={verifyCommand} onChange={(event) => setVerifyCommand(event.target.value)} placeholder="pnpm test && pnpm typecheck" className={`mt-1 ${monoField}`} />
-			</label>
-			<label className="block font-semibold">
-				Setup command
-				<span className="block text-[13px] font-normal text-slate">Runs once when a card's worktree is created. New worktrees have no installed dependencies.</span>
-				<input value={setupCommand} onChange={(event) => setSetupCommand(event.target.value)} placeholder="pnpm install --prefer-offline" className={`mt-1 ${monoField}`} />
-			</label>
-			<fieldset>
-				<legend className="font-semibold">Reviews after the tests pass</legend>
-				<p className="text-[13px] text-slate">Each runs in a fresh session that never saw the builder's work, on your planning model. Their findings wait for you at the feedback gate.</p>
-				<div className="mt-1.5 flex flex-col gap-1">
-					{flows.data?.flows.map((flow) => (
-						<label key={flow.name} className="flex cursor-pointer items-start gap-2 text-[14px]">
-							<input
-								type="checkbox"
-								className="mt-1 size-4 accent-[var(--primary)]"
-								checked={chosen.includes(flow.name)}
-								onChange={(event) => setReviewFlows(event.target.checked ? [...chosen, flow.name] : chosen.filter((name) => name !== flow.name))}
-							/>
-							<span>
-								<span className="font-semibold">{flow.title}</span>
-								<span className="block text-[13px] text-slate">{flow.description}</span>
-							</span>
-						</label>
-					))}
-				</div>
-			</fieldset>
-			<label className="block font-semibold">
-				Cards at once
-				<span className="block text-[13px] font-normal text-slate">How many of this project's cards may run at the same time. Each runs in its own worktree.</span>
-				<input type="number" min={1} max={16} value={concurrencyLimit} onChange={(event) => setConcurrencyLimit(Number(event.target.value))} className={`mt-1 !w-24 ${monoField}`} />
-			</label>
-			<div className="flex items-center gap-3">
-				<button type="submit" disabled={save.isPending} className={button.primary}>
-					Save settings
-				</button>
-				{save.error && <span className="text-[14px] text-danger">{save.error.message}</span>}
-			</div>
-		</form>
 	);
 }
 

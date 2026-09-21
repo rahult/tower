@@ -4,7 +4,10 @@
 
 A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for many projects on one board, let an expensive model plan and a cheap model build, have your test suite judge the result, and step in only where a decision is yours.
 
-- **One board, every project.** A swimlane per project, a column per stage: backlog, planning, building, testing, feedback, pull request, done.
+- **Attention first.** The board opens on **Focus**: everything that needs you in one amber tray — plans to approve, questions to answer, findings to judge — each with its action right on the row, then the work in flight, then the backlog. Empty trays do not render.
+- **One board, every project.** A swimlane per project, a column per stage: backlog, planning, building, testing, feedback, pull request, done. Done folds away until you want it; **Projects** and **Usage** have their own views.
+- **Keyboard included.** `⌘K` opens a command palette (add work, jump to a card, switch views, theme); `n` starts a new card; `⌘1–4` switch views. Cards are deep-linkable (`#card/<id>`).
+- **Nudged when away.** Turn on notifications and a card that starts waiting for you pings the browser while the tab is hidden; the tab title carries the count when it is visible.
 - **Model tiering.** Planning defaults to `anthropic/claude-fable-5-1`; building and testing default to `zai/glm-5.3`. Override per card.
 - **Isolation.** Every card gets its own git worktree and branch; your checkout is never touched. (One exception: a repository with no commits at all gets an empty first commit, made without touching your files or index, because a branch needs a commit to start from.) Every stage is a fresh pi session that sees only the previous stage's artifacts (for example `plan.md`), never its conversation.
 - **Gates.** A finished plan waits for you: approve it, or send it back with what should change.
@@ -13,7 +16,7 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 - **Reviews before you look.** Once tests pass, review flows run in fresh sessions that never saw the builder's work: an adversarial review that tries to break the change, and a SOLID design review. Their findings are waiting at the feedback gate.
 - **Pull requests, watched.** Approve the work and Tower pushes the branch and opens the pull request with `gh`. Failing CI goes to a builder with the failing checks (twice at most), a merge finishes the card and removes its worktree. A repository with no remote simply finishes with the branch ready to merge.
 - **Run anything on a card.** A review flow, any pi skill, one of your `~/.pi/agent/agents` roles, or a plain prompt with the model you choose.
-- **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff.
+- **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff. Every session a card has had stays reachable from the rail above its transcript.
 - **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
 
 Status: all six milestones are built. Everything is covered by tests that run the whole daemon, and the plan, build, test and question flows have been run against real pi sessions. The pull request stage is tested against a fake `gh` and a local remote, and has not yet been run against a real GitHub repository. See the [design](docs/superpowers/specs/2026-09-21-tower-design.md).
@@ -60,7 +63,7 @@ A first card, end to end:
 6. Tower opens the pull request and watches it. When you merge it on GitHub, the card moves to Done.
 7. Open the card any time to watch the session, **steer** it ("use the existing logger"), abort it, or read its diff under **Changes**.
 
-Click a strip to open its card. Colour is state, and means the same everywhere: blue is an agent working, solid amber needs you, green is clear, red is a warning. Plans, replies and files are rendered (Markdown, highlighted code, pretty-printed JSON). The theme follows your system; the status bar has a toggle.
+Click a strip to open its card. Colour is state, and means the same everywhere: blue is an agent working, solid amber needs you, green is clear, red is a warning. Plans, replies and files are rendered (Markdown, highlighted code, pretty-printed JSON). The theme follows your system; the top bar has a toggle.
 
 ### Update and remove
 
