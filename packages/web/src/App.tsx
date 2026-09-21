@@ -2,7 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useCallback, useState } from "react";
 import { api } from "./api/client.ts";
 import { useEventStream } from "./api/stream.ts";
-import { Bay } from "./board/Bay.tsx";
+import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 
 export function App() {
@@ -18,7 +18,7 @@ export function App() {
 	const needYou = cards.filter((card) => ["needs_attention", "awaiting_gate", "awaiting_input", "interrupted"].includes(card.status)).length;
 
 	return (
-		<div className={`grid h-full ${selectedCardId ? "lg:grid-cols-[minmax(0,1fr)_minmax(28rem,46vw)]" : ""}`}>
+		<div className={`grid h-full ${selectedCardId ? "lg:grid-cols-[minmax(0,1fr)_minmax(28rem,42vw)]" : ""}`}>
 			<main className={`min-h-0 overflow-y-auto p-4 ${selectedCardId ? "hidden lg:block" : ""}`}>
 				<header className="mb-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
 					<h1 className="condensed text-[26px] font-bold tracking-tight">Traffic Control</h1>
@@ -32,15 +32,7 @@ export function App() {
 				{board.error && <p className="mb-3 rounded-[3px] bg-rose px-3 py-2 text-ink">Cannot reach the daemon: {board.error.message}</p>}
 
 				<div className="flex flex-col gap-3">
-					{projects.map((project) => (
-						<Bay
-							key={project.id}
-							project={project}
-							cards={cards.filter((card) => card.projectId === project.id)}
-							selectedCardId={selectedCardId}
-							onOpen={setSelectedCardId}
-						/>
-					))}
+					{projects.length > 0 && <Board projects={projects} cards={cards} selectedCardId={selectedCardId} onOpen={setSelectedCardId} />}
 					<NewProject first={projects.length === 0 && !board.isPending} />
 				</div>
 			</main>
@@ -62,7 +54,7 @@ function NewProject({ first }: { first: boolean }) {
 		if (repoPath.trim()) add.mutate();
 	};
 	return (
-		<form onSubmit={submit} className="rounded-md border border-dashed border-seam p-3">
+		<form onSubmit={submit} className="max-w-[44rem] rounded-md border border-dashed border-seam p-3">
 			<label htmlFor="repo-path" className="mb-1 block text-[14px]">
 				{first ? "Add your first project: the path to a git repository on this machine." : "Add a project"}
 			</label>

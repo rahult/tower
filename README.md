@@ -6,7 +6,9 @@ Design and roadmap: [`docs/superpowers/specs/2026-09-21-traffic-control-design.m
 
 ## Status
 
-Milestone 3 of 6. A card goes from the backlog through **planning** (expensive model), waits at a **plan approval gate**, is **built** by a cheap model in a fresh session that sees only the plan, and is then **tested**: the project's verify command runs in the card's worktree and its exit code decides. Failures go back to a fresh builder with the output, up to a cap, then the card asks for you. Every session streams live, can be steered and aborted, and leaves its diff on the card. The swimlane board and scheduler, review flows and pull requests come in milestones 4 to 6.
+Milestone 4 of 6. The board has one **swimlane per project** and one column per stage. A card goes from the backlog through **planning** (expensive model), waits at a **plan approval gate**, is **built** by a cheap model in a fresh session that sees only the plan, and is then **tested**: the project's verify command runs in the card's worktree and its exit code decides; failures go back to a fresh builder with the output, up to a cap. A **scheduler** starts queued work under a global cap and a per-project cap, the queue survives restarts, and sessions interrupted by a restart can be **resumed** in the same pi session. Every session streams live and can be steered and aborted.
+
+Still to come: the feedback gate with review flows (adversarial, SOLID), pull requests with CI watching (milestone 5), and model routing on retry, cost roll-ups, ad hoc skills and extension questions (milestone 6). Backlog drag-and-drop ordering was deferred: nothing reads the order yet.
 
 ## Run it
 
@@ -25,6 +27,7 @@ For development, `pnpm dev` runs the daemon with `--watch` and Vite on http://12
 | `TC_HOME` | `~/.traffic-control` | Database, card folders (`cards/<id>/`), worktrees |
 | `TC_PORT` | `4700` | Daemon port (always bound to 127.0.0.1) |
 | `TC_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
+| `TC_MAX_CONCURRENT` | `3` | Sessions and verify commands running at once, across all projects |
 
 Per project (Settings on its bay): a **verify command** (for example `pnpm test && pnpm typecheck`) and a **setup command** that runs once in each new worktree (for example `pnpm install --prefer-offline`). Without a verify command, a tester agent judges the build instead.
 
@@ -43,6 +46,14 @@ Stage defaults live in `packages/core/src/stage-spec.ts` (expensive model plans,
 - `packages/web` — React UI.
 - `prompts/` — stage prompt templates.
 - `spikes/` — throwaway M0 spike that verified the pi integration and recorded the test fixture.
+
+## See the UI without spending tokens
+
+```sh
+pnpm build && node packages/daemon/test/demo.ts   # http://127.0.0.1:4720
+```
+
+Boots the real daemon on a scripted fake driver and seeds three projects with cards in every state.
 
 ## Test
 

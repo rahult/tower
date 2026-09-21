@@ -40,3 +40,5 @@ export function describeCard(card: Card): { stage: string; status: string; tint:
 }
 
 export const isLive = (card: Card) => card.status === "running" || card.status === "verifying";
+
+export const STAGE_COLUMNS: Array<{ stage: Card["stage"]; label: string }> = (Object.keys(STAGE_LABEL) as Card["stage"][]).map((stage) => ({ stage, label: STAGE_LABEL[stage] }));
