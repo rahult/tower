@@ -5,6 +5,9 @@
  *   /tower add <title>     add a card for this repository to the backlog
  *   /tower run <title>     add a card and start it (planning begins when a slot is free)
  *   /tower status          what is running and what is waiting for you
+ *   /tower settings        show which model runs each stage
+ *   /tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low
+ *                          set them (":thinking" is optional; "stage=default" clears one)
  *   /tower stop            stop the daemon (running sessions become resumable)
  *
  * The daemon is a separate long-running process, so it keeps working after this pi session ends. It inherits
@@ -23,7 +26,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOME = process.env.TOWER_HOME ?? join(homedir(), ".tower");
 const PORT = process.env.TOWER_PORT ?? "4700";
 const BASE = `http://127.0.0.1:${PORT}`;
-const SUBCOMMANDS = ["open", "add", "run", "status", "stop"];
+const SUBCOMMANDS = ["open", "add", "run", "status", "settings", "stop"];
 
 interface Card {
 	id: string;
@@ -126,6 +129,35 @@ async function status(ctx: ExtensionContext): Promise<void> {
 	);
 }
 
+interface Settings {
+	models: Record<string, { model: string; thinking: string; source: "config" | "default" }>;
+	file: string;
+}
+
+/** `/tower settings` shows the models; `/tower settings planning=provider/model[:thinking] …` changes them. */
+async function settings(args: string[], ctx: ExtensionContext): Promise<void> {
+	await ensureRunning(ctx);
+	let current = await api<Settings>("GET", "/api/settings");
+	if (args.length > 0) {
+		// Start from what is configured now, so setting one stage leaves the others alone.
+		const models: Record<string, { model: string; thinking?: string } | null> = {};
+		for (const [stage, value] of Object.entries(current.models)) if (value.source === "config") models[stage] = { model: value.model, thinking: value.thinking };
+		for (const arg of args) {
+			const [stage, value] = arg.split("=", 2);
+			if (!stage || !value) throw new Error(`"${arg}" is not stage=provider/model. Example: /tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low`);
+			if (value === "default") {
+				models[stage] = null;
+				continue;
+			}
+			const colon = value.lastIndexOf(":");
+			models[stage] = colon > value.indexOf("/") ? { model: value.slice(0, colon), thinking: value.slice(colon + 1) } : { model: value, ...(models[stage]?.thinking ? { thinking: models[stage]?.thinking } : {}) };
+		}
+		current = await api<Settings>("PUT", "/api/settings", { models });
+	}
+	const lines = Object.entries(current.models).map(([stage, value]) => `  ${stage.padEnd(9)} ${value.model}, thinking ${value.thinking}${value.source === "default" ? " (Tower's default)" : ""}`);
+	ctx.ui.notify([`Tower models${args.length > 0 ? " saved" : ""} (${current.file}):`, ...lines, "Change with: /tower settings planning=provider/model[:thinking] building=…"].join("\n"), "info");
+}
+
 async function stop(ctx: ExtensionContext): Promise<void> {
 	const pidFile = join(HOME, "daemon.pid");
 	if (!(await isUp()) || !existsSync(pidFile)) return ctx.ui.notify("Tower is not running.", "info");
@@ -135,7 +167,7 @@ async function stop(ctx: ExtensionContext): Promise<void> {
 
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("tower", {
-		description: "Tower control board: /tower [open | add <title> | run <title> | status | stop]",
+		description: "Tower control board: /tower [open | add <title> | run <title> | status | settings | stop]",
 		getArgumentCompletions: (prefix: string) => {
 			if (prefix.includes(" ")) return null;
 			const matches = SUBCOMMANDS.filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name }));
@@ -150,6 +182,7 @@ export default function (pi: ExtensionAPI) {
 					ctx.ui.notify(`Tower is running: ${BASE}`, "info");
 				} else if (subcommand === "add" || subcommand === "run") await addCard(rest.join(" "), ctx, subcommand === "run");
 				else if (subcommand === "status") await status(ctx);
+				else if (subcommand === "settings") await settings(rest, ctx);
 				else if (subcommand === "stop") await stop(ctx);
 				else ctx.ui.notify(`Unknown: /tower ${subcommand}. Try: ${SUBCOMMANDS.join(", ")}`, "warning");
 			} catch (error) {

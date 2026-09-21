@@ -15,6 +15,7 @@ import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import type { RunManager } from "../run/run-manager.ts";
+import { describeModels, knownModels, parseModels, SettingsError, settingsFile, writeModels } from "../settings.ts";
 import type { StageRunner } from "../stage-runner.ts";
 import { serveWeb } from "./static.ts";
 
@@ -49,6 +50,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.onError((error, c) => {
 		if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
+		if (error instanceof SettingsError) return c.json({ error: error.message }, 400);
 		if (error instanceof InvalidTransition || error instanceof ConflictError) return c.json({ error: error.message }, 409);
 		console.error(error);
 		return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
@@ -63,6 +65,21 @@ export function createApp(deps: AppDeps): Hono {
 	app.get("/api/health", (c) => c.json({ ok: true }));
 
 	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db) }));
+
+	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels() });
+
+	app.get("/api/settings", (c) => c.json(settingsView()));
+
+	app.put("/api/settings", async (c) => {
+		const body = (await c.req.json()) as { models?: unknown };
+		if (body.models === undefined) throw new SettingsError('Send the "models" to use, keyed by stage: planning, building, testing');
+		const models = parseModels(body.models);
+		writeModels(config.home, models);
+		// Sessions read this when they start, so the next stage to run uses the new models.
+		config.globalStageConfig = models;
+		bus.publish({ topic: "board", type: "settings_changed", data: settingsView().models });
+		return c.json(settingsView());
+	});
 
 	app.post("/api/projects", async (c) => {
 		const body = (await c.req.json()) as Record<string, unknown>;

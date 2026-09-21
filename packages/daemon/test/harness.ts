@@ -31,10 +31,11 @@ export async function bootHarness(script: FakeScript, env: Record<string, string
 	git("add", ".");
 	git("-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "init");
 
-	const config = loadConfig({ TOWER_HOME: home, TOWER_PORT: "0", ...env });
+	// Read afresh on every boot, as a real restart does, so tests of persisted settings mean something.
+	const config = () => loadConfig({ TOWER_HOME: home, TOWER_PORT: "0", ...env });
 	const readers: SseReader[] = [];
 	const harness = { driver: new FakeSessionDriver(script), daemon: undefined as unknown as Daemon };
-	harness.daemon = await startDaemon(config, harness.driver);
+	harness.daemon = await startDaemon(config(), harness.driver);
 
 	return {
 		get daemon() {
@@ -49,7 +50,7 @@ export async function bootHarness(script: FakeScript, env: Record<string, string
 			for (const reader of readers.splice(0)) reader.close();
 			await harness.daemon.close();
 			harness.driver = new FakeSessionDriver(nextScript);
-			harness.daemon = await startDaemon(config, harness.driver);
+			harness.daemon = await startDaemon(config(), harness.driver);
 		},
 		async api(method, path, body) {
 			const response = await fetch(`${harness.daemon.url}${path}`, {

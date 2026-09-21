@@ -4,11 +4,13 @@ import { api } from "./api/client.ts";
 import { useEventStream } from "./api/stream.ts";
 import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
+import { ModelSettings } from "./settings/ModelSettings.tsx";
 
 export function App() {
 	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
 	const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 	const [openRunId, setOpenRunId] = useState<string | null>(null);
+	const [showingModels, setShowingModels] = useState(false);
 	useEventStream(openRunId);
 	const onRunOpen = useCallback((runId: string | null) => setOpenRunId(runId), []);
 
@@ -27,7 +29,17 @@ export function App() {
 							{inFlight} running, <span className={needYou > 0 ? "font-semibold text-signal" : ""}>{needYou} need you</span>, {cards.length} cards
 						</p>
 					)}
+					<button
+						type="button"
+						onClick={() => setShowingModels((on) => !on)}
+						aria-expanded={showingModels}
+						className="ml-auto cursor-pointer text-[14px] text-chalk underline decoration-seam underline-offset-4 hover:decoration-chalk"
+					>
+						{showingModels ? "Close models" : "Models"}
+					</button>
 				</header>
+
+				{showingModels && <ModelSettings onDone={() => setShowingModels(false)} />}
 
 				{board.error && <p className="mb-3 rounded-[3px] bg-rose px-3 py-2 text-ink">Cannot reach the daemon: {board.error.message}</p>}
 

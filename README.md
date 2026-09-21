@@ -42,6 +42,8 @@ The first run builds the board UI (a few seconds), starts the daemon in the back
 | `/tower add <title>` | Add a card for the current repository to its backlog. The repository becomes a project the first time |
 | `/tower run <title>` | Add a card and start it: planning begins when a slot is free |
 | `/tower status` | What is running, and what is waiting for you |
+| `/tower settings` | Show which model runs each stage |
+| `/tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low` | Set them. `:thinking` is optional; `stage=default` clears one |
 | `/tower stop` | Stop the daemon. Sessions that were running can be resumed from the board next time |
 
 A first card, end to end:
@@ -83,6 +85,23 @@ Environment variables, read when the daemon starts:
 | `TOWER_MAX_CONCURRENT` | `3` | Sessions and verify commands running at once, across all projects |
 | `TOWER_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
 
+### Models
+
+Which model runs each stage is stored in `~/.tower/config.json`. Change it from the board (**Models**, top right), with `/tower settings` in pi, or by editing the file and restarting Tower:
+
+```json
+{
+  "models": {
+    "planning": { "model": "zai/glm-5.3", "thinking": "high" },
+    "building": { "model": "zai/glm-5.3-flash", "thinking": "low" }
+  }
+}
+```
+
+Names are pi's `provider/model-id` selectors (`pi --list-models`). A stage you leave out uses Tower's default (planning `anthropic/claude-fable-5-1`, building and testing `zai/glm-5.3`). Changes apply to the next session that starts. Precedence is card, then project, then `config.json`, then the default.
+
+If a provider rejects a request (no credit, a bad key, an unknown model), the card stops and shows the provider's own message.
+
 Per project, under **Settings** on its lane: the verify command, the setup command, and how many of its cards may run at once (default 1).
 
 Per card, models can be overridden when creating it through the API:
@@ -94,7 +113,7 @@ curl -X POST http://127.0.0.1:4700/api/cards -H 'content-type: application/json'
 }'
 ```
 
-Model names are pi's `provider/model-id` selectors (`pi --list-models`). Stage defaults are in `packages/core/src/stage-spec.ts`.
+Stage defaults are in `packages/core/src/stage-spec.ts`.
 
 ### How sessions are run
 

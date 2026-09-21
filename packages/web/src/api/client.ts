@@ -26,6 +26,18 @@ export interface CardDetail {
 	artifacts: Artifact[];
 }
 
+export interface StageModel {
+	model: string;
+	thinking: string;
+	source: "config" | "default";
+}
+
+export interface Settings {
+	models: Record<"planning" | "building" | "testing", StageModel>;
+	file: string;
+	knownModels: string[];
+}
+
 export interface CardDiff {
 	diff: string;
 	untracked: string[];
@@ -47,6 +59,8 @@ export const api = {
 	board: () => request<Board>("GET", "/api/board"),
 	card: (id: string) => request<CardDetail>("GET", `/api/cards/${id}`),
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
+	settings: () => request<Settings>("GET", "/api/settings"),
+	saveSettings: (models: Record<string, { model: string; thinking: string } | null>) => request<Settings>("PUT", "/api/settings", { models }),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; concurrencyLimit: number }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
