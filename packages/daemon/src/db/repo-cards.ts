@@ -1,0 +1,78 @@
+import type { Card } from "@traffic-control/core";
+import type { Db } from "./open.ts";
+
+type Row = Record<string, string | number | null>;
+
+function toCard(row: Row): Card {
+	return {
+		id: row.id as string,
+		projectId: row.project_id as string,
+		title: row.title as string,
+		brief: row.brief as string,
+		stage: row.stage as Card["stage"],
+		status: row.status as Card["status"],
+		priority: row.priority as number,
+		position: row.position as number,
+		branchName: row.branch_name as string | null,
+		worktreePath: row.worktree_path as string | null,
+		baseCommit: row.base_commit as string | null,
+		attempt: row.attempt as number,
+		stageConfig: JSON.parse(row.stage_config_json as string),
+		prUrl: row.pr_url as string | null,
+		prState: row.pr_state as string | null,
+		needsAttentionReason: row.needs_attention_reason as string | null,
+		createdAt: row.created_at as number,
+		updatedAt: row.updated_at as number,
+	};
+}
+
+export function insertCard(db: Db, card: Card): void {
+	db.prepare(
+		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	).run(
+		card.id,
+		card.projectId,
+		card.title,
+		card.brief,
+		card.stage,
+		card.status,
+		card.priority,
+		card.position,
+		card.attempt,
+		JSON.stringify(card.stageConfig),
+		card.createdAt,
+		card.updatedAt,
+	);
+}
+
+const COLUMNS = {
+	stage: "stage",
+	status: "status",
+	attempt: "attempt",
+	branchName: "branch_name",
+	worktreePath: "worktree_path",
+	baseCommit: "base_commit",
+	needsAttentionReason: "needs_attention_reason",
+} as const;
+
+export type CardPatch = Partial<Pick<Card, keyof typeof COLUMNS>>;
+
+export function updateCard(db: Db, id: string, patch: CardPatch): Card {
+	const keys = Object.keys(patch) as Array<keyof typeof COLUMNS>;
+	const sets = [...keys.map((key) => `${COLUMNS[key]} = ?`), "updated_at = ?"];
+	const values = [...keys.map((key) => patch[key] ?? null), Date.now(), id];
+	db.prepare(`UPDATE cards SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+	const card = getCard(db, id);
+	if (!card) throw new Error(`Card not found: ${id}`);
+	return card;
+}
+
+export function listCards(db: Db): Card[] {
+	return (db.prepare("SELECT * FROM cards ORDER BY position, created_at").all() as Row[]).map(toCard);
+}
+
+export function getCard(db: Db, id: string): Card | null {
+	const row = db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as Row | undefined;
+	return row ? toCard(row) : null;
+}
