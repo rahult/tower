@@ -48,6 +48,7 @@ export const api = {
 	card: (id: string) => request<CardDetail>("GET", `/api/cards/${id}`),
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
+	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),

@@ -1,4 +1,5 @@
 import type { GateKind } from "./policy/gates.ts";
+import type { FailureDecision } from "./policy/retry.ts";
 import type { AgentStage, CardStatus, ResultStatus, Stage } from "./types.ts";
 
 /** The slice of a card the lifecycle rules depend on. */
@@ -11,13 +12,26 @@ export interface CardState {
 export type CardEvent =
 	| { type: "enqueue" }
 	| { type: "run_started" }
-	| { type: "run_settled"; result: ResultStatus; summary: string; requiredGates: GateKind[] }
+	| { type: "run_settled"; result: ResultStatus; summary: string; context: SettleContext }
+	| { type: "verify_finished"; passed: boolean; onFailure: FailureDecision }
 	| { type: "run_failed"; error: string }
 	| { type: "run_aborted" }
 	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string }
-	| { type: "retry"; feedback?: string };
+	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean };
 
-export type Effect = { type: "start_run"; stage: AgentStage; feedback?: string } | { type: "open_gate"; kind: GateKind };
+/** Facts the orchestrator gathers (with IO) so the transition itself can stay pure. */
+export interface SettleContext {
+	requiredGates: GateKind[];
+	/** The project has a verify command, so the daemon (not an agent) decides whether testing passes. */
+	hasVerifyCommand: boolean;
+	/** What the retry policy says to do if this settle is a testing failure. */
+	onFailure: FailureDecision;
+}
+
+export type Effect =
+	| { type: "start_run"; stage: AgentStage; feedback?: string }
+	| { type: "run_verify" }
+	| { type: "open_gate"; kind: GateKind };
 
 export interface Transition {
 	next: CardState;
@@ -34,6 +48,9 @@ const AGENT_STAGES = new Set<Stage>(["planning", "building", "testing"]);
 const isAgentStage = (stage: Stage): stage is AgentStage => AGENT_STAGES.has(stage);
 
 const rest = (stage: Stage, status: CardStatus, needsAttentionReason: string | null = null): CardState => ({ stage, status, needsAttentionReason });
+const afterTestFailure = (decision: FailureDecision): Transition =>
+	decision.action === "retry" ? queue("building", decision.feedback) : { next: rest("testing", "needs_attention", decision.reason), effects: [] };
+
 const queue = (stage: AgentStage, feedback?: string): Transition => ({
 	next: rest(stage, "queued"),
 	effects: [{ type: "start_run", stage, ...(feedback ? { feedback } : {}) }],
@@ -56,26 +73,35 @@ export function transition(card: CardState, event: CardEvent): Transition {
 
 		case "run_settled": {
 			if (status !== "running") break;
+			// A tester that reports failure is the loop's signal, not a dead end: the retry policy decides.
+			if (stage === "testing" && event.result === "fail") return afterTestFailure(event.context.onFailure);
 			if (event.result !== "pass") {
 				const reason = event.result === "missing" ? event.summary : `${event.result}: ${event.summary}`;
 				return { next: rest(stage, "needs_attention", reason), effects: [] };
 			}
 			if (stage === "planning") {
-				return event.requiredGates.includes("plan_approval")
+				return event.context.requiredGates.includes("plan_approval")
 					? { next: rest("planning", "awaiting_gate"), effects: [{ type: "open_gate", kind: "plan_approval" }] }
 					: queue("building");
 			}
-			// M3 sends a finished build on to testing. Until then it rests here.
-			if (stage === "building") return { next: rest("building", "idle"), effects: [] };
+			if (stage === "building") {
+				return event.context.hasVerifyCommand ? { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] } : queue("testing");
+			}
+			// M5 sends tested work on to feedback. Until then it rests here.
+			if (stage === "testing") return { next: rest("testing", "idle"), effects: [] };
 			break;
 		}
 
+		case "verify_finished":
+			if (stage !== "testing" || status !== "verifying") break;
+			return event.passed ? { next: rest("testing", "idle"), effects: [] } : afterTestFailure(event.onFailure);
+
 		case "run_failed":
-			if (status === "running" || status === "queued") return { next: rest(stage, "needs_attention", event.error), effects: [] };
+			if (status === "running" || status === "queued" || status === "verifying") return { next: rest(stage, "needs_attention", event.error), effects: [] };
 			break;
 
 		case "run_aborted":
-			if (status === "running" || status === "queued") return { next: rest(stage, "idle"), effects: [] };
+			if (status === "running" || status === "queued" || status === "verifying") return { next: rest(stage, "idle"), effects: [] };
 			break;
 
 		case "gate_decided":
@@ -86,7 +112,9 @@ export function transition(card: CardState, event: CardEvent): Transition {
 
 		case "retry":
 			// Re-run the stage the card is stuck or resting in, optionally with guidance.
-			if (isAgentStage(stage) && (status === "needs_attention" || status === "idle")) return queue(stage, event.feedback);
+			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle")) break;
+			if (stage === "testing" && event.hasVerifyCommand) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
+			return queue(stage, event.feedback);
 			break;
 	}
 	throw new InvalidTransition(card, event);

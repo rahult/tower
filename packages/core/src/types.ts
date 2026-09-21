@@ -18,7 +18,7 @@ export type CardStatus =
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-export type RunKind = "stage" | "flow_step" | "adhoc";
+export type RunKind = "stage" | "verify" | "flow_step" | "adhoc";
 export type RunStatus = "starting" | "running" | "settled" | "interrupted" | "failed" | "aborted";
 export type ResultStatus = "pass" | "fail" | "blocked" | "missing";
 

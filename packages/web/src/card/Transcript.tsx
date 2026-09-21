@@ -72,6 +72,13 @@ function BlockView({ block }: { block: Block }) {
 					{block.output !== null && <pre className="max-h-72 overflow-auto border-t border-seam px-3 py-2 whitespace-pre-wrap text-dust">{block.output || "(no output)"}</pre>}
 				</details>
 			);
+		case "verify":
+			return (
+				<div className="rounded-[3px] bg-well font-mono text-[13px]">
+					<p className="border-b border-seam px-3 py-1.5">$ {block.command}</p>
+					<pre className="max-h-[32rem] overflow-auto px-3 py-2 whitespace-pre-wrap text-dust">{block.output || "(no output yet)"}</pre>
+				</div>
+			);
 		case "note":
 			return <p className="text-[13px] text-dust">{block.text}</p>;
 	}

@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
 import { getCard, insertCard, listCards } from "../db/repo-cards.ts";
-import { getProject, insertProject, listProjects } from "../db/repo-projects.ts";
+import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
 import { listGatesForCard } from "../db/repo-gates.ts";
 import { listActiveRuns, listRunsForCard } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
@@ -87,6 +87,21 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(project, 201);
 	});
 
+	app.patch("/api/projects/:id", async (c) => {
+		const id = c.req.param("id");
+		if (!getProject(db, id)) throw new HttpError(404, `Project not found: ${id}`);
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const settings: ProjectSettings = {};
+		if (typeof body.name === "string" && body.name.trim()) settings.name = body.name.trim();
+		// An empty string clears a command.
+		for (const key of ["setupCommand", "verifyCommand"] as const) {
+			if (typeof body[key] === "string") settings[key] = (body[key] as string).trim() || null;
+		}
+		const project = updateProject(db, id, settings);
+		bus.publish({ topic: "board", type: "project_upserted", data: project });
+		return c.json(project);
+	});
+
 	app.post("/api/cards", async (c) => {
 		const body = (await c.req.json()) as Record<string, unknown>;
 		const projectId = requireString(body, "projectId");
@@ -128,7 +143,7 @@ export function createApp(deps: AppDeps): Hono {
 		const card = cardOr404(c.req.param("id"));
 		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 		const feedback = typeof body.feedback === "string" && body.feedback.trim() ? body.feedback.trim() : undefined;
-		return c.json(orchestrator.dispatch(card.id, { type: "retry", ...(feedback ? { feedback } : {}) }), 202);
+		return c.json(orchestrator.retry(card.id, feedback), 202);
 	});
 
 	app.post("/api/cards/:id/gates/:gateId", async (c) => {
@@ -150,15 +165,15 @@ export function createApp(deps: AppDeps): Hono {
 	app.post("/api/cards/:id/steer", async (c) => {
 		const card = cardOr404(c.req.param("id"));
 		const text = requireString((await c.req.json()) as Record<string, unknown>, "text");
-		if (!runs.liveRunForCard(card.id)) throw new HttpError(409, "This card has no running session to steer");
+		if (!runs.liveRunForCard(card.id)?.handle) throw new HttpError(409, "This card has no running session to steer");
 		await stages.steer(card.id, text);
 		return c.json({ ok: true });
 	});
 
 	app.post("/api/cards/:id/abort", async (c) => {
 		const card = cardOr404(c.req.param("id"));
-		if (!runs.liveRunForCard(card.id)) throw new HttpError(409, "This card has no running session to abort");
-		await stages.abort(card.id);
+		if (!runs.liveRunForCard(card.id)) throw new HttpError(409, "Nothing is running for this card");
+		await orchestrator.abort(card.id);
 		return c.json({ ok: true });
 	});
 

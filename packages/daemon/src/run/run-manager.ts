@@ -8,7 +8,8 @@ import { TranscriptBuffer, type TranscriptItem } from "./transcript-buffer.ts";
 export interface LiveRun {
 	runId: string;
 	cardId: string;
-	handle: RunHandle;
+	/** Null for daemon-run work such as the verify command, which has a transcript but no agent session. */
+	handle: RunHandle | null;
 	buffer: TranscriptBuffer;
 	/** Stops recording driver events into the transcript. */
 	detach: () => void;
@@ -38,13 +39,7 @@ export class RunManager {
 		this.byCard.set(cardId, runId);
 		try {
 			const handle = await this.driver.start(spec);
-			const buffer = new TranscriptBuffer({
-				onItem: (item, durable) => {
-					if (durable) insertRunEvent(this.db, cardId, runId, item);
-					this.bus.publish({ topic: `run:${runId}`, type: item.type, data: item, seq: item.seq });
-				},
-			});
-			const live: LiveRun = { runId, cardId, handle, buffer, detach: () => {} };
+			const live: LiveRun = { runId, cardId, handle, buffer: this.createBuffer(cardId, runId), detach: () => {} };
 			live.detach = handle.onEvent((event) => this.record(live, event));
 			this.byRun.set(runId, live);
 			return live;
@@ -52,6 +47,24 @@ export class RunManager {
 			this.byCard.delete(cardId);
 			throw error;
 		}
+	}
+
+	/** Opens a transcript for daemon-run work. Holds the card's lease like a session does. */
+	openLog(cardId: string, runId: string): LiveRun {
+		if (this.byCard.has(cardId)) throw new Error(`Card ${cardId} already has a live run`);
+		const live: LiveRun = { runId, cardId, handle: null, buffer: this.createBuffer(cardId, runId), detach: () => {} };
+		this.byCard.set(cardId, runId);
+		this.byRun.set(runId, live);
+		return live;
+	}
+
+	private createBuffer(cardId: string, runId: string): TranscriptBuffer {
+		return new TranscriptBuffer({
+			onItem: (item, durable) => {
+				if (durable) insertRunEvent(this.db, cardId, runId, item);
+				this.bus.publish({ topic: `run:${runId}`, type: item.type, data: item, seq: item.seq });
+			},
+		});
 	}
 
 	private record(live: LiveRun, event: DriverEvent): void {
@@ -92,7 +105,7 @@ export class RunManager {
 		live.buffer.close();
 		this.byRun.delete(runId);
 		this.byCard.delete(live.cardId);
-		await live.handle.stop().catch(() => {});
+		await live.handle?.stop().catch(() => {});
 	}
 
 	async stopAll(): Promise<void> {

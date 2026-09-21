@@ -6,3 +6,4 @@ export * from "./prompt-render.ts";
 export * from "./policy/model-routing.ts";
 export * from "./policy/gates.ts";
 export * from "./card-machine.ts";
+export * from "./policy/retry.ts";

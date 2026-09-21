@@ -32,7 +32,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 		onStarted: (cardId) => orchestrator.handleStarted(cardId),
 		onOutcome: (cardId, outcome) => orchestrator.handleOutcome(cardId, outcome),
 	});
-	orchestrator = new Orchestrator({ config, db, bus, stages });
+	orchestrator = new Orchestrator({ config, db, bus, runs, stages });
 	const app = createApp({ config, db, bus, runs, stages, orchestrator });
 
 	const server: ServerType = await new Promise((resolve) => {

@@ -47,7 +47,22 @@ describe("applyItem", () => {
 
 	it("shows steers and the end of the session; ignores bookkeeping items", () => {
 		const blocks = fold([item("steer", { text: "shorter" }), item("queue", {}), item("settled", {}), item("run_finished", { status: "settled" })]);
-		expect(blocks).toMatchObject([{ kind: "steer", text: "shorter" }, { kind: "note", text: "Session finished: settled." }]);
+		expect(blocks).toMatchObject([{ kind: "steer", text: "shorter" }, { kind: "note", text: "Finished: settled." }]);
+	});
+});
+
+describe("verify runs", () => {
+	it("accumulates the command's output into one block", () => {
+		const blocks = fold([
+			item("verify_started", { command: "pnpm test" }),
+			item("verify_output", { text: "running…\n" }),
+			item("verify_output", { text: "1 failed\n" }),
+			item("run_finished", { status: "Verify command exited with code 1." }),
+		]);
+		expect(blocks).toMatchObject([
+			{ kind: "verify", command: "pnpm test", output: "running…\n1 failed\n" },
+			{ kind: "note", text: "Finished: Verify command exited with code 1." },
+		]);
 	});
 });
 

@@ -6,7 +6,7 @@ Design and roadmap: [`docs/superpowers/specs/2026-09-21-traffic-control-design.m
 
 ## Status
 
-Milestone 2 of 6. A card goes from the backlog through **planning** (expensive model), waits at a **plan approval gate** where you approve it or send it back with feedback, then **building** (cheap model) in a fresh session that sees only the plan. Every session streams live, can be steered and aborted, and leaves its diff on the card. Testing with a retry loop, the swimlane board and scheduler, review flows and pull requests come in milestones 3 to 6.
+Milestone 3 of 6. A card goes from the backlog through **planning** (expensive model), waits at a **plan approval gate**, is **built** by a cheap model in a fresh session that sees only the plan, and is then **tested**: the project's verify command runs in the card's worktree and its exit code decides. Failures go back to a fresh builder with the output, up to a cap, then the card asks for you. Every session streams live, can be steered and aborted, and leaves its diff on the card. The swimlane board and scheduler, review flows and pull requests come in milestones 4 to 6.
 
 ## Run it
 
@@ -24,6 +24,9 @@ For development, `pnpm dev` runs the daemon with `--watch` and Vite on http://12
 |---|---|---|
 | `TC_HOME` | `~/.traffic-control` | Database, card folders (`cards/<id>/`), worktrees |
 | `TC_PORT` | `4700` | Daemon port (always bound to 127.0.0.1) |
+| `TC_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
+
+Per project (Settings on its bay): a **verify command** (for example `pnpm test && pnpm typecheck`) and a **setup command** that runs once in each new worktree (for example `pnpm install --prefer-offline`). Without a verify command, a tester agent judges the build instead.
 
 ## How a stage runs
 

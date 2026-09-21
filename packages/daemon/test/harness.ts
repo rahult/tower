@@ -155,11 +155,32 @@ export function buildingTurn(): FakeTurn {
 	return {
 		events: [{ type: "message", message: { role: "assistant", text: "Implemented.", thinking: "", toolCalls: [] } }],
 		effect: ({ spec }) => {
-			writeFileSync(join(spec.cwd, "feature.txt"), "new feature\n");
+			// Unique per session so a rebuild always has something to commit.
+			writeFileSync(join(spec.cwd, "feature.txt"), `new feature\nbuilt by ${spec.sessionId}\n`);
 			writeFileSync(join(spec.cwd, "scratch.tmp"), "left untracked\n");
 			execFileSync("git", ["add", "feature.txt"], { cwd: spec.cwd });
 			execFileSync("git", ["-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "Add feature"], { cwd: spec.cwd });
 			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Built." }));
 		},
+	};
+}
+
+/** A scripted tester turn: writes a report and passes. */
+export function testerTurn(): FakeTurn {
+	return {
+		events: [],
+		effect: ({ spec }) => {
+			writeFileSync(join(spec.sessionDir, "..", "test-report.md"), "# Report\n\nAll good.\n");
+			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Checks pass." }));
+		},
+	};
+}
+
+/** Scripts each session by its stage, so re-plans, rebuilds and tests each behave like the right agent. */
+export function byStage(overrides: { build?: () => FakeTurn } = {}): FakeScript {
+	return (spec) => {
+		if (spec.sessionId.includes("-plan-")) return [planningTurn()];
+		if (spec.sessionId.includes("-build-")) return [overrides.build?.() ?? buildingTurn()];
+		return [testerTurn()];
 	};
 }

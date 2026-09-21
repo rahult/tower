@@ -10,6 +10,7 @@ export type Block =
 	| { kind: "steer"; seq: number; text: string }
 	| { kind: "assistant"; seq: number; text: string; thinking: string; streaming: boolean }
 	| { kind: "tool"; seq: number; id: string; name: string; args: unknown; output: string | null; isError: boolean }
+	| { kind: "verify"; seq: number; command: string; output: string }
 	| { kind: "note"; seq: number; text: string };
 
 /**
@@ -46,10 +47,18 @@ export function applyItem(blocks: Block[], item: TranscriptItem): Block[] {
 			const done: Block = { kind: "tool", seq, id: payload.id, name: payload.name, args: null, output: payload.output, isError: payload.isError };
 			return index === -1 ? [...blocks, done] : blocks.with(index, { ...(blocks[index] as Extract<Block, { kind: "tool" }>), output: payload.output, isError: payload.isError });
 		}
+		case "verify_started":
+			return [...blocks, { kind: "verify", seq, command: payload.command, output: "" }];
+		case "verify_output": {
+			const index = blocks.findLastIndex((block) => block.kind === "verify");
+			if (index === -1) return [...blocks, { kind: "verify", seq, command: "", output: payload.text }];
+			const open = blocks[index] as Extract<Block, { kind: "verify" }>;
+			return blocks.with(index, { ...open, output: open.output + payload.text });
+		}
 		case "exit":
 			return [...blocks, { kind: "note", seq, text: `Session process exited (code ${payload.code}).` }];
 		case "run_finished":
-			return [...blocks, { kind: "note", seq, text: `Session finished: ${payload.status}.` }];
+			return [...blocks, { kind: "note", seq, text: `Finished: ${String(payload.status).replace(/\.$/, "")}.` }];
 		case "gap":
 			return [...blocks, { kind: "note", seq, text: "Earlier output is no longer buffered." }];
 		default:

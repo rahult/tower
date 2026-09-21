@@ -75,7 +75,7 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 					>
 						{runs.map((r) => (
 							<option key={r.id} value={r.id}>
-								{r.stage} attempt {r.attempt}
+								{r.kind === "verify" ? "verify command" : r.stage} {r.attempt}
 							</option>
 						))}
 					</select>
@@ -92,7 +92,7 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 				<>
 					<RunSummary run={run} />
 					<Transcript blocks={blocks} live={live} />
-					{live && <SteerBox cardId={card.id} />}
+					{live && run.kind !== "verify" && <SteerBox cardId={card.id} />}
 				</>
 			) : (
 				<p className="p-4 text-[14px] text-dust">No session has run for this card yet. Choose Start on its strip to plan it.</p>
@@ -121,7 +121,15 @@ function RunSummary({ run }: { run: StageRun }) {
 	return (
 		<div className="border-b border-seam px-4 py-2 text-[13px] text-dust">
 			<p>
-				<span className="font-mono text-chalk">{run.model}</span> thinking {run.thinking}
+				{run.kind === "verify" ? (
+					<>
+						Verify command <span className="font-mono text-chalk">{run.model}</span>
+					</>
+				) : (
+					<>
+						<span className="font-mono text-chalk">{run.model}</span> thinking {run.thinking}
+					</>
+				)}
 				{tokens && <>, {tokens}</>}
 				{cost && <>, {cost}</>}
 			</p>

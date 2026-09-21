@@ -21,6 +21,7 @@ import { getCard, updateCard } from "./db/repo-cards.ts";
 import { getProject } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, type RunPatch, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
+import { runSetup } from "./git/setup.ts";
 import { branchNameFor, ensureWorktree } from "./git/worktree-manager.ts";
 import { buildPiArgs } from "./pi/argv.ts";
 import type { LiveRun, RunManager } from "./run/run-manager.ts";
@@ -69,6 +70,8 @@ export class StageRunner {
 			branchName: card.branchName ?? branchNameFor(card.id, card.title),
 			baseBranch: project.defaultBranch,
 		});
+		// A fresh worktree has no node_modules, venv or build cache; the project says how to make it usable.
+		if (worktree.created && project.setupCommand) await runSetup(project.setupCommand, worktree.path);
 		const cardDir = paths.cardDir(config, card.id);
 		mkdirSync(paths.sessionDir(config, card.id), { recursive: true });
 		// A stale result from an earlier stage must never be read as this stage's verdict.
@@ -117,14 +120,14 @@ export class StageRunner {
 
 	async steer(cardId: string, text: string): Promise<void> {
 		const live = this.deps.runs.liveRunForCard(cardId);
-		if (!live) throw new Error("This card has no running session to steer");
+		if (!live?.handle) throw new Error("This card has no running session to steer");
 		this.deps.runs.note(live.runId, "steer", { text });
 		await live.handle.steer(text);
 	}
 
 	async abort(cardId: string): Promise<void> {
 		const live = this.deps.runs.liveRunForCard(cardId);
-		if (!live) throw new Error("This card has no running session to abort");
+		if (!live?.handle) throw new Error("This card has no running session to abort");
 		this.aborts.get(live.runId)?.();
 		await live.handle.abort().catch(() => {});
 		await this.inFlight.get(live.runId);
@@ -159,6 +162,7 @@ export class StageRunner {
 				worktreePath,
 				branchName,
 				planPath: join(cardDir, "plan.md"),
+				reportPath: join(cardDir, "test-report.md"),
 				resultPath: join(cardDir, STAGE_RESULT_FILE),
 				feedbackSection: feedback ? `# Feedback on your previous attempt\n\n${feedback}` : "",
 			},
@@ -167,8 +171,9 @@ export class StageRunner {
 	}
 
 	/** Prompt → settle → validate result (one nudge if missing) → record outcome. Never throws. */
-	private async drive(live: LiveRun, stage: AgentStage, prompt: string, cardDir: string): Promise<void> {
+	private async drive(liveRun: LiveRun, stage: AgentStage, prompt: string, cardDir: string): Promise<void> {
 		const { runs } = this.deps;
+		const live = liveRun as LiveRun & { handle: NonNullable<LiveRun["handle"]> };
 		let outcome: RunOutcome;
 		let aborted = false;
 		const abortSignal = new Promise<void>((resolve) => {

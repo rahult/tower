@@ -49,10 +49,13 @@ export class FakeRunHandle implements RunHandle {
 
 	private emit(event: DriverEvent): void {
 		for (const listener of this.listeners) listener(event);
-		if (event.type !== "settled") return;
+		if (event.type !== "settled" && event.type !== "exit") return;
 		const waiters = this.settleWaiters;
 		this.settleWaiters = [];
-		for (const waiter of waiters) waiter.resolve();
+		for (const waiter of waiters) {
+			if (event.type === "settled") waiter.resolve();
+			else waiter.reject(new Error(`fake session exited with code ${event.code}: ${event.stderr}`));
+		}
 	}
 
 	onEvent(listener: (event: DriverEvent) => void): () => void {
@@ -74,7 +77,13 @@ export class FakeRunHandle implements RunHandle {
 			if (turn.delayMs) await new Promise((resolve) => setTimeout(resolve, turn.delayMs));
 			this.emit(event);
 		}
-		if (!this.aborted) await turn.effect?.({ spec: this.spec, prompt });
+		try {
+			if (!this.aborted) await turn.effect?.({ spec: this.spec, prompt });
+		} catch (error) {
+			// A broken script must fail the run loudly, the way a crashed pi process would, not hang the test.
+			this.emit({ type: "exit", code: 1, stderr: error instanceof Error ? error.message : String(error) });
+			return;
+		}
 		this.emit({ type: "settled" });
 	}
 

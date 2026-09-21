@@ -15,6 +15,7 @@ interface BayProps {
 /** A project, drawn as a strip bay: the rack that holds its cards. */
 export function Bay({ project, cards, selectedCardId, onOpen }: BayProps) {
 	const [adding, setAdding] = useState(false);
+	const [configuring, setConfiguring] = useState(false);
 	const start = useMutation({ mutationFn: api.enqueue, onSuccess: (card) => onOpen(card.id) });
 	const retry = useMutation({ mutationFn: (cardId: string) => api.retry(cardId), onSuccess: (card) => onOpen(card.id) });
 	const abort = useMutation({ mutationFn: api.abort });
@@ -27,10 +28,18 @@ export function Bay({ project, cards, selectedCardId, onOpen }: BayProps) {
 				<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-dust" title={project.repoPath}>
 					{project.repoPath} on {project.defaultBranch}
 				</span>
+				<button type="button" onClick={() => setConfiguring((open) => !open)} className="cursor-pointer text-[14px] text-chalk underline decoration-seam underline-offset-4 hover:decoration-chalk">
+					{configuring ? "Close settings" : "Settings"}
+				</button>
 				<button type="button" onClick={() => setAdding((open) => !open)} className="cursor-pointer text-[14px] text-chalk underline decoration-seam underline-offset-4 hover:decoration-chalk">
 					{adding ? "Cancel" : "Add card"}
 				</button>
 			</header>
+
+			{configuring && <ProjectSettings project={project} onDone={() => setConfiguring(false)} />}
+			{!configuring && !project.verifyCommand && cards.length > 0 && (
+				<p className="mb-2 px-1 text-[13px] text-dust">No verify command set, so an agent judges whether builds pass. Set one in Settings to let your test suite decide.</p>
+			)}
 
 			{adding && <NewCard projectId={project.id} onDone={() => setAdding(false)} />}
 			{failure && <p className="mb-2 rounded-[3px] bg-rose px-3 py-1.5 text-[14px] text-ink">{failure.message}</p>}
@@ -67,6 +76,39 @@ export function Bay({ project, cards, selectedCardId, onOpen }: BayProps) {
 				</ul>
 			)}
 		</section>
+	);
+}
+
+function ProjectSettings({ project, onDone }: { project: Project; onDone: () => void }) {
+	const [setupCommand, setSetupCommand] = useState(project.setupCommand ?? "");
+	const [verifyCommand, setVerifyCommand] = useState(project.verifyCommand ?? "");
+	const save = useMutation({ mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand }), onSuccess: onDone });
+	const field = "w-full rounded-[3px] bg-well px-3 py-1.5 font-mono text-[13px] placeholder:text-dust/60";
+	return (
+		<form
+			onSubmit={(event: FormEvent) => {
+				event.preventDefault();
+				save.mutate();
+			}}
+			className="mb-3 flex flex-col gap-3 rounded-[3px] border border-seam p-3"
+		>
+			<label className="block text-[14px]">
+				Verify command
+				<span className="block text-[13px] text-dust">Runs in the card's worktree after each build. Its exit code decides whether testing passes; failures go back to the builder.</span>
+				<input value={verifyCommand} onChange={(event) => setVerifyCommand(event.target.value)} placeholder="pnpm test && pnpm typecheck" className={`mt-1 ${field}`} />
+			</label>
+			<label className="block text-[14px]">
+				Setup command
+				<span className="block text-[13px] text-dust">Runs once when a card's worktree is created. New worktrees have no installed dependencies.</span>
+				<input value={setupCommand} onChange={(event) => setSetupCommand(event.target.value)} placeholder="pnpm install --prefer-offline" className={`mt-1 ${field}`} />
+			</label>
+			<div className="flex items-center gap-3">
+				<button type="submit" disabled={save.isPending} className="condensed cursor-pointer rounded-[3px] bg-chalk px-3 py-1.5 font-semibold text-ink hover:bg-white disabled:opacity-40">
+					Save settings
+				</button>
+				{save.error && <span className="text-[14px] text-rose">{save.error.message}</span>}
+			</div>
+		</form>
 	);
 }
 

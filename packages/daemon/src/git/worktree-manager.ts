@@ -37,16 +37,19 @@ export interface Worktree {
 	path: string;
 	branchName: string;
 	baseCommit: string;
+	/** True when this call created the worktree, so one-time setup should run. */
+	created: boolean;
 }
 
 /** One git worktree per card: pi has no repo locking, so isolation between concurrent cards is ours to provide. */
 export async function ensureWorktree(options: { repoPath: string; path: string; branchName: string; baseBranch: string }): Promise<Worktree> {
 	const { repoPath, path, branchName, baseBranch } = options;
-	if (!existsSync(path)) {
+	const created = !existsSync(path);
+	if (created) {
 		mkdirSync(dirname(path), { recursive: true });
 		await git(repoPath, "worktree", "add", "-b", branchName, path, baseBranch);
 	}
-	return { path, branchName, baseCommit: await git(path, "merge-base", "HEAD", baseBranch) };
+	return { path, branchName, baseCommit: await git(path, "merge-base", "HEAD", baseBranch), created };
 }
 
 export async function removeWorktree(repoPath: string, path: string): Promise<void> {
