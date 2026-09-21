@@ -6,7 +6,7 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 
 - **One board, every project.** A swimlane per project, a column per stage: backlog, planning, building, testing, feedback, pull request, done.
 - **Model tiering.** Planning defaults to `anthropic/claude-fable-5-1`; building and testing default to `zai/glm-5.3`. Override per card.
-- **Isolation.** Every card gets its own git worktree and branch; your checkout is never touched. Every stage is a fresh pi session that sees only the previous stage's artifacts (for example `plan.md`), never its conversation.
+- **Isolation.** Every card gets its own git worktree and branch; your checkout is never touched. (One exception: a repository with no commits at all gets an empty first commit, made without touching your files or index, because a branch needs a commit to start from.) Every stage is a fresh pi session that sees only the previous stage's artifacts (for example `plan.md`), never its conversation.
 - **Gates.** A finished plan waits for you: approve it, or send it back with what should change.
 - **Your tests decide.** A project's verify command runs after each build; its exit code is the verdict. Failures go back to a fresh builder with the output, up to a cap, then the card asks for you.
 - **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff.
