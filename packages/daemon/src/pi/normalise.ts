@@ -20,6 +20,19 @@ function textOf(content: unknown): string {
 		.join("");
 }
 
+/** Providers wrap their reason in a status code and a JSON envelope; people need the sentence inside. */
+function readableProviderError(raw: string): string {
+	const match = raw.match(/^(\d{3})\s+(\{.*\})$/s);
+	if (!match) return raw;
+	try {
+		const body = JSON.parse(match[2] as string) as { error?: { message?: string }; message?: string };
+		const message = body.error?.message ?? body.message;
+		return message ? `${message} (HTTP ${match[1]})` : raw;
+	} catch {
+		return raw;
+	}
+}
+
 function toMessage(raw: Record<string, unknown>): TranscriptMessage | null {
 	const role = raw.role;
 	if (role !== "user" && role !== "assistant" && role !== "toolResult") return null;
@@ -35,6 +48,7 @@ function toMessage(raw: Record<string, unknown>): TranscriptMessage | null {
 		...(role === "toolResult"
 			? { toolCallId: raw.toolCallId as string, toolName: raw.toolName as string, isError: raw.isError === true }
 			: {}),
+		...(role === "assistant" && raw.stopReason === "error" ? { error: readableProviderError(String(raw.errorMessage ?? "The model request failed")) } : {}),
 	};
 }
 

@@ -41,6 +41,8 @@ export interface TranscriptMessage {
 	toolCallId?: string;
 	toolName?: string;
 	isError?: boolean;
+	/** Set on an assistant message when the model provider rejected or failed the request. */
+	error?: string;
 }
 
 /** Normalised session events. Deliberately not pi's event union. */

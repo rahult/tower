@@ -220,12 +220,19 @@ export class StageRunner {
 				resolve();
 			});
 		});
+		// pi retries transient provider errors itself; an error still standing when the turn settles is final.
+		let providerError: string | null = null;
+		const stopWatching = live.handle.onEvent((event) => {
+			if (event.type === "message" && event.message.role === "assistant") providerError = event.message.error ?? null;
+		});
 		const turn = async (text: string) => {
 			const settled = live.handle.waitSettled();
 			settled.catch(() => {});
 			runs.note(live.runId, "prompt", { text });
 			await live.handle.prompt(text);
 			await Promise.race([settled, abortSignal]);
+			// Asking again would only fail the same way, so stop here with the provider's own words.
+			if (providerError && !aborted) throw new Error(`${getRun(this.deps.db, live.runId)?.model ?? "The model"} could not answer: ${providerError}`);
 		};
 		const readResult = () => {
 			const file = join(cardDir, STAGE_RESULT_FILE);
@@ -257,6 +264,7 @@ export class StageRunner {
 			if (!this.stopping) this.patchRun(live.runId, { status: "failed", error: message, endedAt: Date.now() });
 			outcome = { kind: "failed", error: message };
 		} finally {
+			stopWatching();
 			this.aborts.delete(live.runId);
 			if (!this.stopping) runs.note(live.runId, "run_finished", { status: getRun(this.deps.db, live.runId)?.status });
 			await runs.finish(live.runId);

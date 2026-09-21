@@ -51,6 +51,13 @@ describe("applyItem", () => {
 	});
 });
 
+describe("provider errors", () => {
+	it("shows why the model could not answer instead of an empty reply", () => {
+		const blocks = fold([item("prompt", { text: "Plan" }), item("message", { message: { role: "assistant", text: "", thinking: "", toolCalls: [], error: "Out of usage (HTTP 400)" } })]);
+		expect(blocks).toMatchObject([{ kind: "prompt" }, { kind: "note", text: "The model could not answer: Out of usage (HTTP 400)" }]);
+	});
+});
+
 describe("verify runs", () => {
 	it("accumulates the command's output into one block", () => {
 		const blocks = fold([

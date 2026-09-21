@@ -35,6 +35,7 @@ export function applyItem(blocks: Block[], item: TranscriptItem): Block[] {
 		case "message": {
 			const message = payload.message;
 			if (message.role !== "assistant") return blocks;
+			if (message.error) return [...blocks.filter((block) => !(block.kind === "assistant" && block.streaming)), { kind: "note", seq, text: `The model could not answer: ${message.error}` }];
 			const index = blocks.findLastIndex((block) => block.kind === "assistant" && block.streaming);
 			const settled: Block = { kind: "assistant", seq, text: message.text, thinking: message.thinking, streaming: false };
 			if (index !== -1) return blocks.with(index, { ...settled, seq: blocks[index]!.seq });
