@@ -105,6 +105,24 @@ describe("review flows and the feedback gate", () => {
 		expect(h.driver.handles.filter((handle) => handle.sessionId.includes("-adversarial-review-"))).toHaveLength(2);
 	});
 
+	it("a card resting on a passing test continues to review without testing again", async () => {
+		h = await bootHarness(byStage(), FLOWS);
+		const { card } = await toFeedbackGate(h);
+		// Put it back where an older Tower left such cards: tested, passed, resting.
+		const { DatabaseSync } = await import("node:sqlite");
+		const db = new DatabaseSync(join(h.home, "tower.sqlite"));
+		db.prepare("UPDATE cards SET stage = 'testing', status = 'idle' WHERE id = ?").run(card.id);
+		db.prepare("UPDATE gates SET status = 'approved' WHERE card_id = ?").run(card.id);
+		db.close();
+		const sessions = h.driver.handles.length;
+
+		expect((await h.api("POST", `/api/cards/${card.id}/retry`)).body).toMatchObject({ stage: "feedback", status: "queued" });
+		await h.daemon.whenIdle();
+		const started = h.driver.handles.slice(sessions).map((handle) => handle.sessionId.replace(`c${card.id}-`, ""));
+		expect(started).toEqual(["adversarial-review-2", "solid-review-2"]);
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
+	});
+
 	it("a project can turn reviews off, or choose which run", async () => {
 		h = await bootHarness(byStage(), FLOWS);
 		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;

@@ -102,6 +102,15 @@ export class Orchestrator {
 	}
 
 	retry(cardId: string, feedback?: string): Card {
+		// Resting in testing with a pass already on record (an older Tower stopped here): go on, do not pay to test again.
+		const card = getCard(this.deps.db, cardId);
+		const lastTest = listRunsForCard(this.deps.db, cardId).findLast((run) => run.stage === "testing" && (run.kind === "verify" || run.kind === "stage"));
+		if (card?.stage === "testing" && card.status === "idle" && !feedback && lastTest?.resultStatus === "pass") {
+			return this.dispatch(cardId, {
+				type: "tests_already_passed",
+				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, onFailure: { action: "needs_attention", reason: "" } },
+			});
+		}
 		return this.dispatch(cardId, { type: "retry", ...(feedback ? { feedback } : {}), hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
 	}
 

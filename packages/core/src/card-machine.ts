@@ -14,6 +14,8 @@ export type CardEvent =
 	| { type: "run_started" }
 	| { type: "run_settled"; result: ResultStatus; summary: string; context: SettleContext }
 	| { type: "verify_finished"; passed: boolean; context: SettleContext }
+	/** The card is resting in testing with a passing result already on record; carry on without testing again. */
+	| { type: "tests_already_passed"; context: SettleContext }
 	| { type: "flows_started" }
 	| { type: "flows_finished" }
 	| { type: "pr_opened" }
@@ -132,6 +134,10 @@ export function transition(card: CardState, event: CardEvent): Transition {
 		case "verify_finished":
 			if (stage !== "testing" || status !== "verifying") break;
 			return event.passed ? afterTestsPass(event.context) : afterTestFailure(event.context.onFailure);
+
+		case "tests_already_passed":
+			if (stage === "testing" && status === "idle") return afterTestsPass(event.context);
+			break;
 
 		case "flows_started":
 			if (stage === "feedback" && status === "queued") return { next: rest("feedback", "running"), effects: [] };

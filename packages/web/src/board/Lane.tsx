@@ -74,7 +74,7 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 		if (card.status === "needs_attention" || card.status === "idle") {
 			return (
 				<StripButton onClick={() => retry.mutate(card.id)} disabled={retry.isPending} kind={card.status === "needs_attention" ? "onCaution" : "quiet"}>
-					Run again
+					{card.stage === "testing" && card.status === "idle" ? "Continue" : "Run again"}
 				</StripButton>
 			);
 		}

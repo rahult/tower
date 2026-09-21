@@ -30,6 +30,7 @@ describe("transition", () => {
 		["passing verification rests in testing", card("testing", "verifying"), verified(true), { stage: "feedback", status: "awaiting_gate" }, [{ type: "open_gate", kind: "feedback" }]],
 		["passing tests start the project's review flows first", card("testing", "verifying"), verified(true, { hasReviewFlows: true }), { stage: "feedback", status: "queued" }, [{ type: "run_flows" }]],
 		["passing tests go straight to a pull request when nothing gates them", card("testing", "verifying"), verified(true, { requiredGates: [] }), { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
+		["a card resting on a passing test moves on without testing again", card("testing", "idle"), { type: "tests_already_passed", context: context({ hasReviewFlows: true }) }, { stage: "feedback", status: "queued" }, [{ type: "run_flows" }]],
 		["review flows that start are running", card("feedback", "queued"), { type: "flows_started" }, { stage: "feedback", status: "running" }, []],
 		["finished reviews wait for the human", card("feedback", "running"), { type: "flows_finished" }, { stage: "feedback", status: "awaiting_gate" }, [{ type: "open_gate", kind: "feedback" }]],
 		["approving the work opens a pull request", card("feedback", "awaiting_gate"), { type: "gate_decided", decision: "approve", feedback: "" }, { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
@@ -89,6 +90,7 @@ describe("transition", () => {
 		["answer a card that asked nothing", card("planning", "needs_attention"), { type: "answers_given", message: "x" }],
 		["resume a card that was not interrupted", card("building", "idle"), { type: "resume", wasVerifying: false }],
 		["CI failing on a card that is already being fixed", card("pull_request", "running"), { type: "ci_failed", feedback: "x" }],
+		["skip testing on a card that is still building", card("building", "idle"), { type: "tests_already_passed", context: context() }],
 		["merge a card that has no pull request", card("building", "idle"), { type: "pr_merged" }],
 		["finish a verification that is not running", card("testing", "idle"), verified(true)],
 	])("rejects: %s", (_name, from, event) => {
