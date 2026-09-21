@@ -1,5 +1,7 @@
 # Tower
 
+**[tower.rahultrikha.com](https://tower.rahultrikha.com)**
+
 A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for many projects on one board, let an expensive model plan and a cheap model build, have your test suite judge the result, and step in only where a decision is yours.
 
 - **One board, every project.** A swimlane per project, a column per stage: backlog, planning, building, testing, feedback, pull request, done.
@@ -129,4 +131,5 @@ pnpm build && node packages/daemon/test/demo.ts   # seeded board on the fake dri
 - `packages/daemon`: Hono API and SSE, SQLite (`node:sqlite`), scheduler, stage runner, verifier. Only `src/pi/` knows pi exists; everything else talks to the `SessionDriver` interface, and the tests run the whole daemon against a scripted fake.
 - `packages/web`: the React board.
 - `pi/tower.ts`: the pi extension.
+- `site/`: the static project site (plain HTML, CSS and one script; no build step). Pushing changes under `site/` to `main` deploys it to GitHub Pages.
 - `prompts/`: stage prompt templates. They are not pi prompt templates; the explicit `pi` manifest in `package.json` keeps pi from loading them.

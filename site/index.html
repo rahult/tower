@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Tower: one board for every coding agent you run</title>
+		<meta name="description" content="Tower is a control board for pi coding-agent sessions. Queue work across projects, let an expensive model plan and a cheap one build, and let your test suite decide what passes." />
+		<meta property="og:title" content="Tower: one board for every coding agent you run" />
+		<meta property="og:description" content="Queue work across projects, let an expensive model plan and a cheap one build, and let your test suite decide what passes." />
+		<meta property="og:image" content="https://tower.rahultrikha.com/assets/session.png" />
+		<meta property="og:url" content="https://tower.rahultrikha.com/" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+		<link rel="preload" href="assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<a class="skip" href="#main">Skip to content</a>
+
+		<header class="masthead wrap">
+			<a class="wordmark" href="/">Tower</a>
+			<nav aria-label="Site">
+				<a href="#how">How it works</a>
+				<a href="#install">Install</a>
+				<a href="https://github.com/rahult/tower">GitHub</a>
+			</nav>
+		</header>
+
+		<main id="main">
+			<section class="hero wrap">
+				<h1>One board for every coding agent you run.</h1>
+				<p class="lede">
+					Tower runs <a href="https://pi.dev">pi</a> sessions across all your projects from a single board. An expensive model plans, a cheap one builds, your test suite decides
+					what passes, and you step in only where the decision is yours.
+				</p>
+				<div class="install">
+					<code id="install-command">pi install git:github.com/rahult/tower</code>
+					<button type="button" class="copy" data-copy="install-command">Copy</button>
+				</div>
+				<p class="after-install">Then type <code>/tower</code> in any pi session.</p>
+			</section>
+
+			<section class="demo wide" aria-labelledby="demo-title">
+				<div class="demo-bar">
+					<h2 id="demo-title">This is a simulation of the board. One card is waiting for you.</h2>
+					<button type="button" id="pause" class="quiet" aria-pressed="false">Pause</button>
+				</div>
+				<div class="board-scroll" tabindex="0" role="region" aria-label="Simulated Tower board">
+					<div id="board" class="board"></div>
+				</div>
+				<p id="announcer" class="visually-hidden" aria-live="polite"></p>
+				<ul class="legend" aria-label="What strip colours mean">
+					<li><span class="swatch buff"></span>Resting</li>
+					<li><span class="swatch sky"></span>An agent is working</li>
+					<li><span class="swatch signal"></span>Needs you</li>
+					<li><span class="swatch sage"></span>Tests passed</li>
+				</ul>
+			</section>
+
+			<section id="how" class="wrap prose">
+				<h2>How a card moves</h2>
+				<ol class="route">
+					<li>
+						<h3>An expensive model plans</h3>
+						<p>
+							The planner explores your repository and writes <code>plan.md</code>. It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a wrong
+							plan is the costliest mistake a cheap builder can inherit.
+						</p>
+					</li>
+					<li>
+						<h3>You approve the plan, or send it back</h3>
+						<p>The card turns amber and waits. Read the plan on the board. Approve it, or write what should change and the planner starts over with your note.</p>
+					</li>
+					<li>
+						<h3>A cheap model builds from the plan alone</h3>
+						<p>
+							Building is a fresh pi session that sees the plan and nothing of the planner's conversation. It works in the card's own git worktree and commits on the card's branch.
+							Building defaults to <code>zai/glm-5.3</code>.
+						</p>
+					</li>
+					<li>
+						<h3>Your tests decide</h3>
+						<p>
+							Tower runs the project's verify command, for example <code>pnpm test &amp;&amp; pnpm typecheck</code>, and reads its exit code. A failure goes to a fresh builder together
+							with the output. After three builds the loop stops and the card asks for you.
+						</p>
+					</li>
+				</ol>
+			</section>
+
+			<figure class="shot wide">
+				<img src="assets/session.png" width="1600" height="760" alt="The Tower board with three project lanes. A card's drawer is open showing a live session: the agent's reasoning, a file it read, its reply, a test command that is still running, and a box for steering it." loading="lazy" />
+				<figcaption>Every session streams to the board. Steer it after its current tool calls finish, abort it, or read its diff.</figcaption>
+			</figure>
+
+			<section class="wrap prose">
+				<h2>What it takes care of</h2>
+				<dl class="facts">
+					<div>
+						<dt>A worktree per card</dt>
+						<dd>pi has no repository locking, so Tower gives every card its own git worktree and branch. Two cards can build in one project at once, and your checkout is never touched.</dd>
+					</div>
+					<div>
+						<dt>A fresh session per stage</dt>
+						<dd>Stages hand off through files such as <code>plan.md</code>, never through a shared conversation. The builder starts with a clean context, and a reviewer never inherits the author's reasoning.</dd>
+					</div>
+					<div>
+						<dt>Locked-down sessions</dt>
+						<dd>pi has no tool-approval step, so stages start with <code>--no-extensions</code> and without project trust. Both are opt-in per project.</dd>
+					</div>
+					<div>
+						<dt>A queue with caps</dt>
+						<dd>A global limit and a per-project limit decide how much runs at once. The queue is stored, so it survives a restart.</dd>
+					</div>
+					<div>
+						<dt>Resume after a restart</dt>
+						<dd>Sessions cut off by a restart are marked interrupted. Resume reopens the same pi session and the transcript carries on where it stopped.</dd>
+					</div>
+					<div>
+						<dt>Tokens first, dollars second</dt>
+						<dd>Subscription models report a cost of zero, so every run shows its tokens, and a dollar figure only when there is a real one.</dd>
+					</div>
+				</dl>
+			</section>
+
+			<figure class="shot wide">
+				<img src="assets/gate.png" width="1600" height="760" alt="A card waiting for approval. The drawer shows the plan the planner wrote, a box for feedback, and two buttons: Approve plan and build, and Send back to planner." loading="lazy" />
+				<figcaption>The plan gate. A cheaper model will build from this plan alone, so it has to stand on its own.</figcaption>
+			</figure>
+
+			<section id="install" class="wrap prose">
+				<h2>Install</h2>
+				<p>You need <a href="https://pi.dev">pi</a>, git, npm and Node 22.18 or newer.</p>
+				<div class="install">
+					<code id="install-command-2">pi install git:github.com/rahult/tower</code>
+					<button type="button" class="copy" data-copy="install-command-2">Copy</button>
+				</div>
+				<p>
+					Start pi from a shell that has your provider API keys, then type <code>/tower</code>. The first run builds the board, starts Tower in the background and opens it at
+					<code>127.0.0.1:4700</code>. Tower keeps running after you quit pi.
+				</p>
+				<table class="commands">
+					<tbody>
+						<tr>
+							<th scope="row"><code>/tower</code></th>
+							<td>Start Tower if needed and open the board</td>
+						</tr>
+						<tr>
+							<th scope="row"><code>/tower add &lt;title&gt;</code></th>
+							<td>Add a card for the repository you are in. It becomes a project the first time</td>
+						</tr>
+						<tr>
+							<th scope="row"><code>/tower run &lt;title&gt;</code></th>
+							<td>Add a card and start planning it</td>
+						</tr>
+						<tr>
+							<th scope="row"><code>/tower status</code></th>
+							<td>What is running, and what is waiting for you</td>
+						</tr>
+						<tr>
+							<th scope="row"><code>/tower stop</code></th>
+							<td>Stop Tower. Running sessions can be resumed next time</td>
+						</tr>
+					</tbody>
+				</table>
+				<p class="caution">
+					pi packages run with full access to your machine, and Tower runs agents that execute shell commands in your repositories.
+					<a href="https://github.com/rahult/tower">Read the source</a> before you install it.
+				</p>
+			</section>
+
+			<section class="wrap prose">
+				<h2>The opinions are yours to change</h2>
+				<p>
+					Four small functions hold Tower's judgement calls. Each ships with a deliberately plain default and a comment that lays out the trade-off. The concurrency caps are enforced
+					outside them, so a policy can only choose among cards that are allowed to start.
+				</p>
+				<pre><code>// packages/core/src/policy/scheduler.ts
+// Keep every lane moving, or finish what is started?
+export function pickNext(candidates, state) {
+  const [first] = [...candidates].sort((a, b) =&gt; a.queuedAt - b.queuedAt);
+  return first?.cardId ?? null;
+}</code></pre>
+				<dl class="facts compact">
+					<div>
+						<dt><code>requiredGates</code></dt>
+						<dd>When may a small plan skip your approval?</dd>
+					</div>
+					<div>
+						<dt><code>decideAfterFailure</code></dt>
+						<dd>Stop early when the same error repeats? How much output does the builder get?</dd>
+					</div>
+					<div>
+						<dt><code>pickNext</code></dt>
+						<dd>Which waiting card gets the next free slot?</dd>
+					</div>
+					<div>
+						<dt><code>pickModel</code></dt>
+						<dd>Move to a stronger model after a failed build?</dd>
+					</div>
+				</dl>
+			</section>
+
+			<section class="wrap prose">
+				<h2>Where it stands</h2>
+				<p>
+					Tower is early. Planning, the plan gate, building, testing with the retry loop, the scheduler and restart recovery work today, and have been run end to end against real pi
+					sessions. A card that passes its tests currently rests in Testing.
+				</p>
+				<p>
+					Still to build: a feedback gate with adversarial and SOLID review flows, pull requests with CI watching, moving to a stronger model on retry, cost roll-ups, and running any
+					pi skill against a card. The <a href="https://github.com/rahult/tower/blob/main/docs/superpowers/specs/2026-09-21-tower-design.md">design and roadmap</a> are in the
+					repository.
+				</p>
+			</section>
+		</main>
+
+		<footer class="wrap foot">
+			<p>Tower is open source on <a href="https://github.com/rahult/tower">GitHub</a>. It runs on your machine and binds only to localhost. Tower makes no network requests of its own; the model calls are pi's.</p>
+		</footer>
+
+		<script src="board.js" defer></script>
+	</body>
+</html>
