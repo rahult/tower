@@ -12,7 +12,7 @@ import { listActiveRuns, listRunsForCard } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
 import { cardDiff } from "../git/diff.ts";
-import { detectDefaultBranch, isGitRepo } from "../git/worktree-manager.ts";
+import { branchProblem, detectDefaultBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import type { RunManager } from "../run/run-manager.ts";
 import type { StageRunner } from "../stage-runner.ts";
@@ -69,11 +69,15 @@ export function createApp(deps: AppDeps): Hono {
 		const repoPath = resolve(requireString(body, "repoPath"));
 		if (!(await isGitRepo(repoPath))) throw new HttpError(400, `Not a git repository: ${repoPath}`);
 		if (listProjects(db).some((p) => p.repoPath === repoPath)) throw new HttpError(409, "This repository is already a project");
+		const defaultBranch = await detectDefaultBranch(repoPath);
+		// Catch an empty repository here, with a fix, rather than when its first card tries to start.
+		const problem = await branchProblem(repoPath, defaultBranch);
+		if (problem) throw new HttpError(400, problem);
 		const project: Project = {
 			id: shortId(),
 			name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : basename(repoPath),
 			repoPath,
-			defaultBranch: await detectDefaultBranch(repoPath),
+			defaultBranch,
 			setupCommand: null,
 			verifyCommand: null,
 			trustProjectPi: false,

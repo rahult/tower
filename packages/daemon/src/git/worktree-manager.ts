@@ -18,6 +18,27 @@ export async function isGitRepo(path: string): Promise<boolean> {
 	}
 }
 
+async function resolves(repoPath: string, ref: string): Promise<boolean> {
+	try {
+		await git(repoPath, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Why Tower cannot branch from `baseBranch`, in words a person can act on, or null when it can.
+ * A repository fresh out of `git init` names its branch but has no commit for it to point at.
+ */
+export async function branchProblem(repoPath: string, baseBranch: string): Promise<string | null> {
+	if (await resolves(repoPath, baseBranch)) return null;
+	if (!(await resolves(repoPath, "HEAD"))) {
+		return `${repoPath} has no commits yet, so there is nothing for a card's branch to start from. Make a first commit, for example: git -C "${repoPath}" commit --allow-empty -m "Initial commit"`;
+	}
+	return `Tower branches each card from "${baseBranch}", but ${repoPath} has no branch with that name any more. Recreate it, or remove the project and add it again from the branch you want.`;
+}
+
 /** The branch the repo currently has checked out; used as the base for card branches and PRs. */
 export async function detectDefaultBranch(repoPath: string): Promise<string> {
 	return git(repoPath, "symbolic-ref", "--short", "HEAD");
@@ -46,6 +67,8 @@ export async function ensureWorktree(options: { repoPath: string; path: string; 
 	const { repoPath, path, branchName, baseBranch } = options;
 	const created = !existsSync(path);
 	if (created) {
+		const problem = await branchProblem(repoPath, baseBranch);
+		if (problem) throw new Error(problem);
 		mkdirSync(dirname(path), { recursive: true });
 		await git(repoPath, "worktree", "add", "-b", branchName, path, baseBranch);
 	}
