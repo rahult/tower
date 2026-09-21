@@ -12,10 +12,23 @@ export interface Artifact {
 	modifiedAt: number;
 }
 
+export interface Gate {
+	id: string;
+	kind: "plan_approval" | "feedback";
+	status: "pending" | "approved" | "rejected";
+	feedback: string | null;
+}
+
 export interface CardDetail {
 	card: Card;
 	runs: StageRun[];
+	gates: Gate[];
 	artifacts: Artifact[];
+}
+
+export interface CardDiff {
+	diff: string;
+	untracked: string[];
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -36,7 +49,11 @@ export const api = {
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
-	runPlanning: (cardId: string) => request<StageRun>("POST", `/api/cards/${cardId}/run`, { stage: "planning" }),
+	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
+	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),
+	retry: (cardId: string, feedback?: string) => request<Card>("POST", `/api/cards/${cardId}/retry`, { feedback }),
+	decideGate: (cardId: string, gateId: string, decision: "approve" | "reject", feedback?: string) =>
+		request<Card>("POST", `/api/cards/${cardId}/gates/${gateId}`, { decision, feedback }),
 	steer: (cardId: string, text: string) => request<{ ok: true }>("POST", `/api/cards/${cardId}/steer`, { text }),
 	abort: (cardId: string) => request<{ ok: true }>("POST", `/api/cards/${cardId}/abort`),
 };

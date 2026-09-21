@@ -15,12 +15,13 @@ interface BayProps {
 /** A project, drawn as a strip bay: the rack that holds its cards. */
 export function Bay({ project, cards, selectedCardId, onOpen }: BayProps) {
 	const [adding, setAdding] = useState(false);
-	const run = useMutation({ mutationFn: api.runPlanning, onSuccess: (started) => onOpen(started.cardId) });
+	const start = useMutation({ mutationFn: api.enqueue, onSuccess: (card) => onOpen(card.id) });
+	const retry = useMutation({ mutationFn: (cardId: string) => api.retry(cardId), onSuccess: (card) => onOpen(card.id) });
 	const abort = useMutation({ mutationFn: api.abort });
-	const failure = run.error ?? abort.error;
+	const failure = start.error ?? retry.error ?? abort.error;
 
 	return (
-		<section className="rounded-md bg-rack p-3">
+		<section className="@container rounded-md bg-rack p-3">
 			<header className="mb-2 flex items-baseline gap-3 px-1">
 				<h2 className="text-[17px] font-semibold">{project.name}</h2>
 				<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-dust" title={project.repoPath}>
@@ -49,11 +50,17 @@ export function Bay({ project, cards, selectedCardId, onOpen }: BayProps) {
 									<StripButton onClick={() => abort.mutate(card.id)} disabled={abort.isPending}>
 										Abort
 									</StripButton>
-								) : (
-									<StripButton onClick={() => run.mutate(card.id)} disabled={run.isPending}>
-										{card.attempt === 0 ? "Plan" : "Plan again"}
+								) : card.stage === "backlog" ? (
+									<StripButton onClick={() => start.mutate(card.id)} disabled={start.isPending}>
+										Start
 									</StripButton>
-								)
+								) : card.status === "awaiting_gate" ? (
+									<StripButton onClick={() => onOpen(card.id)}>Review</StripButton>
+								) : card.status === "needs_attention" || card.status === "idle" ? (
+									<StripButton onClick={() => retry.mutate(card.id)} disabled={retry.isPending}>
+										Run again
+									</StripButton>
+								) : null
 							}
 						/>
 					))}

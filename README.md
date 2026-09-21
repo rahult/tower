@@ -6,7 +6,7 @@ Design and roadmap: [`docs/superpowers/specs/2026-09-21-traffic-control-design.m
 
 ## Status
 
-Milestone 1 of 6. You can add projects and cards, run the **planning** stage of a card in its own git worktree, watch the session stream, steer it, abort it, and read the plan it writes. Gates, building, testing, the swimlane board, review flows and pull requests come in later milestones.
+Milestone 2 of 6. A card goes from the backlog through **planning** (expensive model), waits at a **plan approval gate** where you approve it or send it back with feedback, then **building** (cheap model) in a fresh session that sees only the plan. Every session streams live, can be steered and aborted, and leaves its diff on the card. Testing with a retry loop, the swimlane board and scheduler, review flows and pull requests come in milestones 3 to 6.
 
 ## Run it
 
@@ -28,6 +28,8 @@ For development, `pnpm dev` runs the daemon with `--watch` and Vite on http://12
 ## How a stage runs
 
 Each stage is a fresh `pi --mode rpc` process in the card's worktree, with `--no-extensions` and no project trust unless the project opts in. Stages hand off through files in `cards/<id>/` (for example `plan.md`), and every stage must finish by writing `stage-result.json`; the daemon nudges once if it is missing, then flags the card.
+
+The card lifecycle is one pure function, `transition(card, event)` in `packages/core/src/card-machine.ts`; the daemon's orchestrator is its only caller. Policies you are meant to edit live in `packages/core/src/policy/`.
 
 Stage defaults live in `packages/core/src/stage-spec.ts` (expensive model plans, cheap model builds) and can be overridden per card with `stageConfig`.
 

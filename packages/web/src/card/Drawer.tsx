@@ -5,6 +5,8 @@ import { api } from "../api/client.ts";
 import { useTranscript } from "../api/stream.ts";
 import { describeCard, isLive, TINT_CLASS } from "../board/status.ts";
 import { ArtifactsPanel } from "./ArtifactsPanel.tsx";
+import { DiffPanel } from "./DiffPanel.tsx";
+import { GatePanel } from "./GatePanel.tsx";
 import { SteerBox } from "./SteerBox.tsx";
 import { Transcript } from "./Transcript.tsx";
 
@@ -17,7 +19,7 @@ interface DrawerProps {
 
 export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 	const detail = useQuery({ queryKey: ["card", cardId], queryFn: () => api.card(cardId) });
-	const [tab, setTab] = useState<"session" | "files">("session");
+	const [tab, setTab] = useState<"session" | "changes" | "files">("session");
 	const [pickedRunId, setPickedRunId] = useState<string | null>(null);
 
 	const runs = detail.data?.runs ?? [];
@@ -33,7 +35,8 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 
 	if (detail.isPending) return <aside className="bg-rack p-4 text-dust">Loading card…</aside>;
 	if (detail.error) return <aside className="bg-rack p-4 text-rose">{detail.error.message}</aside>;
-	const { card, artifacts } = detail.data;
+	const { card, artifacts, gates } = detail.data;
+	const pendingGate = gates.find((gate) => gate.status === "pending") ?? null;
 	const { stage, status, tint } = describeCard(card);
 	const live = isLive(card) && run?.id === runs.at(-1)?.id;
 
@@ -57,6 +60,9 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 				<TabButton active={tab === "session"} onClick={() => setTab("session")}>
 					Session
 				</TabButton>
+				<TabButton active={tab === "changes"} onClick={() => setTab("changes")}>
+					Changes
+				</TabButton>
 				<TabButton active={tab === "files"} onClick={() => setTab("files")}>
 					Files ({artifacts.length})
 				</TabButton>
@@ -78,6 +84,10 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 
 			{tab === "files" ? (
 				<ArtifactsPanel cardId={card.id} artifacts={artifacts} />
+			) : tab === "changes" ? (
+				<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
+			) : pendingGate?.kind === "plan_approval" ? (
+				<GatePanel cardId={card.id} gate={pendingGate} />
 			) : run ? (
 				<>
 					<RunSummary run={run} />
@@ -85,7 +95,7 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 					{live && <SteerBox cardId={card.id} />}
 				</>
 			) : (
-				<p className="p-4 text-[14px] text-dust">No session has run for this card yet. Choose Plan on its strip to start one.</p>
+				<p className="p-4 text-[14px] text-dust">No session has run for this card yet. Choose Start on its strip to plan it.</p>
 			)}
 		</aside>
 	);
