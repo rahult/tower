@@ -143,6 +143,44 @@ export class SseReader {
 	}
 }
 
+/** A plan with the things real plans contain (table, code, checklist), so the UI's rendering can be looked at. */
+const SAMPLE_PLAN = `# Plan
+
+## Context and goal
+
+Requests to the payments API fail on transient **5xx** and network errors. Wrap \`request()\` so they are retried with backoff, without changing its signature.
+
+| Choice | Decision | Why |
+|---|---|---|
+| Strategy | Exponential backoff with jitter | Avoids synchronised retries |
+| Attempts | 5 | Matches the gateway's timeout budget |
+
+## Steps
+
+1. Do the thing.
+2. Add \`retry.ts\`:
+
+\`\`\`ts
+export async function withRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (i === attempts - 1 || !isTransient(error)) throw error;
+      await sleep(2 ** i * 100 + Math.random() * 100); // jitter
+    }
+  }
+}
+\`\`\`
+
+## Verify
+
+- [ ] \`pnpm test --filter http\`
+- [ ] \`pnpm typecheck\`
+
+> Do not retry 4xx responses: they will not get better.
+`;
+
 /** A scripted planning turn that behaves like a well-behaved agent: streams, writes plan.md and a passing result. */
 export function planningTurn(options: { writeResult?: boolean; delayMs?: number } = {}): FakeTurn {
 	return {
@@ -158,7 +196,7 @@ export function planningTurn(options: { writeResult?: boolean; delayMs?: number 
 		effect: ({ spec }) => {
 			// sessionDir is <home>/cards/<id>/sessions; artifacts live one level up.
 			const cardDir = join(spec.sessionDir, "..");
-			writeFileSync(join(cardDir, "plan.md"), "# Plan\n\n1. Do the thing.\n");
+			writeFileSync(join(cardDir, "plan.md"), SAMPLE_PLAN);
 			if (options.writeResult !== false) writeFileSync(join(cardDir, STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Plan ready." }));
 		},
 	};

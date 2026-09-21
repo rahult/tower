@@ -1,27 +1,38 @@
 import type { Card } from "@tower/core";
 
-/** Strip tint encodes state, the way real strip colours encode flight type. */
-export type Tint = "buff" | "sky" | "signal" | "rose" | "sage";
+/**
+ * Annunciator semantics, the same everywhere: work = an agent is running (blue), caution = needs you (amber),
+ * ok = clear (green), danger = stopped for good (red), rest = nothing happening (neutral).
+ */
+export type Tone = "rest" | "work" | "caution" | "ok" | "danger";
 
-export const TINT_CLASS: Record<Tint, string> = {
-	buff: "bg-buff",
-	sky: "bg-sky",
-	signal: "bg-signal",
-	rose: "bg-rose",
-	sage: "bg-sage",
+export const BAR_CLASS: Record<Tone, string> = {
+	rest: "bg-rule",
+	work: "bg-primary",
+	caution: "bg-caution-ink/35",
+	ok: "bg-ok",
+	danger: "bg-danger",
 };
 
-const STATUS: Record<Card["status"], { label: string; tint: Tint }> = {
-	idle: { label: "Idle", tint: "buff" },
-	queued: { label: "Queued", tint: "sky" },
-	running: { label: "Running", tint: "sky" },
-	verifying: { label: "Checking", tint: "sky" },
-	awaiting_gate: { label: "Waiting for approval", tint: "signal" },
-	awaiting_input: { label: "Waiting for your answer", tint: "signal" },
-	needs_attention: { label: "Needs attention", tint: "signal" },
-	paused: { label: "Paused", tint: "buff" },
-	interrupted: { label: "Interrupted", tint: "signal" },
-	abandoned: { label: "Abandoned", tint: "rose" },
+export const CHIP_CLASS: Record<Tone, string> = {
+	rest: "bg-wash text-slate",
+	work: "bg-primary-soft text-primary",
+	caution: "bg-caution-ink/12 text-caution-ink",
+	ok: "bg-ok-soft text-ok",
+	danger: "bg-danger-soft text-danger",
+};
+
+const STATUS: Record<Card["status"], { label: string; tone: Tone }> = {
+	idle: { label: "Idle", tone: "rest" },
+	queued: { label: "Queued", tone: "work" },
+	running: { label: "Running", tone: "work" },
+	verifying: { label: "Checking", tone: "work" },
+	awaiting_gate: { label: "Waiting for approval", tone: "caution" },
+	awaiting_input: { label: "Waiting for your answer", tone: "caution" },
+	needs_attention: { label: "Needs attention", tone: "caution" },
+	paused: { label: "Paused", tone: "rest" },
+	interrupted: { label: "Interrupted", tone: "caution" },
+	abandoned: { label: "Abandoned", tone: "danger" },
 };
 
 const STAGE_LABEL: Record<Card["stage"], string> = {
@@ -34,11 +45,12 @@ const STAGE_LABEL: Record<Card["stage"], string> = {
 	done: "Done",
 };
 
-export function describeCard(card: Card): { stage: string; status: string; tint: Tint } {
+export function describeCard(card: Card): { stage: string; status: string; tone: Tone } {
 	const status = STATUS[card.status];
-	return { stage: STAGE_LABEL[card.stage], status: status.label, tint: card.stage === "done" ? "sage" : status.tint };
+	return { stage: STAGE_LABEL[card.stage], status: status.label, tone: card.stage === "done" ? "ok" : status.tone };
 }
 
 export const isLive = (card: Card) => card.status === "running" || card.status === "verifying";
+export const needsYou = (card: Card) => describeCard(card).tone === "caution";
 
 export const STAGE_COLUMNS: Array<{ stage: Card["stage"]; label: string }> = (Object.keys(STAGE_LABEL) as Card["stage"][]).map((stage) => ({ stage, label: STAGE_LABEL[stage] }));

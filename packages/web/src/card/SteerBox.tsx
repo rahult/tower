@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { api } from "../api/client.ts";
+import { button, field } from "../ui.ts";
 
 export function SteerBox({ cardId }: { cardId: string }) {
 	const [text, setText] = useState("");
@@ -10,11 +11,12 @@ export function SteerBox({ cardId }: { cardId: string }) {
 		if (text.trim()) steer.mutate();
 	};
 	return (
-		<form onSubmit={submit} className="border-t border-seam p-3">
-			<label htmlFor="steer" className="mb-1 block text-[13px] text-dust">
+		// shrink-0: the transcript above gives way, never this.
+		<form onSubmit={submit} className="shrink-0 border-t border-rule bg-sheet p-3">
+			<label htmlFor="steer" className="mb-1 block text-[13px] text-slate">
 				Steer the agent. It reads this after its current tool calls finish.
 			</label>
-			<div className="flex gap-2">
+			<div className="flex items-end gap-2">
 				<textarea
 					id="steer"
 					value={text}
@@ -23,14 +25,14 @@ export function SteerBox({ cardId }: { cardId: string }) {
 						if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) submit(event);
 					}}
 					rows={2}
-					className="flex-1 resize-y rounded-[3px] bg-buff px-3 py-2 text-ink placeholder:text-ink/50"
+					className={`${field} resize-y`}
 					placeholder="Use the existing logger instead of adding a new one"
 				/>
-				<button type="submit" disabled={!text.trim() || steer.isPending} className="condensed cursor-pointer self-end rounded-[3px] bg-chalk px-3 py-2 font-semibold text-ink hover:bg-white disabled:cursor-default disabled:opacity-40">
+				<button type="submit" disabled={!text.trim() || steer.isPending} className={`${button.primary} whitespace-nowrap`}>
 					Send steer
 				</button>
 			</div>
-			{steer.error && <p className="mt-1 text-[14px] text-rose">{steer.error.message}</p>}
+			{steer.error && <p className="mt-1 text-[14px] text-danger">{steer.error.message}</p>}
 		</form>
 	);
 }

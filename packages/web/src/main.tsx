@@ -3,6 +3,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./styles.css";
+import { applyTheme } from "./theme.ts";
+
+// Before the first paint, so a chosen theme never flashes the other one.
+applyTheme();
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 5_000, retry: 1 } } });
 

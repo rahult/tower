@@ -36,6 +36,25 @@ const storeFor = (runId: string) => {
 	return store;
 };
 
+/** Whether the board is hearing from the daemon. Shown in the status bar, because a silent board must not look calm. */
+export type Connection = "connecting" | "live" | "reconnecting";
+let connection: Connection = "connecting";
+const connectionListeners = new Set<() => void>();
+function setConnection(next: Connection): void {
+	if (next === connection) return;
+	connection = next;
+	for (const listener of connectionListeners) listener();
+}
+export function useConnection(): Connection {
+	return useSyncExternalStore(
+		(listener) => {
+			connectionListeners.add(listener);
+			return () => connectionListeners.delete(listener);
+		},
+		() => connection,
+	);
+}
+
 const EMPTY: Block[] = [];
 
 export function useTranscript(runId: string | null): Block[] {
@@ -54,11 +73,17 @@ export function useEventStream(openRunId: string | null): void {
 		const since = openRunId ? storeFor(openRunId).lastSeq : 0;
 		const source = new EventSource(`/api/stream?topics=${topics}&since=${since}`);
 		// Board frames carry no replay cursor, so refetch whenever the connection (re)opens.
-		source.onopen = () => void queryClient.invalidateQueries();
+		source.onopen = () => {
+			setConnection("live");
+			void queryClient.invalidateQueries();
+		};
+		// EventSource retries by itself; until it is back, say so.
+		source.onerror = () => setConnection("reconnecting");
 		source.onmessage = (message) => {
 			const frame = JSON.parse(message.data) as { topic: string; type: string; data: any };
 			if (frame.topic === "board") {
 				void queryClient.invalidateQueries({ queryKey: ["board"] });
+				if (frame.type === "settings_changed") void queryClient.invalidateQueries({ queryKey: ["settings"] });
 				const cardId = frame.data?.cardId ?? (frame.type === "card_upserted" ? frame.data?.id : null);
 				if (cardId) void queryClient.invalidateQueries({ queryKey: ["card", cardId] });
 			} else if (frame.topic.startsWith("run:")) {

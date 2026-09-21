@@ -1,6 +1,7 @@
 import type { Card } from "@tower/core";
 import type { ReactNode } from "react";
-import { describeCard, isLive, TINT_CLASS } from "./status.ts";
+import { button } from "../ui.ts";
+import { BAR_CLASS, CHIP_CLASS, describeCard, isLive } from "./status.ts";
 
 interface StripProps {
 	card: Card;
@@ -10,24 +11,29 @@ interface StripProps {
 }
 
 /**
- * A card, drawn as a flight progress strip: boxed fields in a holder, tinted by state. It adapts to the width of
- * its container: in a board cell it stacks; given room (a wide lane) it lays its fields out in a row.
+ * A card, drawn as a flight progress strip: a white strip in a holder whose bar colour is its state.
+ * The one exception is a card that needs you, which is filled solid amber so it cannot be missed.
  */
 export function Strip({ card, selected, onOpen, action }: StripProps) {
-	const { status, tint } = describeCard(card);
+	const { status, tone } = describeCard(card);
+	const caution = tone === "caution";
 	return (
-		<li className={`flex items-stretch rounded-[3px] text-ink ${TINT_CLASS[tint]} ${selected ? "ring-2 ring-chalk ring-offset-2 ring-offset-rack" : ""}`}>
-			<span aria-hidden className={`w-1.5 shrink-0 rounded-l-[3px] ${isLive(card) ? "sweep" : "bg-ink/25"}`} />
+		<li
+			className={`flex overflow-hidden rounded-md border ${caution ? "border-caution bg-caution text-caution-ink" : "border-rule bg-sheet text-ink"} ${
+				selected ? "ring-2 ring-primary ring-offset-1 ring-offset-wash" : ""
+			}`}
+		>
+			<span aria-hidden className={`w-1.5 shrink-0 ${isLive(card) ? "sweep" : BAR_CLASS[tone]}`} />
 			<div className="flex min-w-0 flex-1 flex-col @2xl:flex-row @2xl:items-stretch">
 				<button type="button" onClick={onOpen} className="min-w-0 flex-1 cursor-pointer px-2.5 py-2 text-left">
 					<span className="line-clamp-2 leading-snug font-semibold">{card.title}</span>
-					<span className="condensed mt-0.5 flex items-baseline gap-2 text-[13px]">
-						<span className="font-semibold">{status}</span>
-						<span className="ml-auto font-mono text-[11px] text-ink/60">{card.id}</span>
+					<span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+						<span className={`rounded px-1.5 py-px text-[12px] font-semibold whitespace-nowrap ${CHIP_CLASS[tone]}`}>{status}</span>
+						<span className={`ml-auto font-mono text-[11px] ${caution ? "text-caution-ink/70" : "text-slate"}`}>{card.id}</span>
 					</span>
-					{card.needsAttentionReason && <span className="mt-0.5 line-clamp-2 text-[13px]">{card.needsAttentionReason}</span>}
+					{card.needsAttentionReason && <span className="mt-1.5 line-clamp-3 text-[13px] leading-snug">{card.needsAttentionReason}</span>}
 				</button>
-				{action && <span className="flex items-center border-t border-ink/25 px-2 py-1.5 @2xl:border-t-0 @2xl:border-l">{action}</span>}
+				{action && <span className={`flex items-center border-t px-2 py-1.5 @2xl:border-t-0 @2xl:border-l ${caution ? "border-caution-ink/20" : "border-rule"}`}>{action}</span>}
 			</div>
 		</li>
 	);
@@ -37,17 +43,13 @@ interface StripButtonProps {
 	/** Omit for a form's submit button. */
 	onClick?: () => void;
 	disabled?: boolean;
+	kind?: keyof typeof button;
 	children: ReactNode;
 }
 
-export function StripButton({ onClick, disabled, children }: StripButtonProps) {
+export function StripButton({ onClick, disabled, kind = "quiet", children }: StripButtonProps) {
 	return (
-		<button
-			type={onClick ? "button" : "submit"}
-			onClick={onClick}
-			disabled={disabled}
-			className="condensed cursor-pointer rounded-[3px] border border-ink/60 px-2.5 py-1 text-[14px] font-semibold whitespace-nowrap hover:bg-ink hover:text-buff disabled:cursor-default disabled:opacity-40"
-		>
+		<button type={onClick ? "button" : "submit"} onClick={onClick} disabled={disabled} className={`${button[kind]} !px-2.5 !py-1 !text-[13px] whitespace-nowrap`}>
 			{children}
 		</button>
 	);

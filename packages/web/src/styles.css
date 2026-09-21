@@ -1,24 +1,137 @@
 @import "tailwindcss";
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght.css";
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
 @import "@fontsource-variable/archivo/wdth.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
 
-@theme {
-	--color-rack: #26323b;
-	--color-rail: #1b242b;
-	--color-well: #1f2a32;
-	--color-seam: #3a4954;
-	--color-chalk: #dce3e8;
-	--color-dust: #93a3af;
-	--color-ink: #1a1d21;
-	--color-buff: #efe6cc;
-	--color-sky: #cbe0ec;
-	--color-signal: #f2c14e;
-	--color-rose: #e9b7b0;
-	--color-sage: #cfe3c8;
+/*
+ * Daylight tower. State colours follow flight-deck annunciator semantics and mean the same thing everywhere:
+ * blue = an agent is working, amber = caution / needs you, green = clear, red = warning, neutral = resting.
+ * Only a card that needs you is filled solid; everything else is a white strip with a coloured holder bar.
+ */
+:root {
+	--paper: #f6f8fa;
+	--sheet: #ffffff;
+	--wash: #edf1f5;
+	--rule: #d9e0e8;
+	--ink: #0e1b2e;
+	--slate: #55657a;
+	--bar: #0e1b2e;
+	--bar-ink: #e8eef6;
+	--bar-dim: #9db0c8;
 
-	--font-sans: "Archivo Variable", system-ui, sans-serif;
-	--font-mono: "IBM Plex Mono", ui-monospace, monospace;
+	--primary: #1d5fd6;
+	--primary-ink: #ffffff;
+	--primary-soft: #e6eefc;
+	--caution: #f5b301;
+	--caution-ink: #2a1e00;
+	--caution-soft: #fff4d1;
+	--ok: #157f4b;
+	--ok-soft: #e1f3e8;
+	--danger: #c4302b;
+	--danger-soft: #fce9e7;
+
+	--code-bg: #f1f4f8;
+	--tok-keyword: #8a2be2;
+	--tok-string: #0f7b45;
+	--tok-number: #b3470a;
+	--tok-comment: #6b7a8d;
+	--tok-title: #1d5fd6;
+	--tok-attr: #0b6e8a;
+	color-scheme: light;
+}
+
+/* Dark follows the OS unless the person picked a theme; `data-theme` is set by the toggle in the status bar. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--paper: #0c141f;
+		--sheet: #142030;
+		--wash: #101a28;
+		--rule: #25364b;
+		--ink: #e6edf6;
+		--slate: #93a5bb;
+		--bar: #070d16;
+		--bar-ink: #e8eef6;
+		--bar-dim: #8498b2;
+
+		--primary: #5b95ff;
+		--primary-ink: #06101f;
+		--primary-soft: #16294a;
+		--caution: #f5b301;
+		--caution-ink: #2a1e00;
+		--caution-soft: #3a2f0a;
+		--ok: #3fc483;
+		--ok-soft: #0f2f22;
+		--danger: #ff7b72;
+		--danger-soft: #3a1618;
+
+		--code-bg: #0e1826;
+		--tok-keyword: #c49bff;
+		--tok-string: #6fd99c;
+		--tok-number: #ffab70;
+		--tok-comment: #7a8ca3;
+		--tok-title: #82b1ff;
+		--tok-attr: #6cd0e6;
+		color-scheme: dark;
+	}
+}
+:root[data-theme="dark"] {
+	--paper: #0c141f;
+	--sheet: #142030;
+	--wash: #101a28;
+	--rule: #25364b;
+	--ink: #e6edf6;
+	--slate: #93a5bb;
+	--bar: #070d16;
+	--bar-ink: #e8eef6;
+	--bar-dim: #8498b2;
+
+	--primary: #5b95ff;
+	--primary-ink: #06101f;
+	--primary-soft: #16294a;
+	--caution: #f5b301;
+	--caution-ink: #2a1e00;
+	--caution-soft: #3a2f0a;
+	--ok: #3fc483;
+	--ok-soft: #0f2f22;
+	--danger: #ff7b72;
+	--danger-soft: #3a1618;
+
+	--code-bg: #0e1826;
+	--tok-keyword: #c49bff;
+	--tok-string: #6fd99c;
+	--tok-number: #ffab70;
+	--tok-comment: #7a8ca3;
+	--tok-title: #82b1ff;
+	--tok-attr: #6cd0e6;
+	color-scheme: dark;
+}
+
+@theme inline {
+	--color-paper: var(--paper);
+	--color-sheet: var(--sheet);
+	--color-wash: var(--wash);
+	--color-rule: var(--rule);
+	--color-ink: var(--ink);
+	--color-slate: var(--slate);
+	--color-bar: var(--bar);
+	--color-bar-ink: var(--bar-ink);
+	--color-bar-dim: var(--bar-dim);
+	--color-primary: var(--primary);
+	--color-primary-ink: var(--primary-ink);
+	--color-primary-soft: var(--primary-soft);
+	--color-caution: var(--caution);
+	--color-caution-ink: var(--caution-ink);
+	--color-caution-soft: var(--caution-soft);
+	--color-ok: var(--ok);
+	--color-ok-soft: var(--ok-soft);
+	--color-danger: var(--danger);
+	--color-danger-soft: var(--danger-soft);
+	--color-code: var(--code-bg);
+
+	--font-sans: "Atkinson Hyperlegible Next Variable", system-ui, sans-serif;
+	--font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+	--font-display: "Archivo Variable", "Atkinson Hyperlegible Next Variable", sans-serif;
 }
 
 html,
@@ -28,41 +141,227 @@ body,
 }
 
 body {
-	background: var(--color-rail);
-	color: var(--color-chalk);
+	background: var(--paper);
+	color: var(--ink);
 	font-family: var(--font-sans);
 	font-size: 15px;
 	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
 }
 
-/* Strip fields are set condensed, like the printed boxes on a flight progress strip. */
-.condensed {
-	font-stretch: 75%;
-	letter-spacing: 0.01em;
+/* Wordmark and column heads: the one place the condensed display face appears. */
+.display {
+	font-family: var(--font-display);
+	font-stretch: 72%;
+	letter-spacing: 0.005em;
 }
 
 :focus-visible {
-	outline: 2px solid var(--color-signal);
+	outline: 2px solid var(--primary);
 	outline-offset: 2px;
+	border-radius: 3px;
 }
 
-/* The only ambient motion in the app: a sweep along the holder edge of a strip whose session is running. */
+/* The only ambient motion: a sweep along the holder bar of a strip whose agent is working. */
 .sweep {
-	background: linear-gradient(180deg, transparent 0%, var(--color-ink) 50%, transparent 100%);
+	background: linear-gradient(180deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 25%, transparent) 50%, var(--primary) 100%);
 	background-size: 100% 200%;
-	animation: sweep 1.6s linear infinite;
+	animation: sweep 1.4s linear infinite;
 }
 @keyframes sweep {
 	from {
-		background-position: 0 100%;
+		background-position: 0 0;
 	}
 	to {
-		background-position: 0 -100%;
+		background-position: 0 -200%;
+	}
+}
+.pulse {
+	animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+	50% {
+		opacity: 0.35;
 	}
 }
 @media (prefers-reduced-motion: reduce) {
-	.sweep {
+	.sweep,
+	.pulse {
 		animation: none;
-		background: var(--color-ink);
 	}
+}
+
+/* ---------- Rendered Markdown (plans, agent replies, instructions) ---------- */
+.prose {
+	max-width: 76ch;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+.prose > :first-child {
+	margin-top: 0;
+}
+.prose > :last-child {
+	margin-bottom: 0;
+}
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+	margin: 1.4em 0 0.5em;
+	font-weight: 700;
+	line-height: 1.25;
+}
+.prose h1 {
+	font-size: 1.35em;
+}
+.prose h2 {
+	font-size: 1.18em;
+	padding-bottom: 0.25em;
+	border-bottom: 1px solid var(--rule);
+}
+.prose h3 {
+	font-size: 1.05em;
+}
+.prose h4 {
+	font-size: 1em;
+	color: var(--slate);
+}
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose table,
+.prose pre {
+	margin: 0 0 0.85em;
+}
+.prose ul {
+	list-style: disc;
+	padding-left: 1.4em;
+}
+.prose ol {
+	list-style: decimal;
+	padding-left: 1.6em;
+}
+.prose li {
+	margin: 0.2em 0;
+}
+.prose li > ul,
+.prose li > ol {
+	margin: 0.2em 0;
+}
+.prose li::marker {
+	color: var(--slate);
+}
+.prose input[type="checkbox"] {
+	margin-right: 0.4em;
+}
+.prose a {
+	color: var(--primary);
+	text-decoration: underline;
+	text-underline-offset: 0.18em;
+}
+.prose strong {
+	font-weight: 700;
+}
+.prose blockquote {
+	border-left: 3px solid var(--rule);
+	padding-left: 0.9em;
+	color: var(--slate);
+}
+.prose hr {
+	margin: 1.4em 0;
+	border: 0;
+	border-top: 1px solid var(--rule);
+}
+.prose table {
+	display: block;
+	overflow-x: auto;
+	border-collapse: collapse;
+	font-size: 0.93em;
+}
+.prose th,
+.prose td {
+	padding: 0.35em 0.7em;
+	border: 1px solid var(--rule);
+	text-align: left;
+	vertical-align: top;
+}
+.prose th {
+	background: var(--wash);
+	font-weight: 700;
+}
+.prose :not(pre) > code {
+	padding: 0.1em 0.35em;
+	border-radius: 4px;
+	background: var(--code-bg);
+	font-family: var(--font-mono);
+	font-size: 0.87em;
+}
+.prose pre,
+.codeblock {
+	overflow-x: auto;
+	padding: 0.75em 0.9em;
+	border: 1px solid var(--rule);
+	border-radius: 6px;
+	background: var(--code-bg);
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+	line-height: 1.55;
+	tab-size: 2;
+}
+.prose pre code {
+	background: none;
+	padding: 0;
+	font-size: inherit;
+}
+
+/* highlight.js tokens, shared by Markdown code fences and CodeBlock */
+.hljs-comment,
+.hljs-quote {
+	color: var(--tok-comment);
+	font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-meta .hljs-keyword {
+	color: var(--tok-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta .hljs-string {
+	color: var(--tok-string);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-built_in,
+.hljs-type {
+	color: var(--tok-number);
+}
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+	color: var(--tok-title);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property,
+.hljs-meta {
+	color: var(--tok-attr);
+}
+.hljs-deletion {
+	color: var(--danger);
+}
+.hljs-emphasis {
+	font-style: italic;
+}
+.hljs-strong {
+	font-weight: 700;
 }
