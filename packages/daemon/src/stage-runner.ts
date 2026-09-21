@@ -32,7 +32,7 @@ const NUDGE = `You stopped without writing the required result file. Write ${STA
 
 /** How a stage run ended. The orchestrator turns this into a card transition. */
 export type RunOutcome =
-	| { kind: "settled"; stage: AgentStage; result: ResultStatus; summary: string }
+	| { kind: "settled"; stage: AgentStage; result: ResultStatus; summary: string; hasQuestions: boolean }
 	| { kind: "failed"; error: string }
 	| { kind: "aborted" };
 
@@ -102,6 +102,7 @@ export class StageRunner {
 			status: "starting",
 			resultStatus: null,
 			resultSummary: null,
+			questions: null,
 			tokens: null,
 			costUsd: null,
 			lastEntryId: null,
@@ -133,9 +134,11 @@ export class StageRunner {
 	 * Reopens the session a restart interrupted (same session id, so pi restores its history) and tells the agent
 	 * to carry on. Falls back to a fresh run when there is nothing to reopen.
 	 */
-	async resume(cardId: string, stage: AgentStage): Promise<StageRun> {
+	async resume(cardId: string, stage: AgentStage, message?: string): Promise<StageRun> {
 		const { config, db, runs } = this.deps;
-		const interrupted = listRunsForCard(db, cardId).findLast((run) => run.kind === "stage" && run.stage === stage && run.status === "interrupted");
+		// With a message (answers to the stage's questions) the session to continue is the stage's latest one,
+		// whatever state it ended in; without one, only a session a restart cut off.
+		const interrupted = listRunsForCard(db, cardId).findLast((run) => run.kind === "stage" && run.stage === stage && (message !== undefined || run.status === "interrupted"));
 		const card = getCard(db, cardId);
 		const project = card && getProject(db, card.projectId);
 		if (!interrupted || !card?.worktreePath || !project) return this.start(cardId, stage);
@@ -148,10 +151,12 @@ export class StageRunner {
 			this.patchRun(interrupted.id, { status: "failed", error: error instanceof Error ? error.message : String(error), endedAt: Date.now() });
 			throw error;
 		}
-		this.patchRun(interrupted.id, { status: "running", endedAt: null, error: null });
+		// The old verdict belongs to the turn that asked; the continued session will write a new one.
+		rmSync(join(paths.cardDir(config, card.id), STAGE_RESULT_FILE), { force: true });
+		this.patchRun(interrupted.id, { status: "running", endedAt: null, error: null, resultStatus: null, resultSummary: null, questions: null });
 		this.deps.onStarted(card.id);
 		runs.note(live.runId, "resumed", {});
-		const work = this.drive(live, stage, RESUME, paths.cardDir(config, card.id)).finally(() => this.inFlight.delete(interrupted.id));
+		const work = this.drive(live, stage, message ?? RESUME, paths.cardDir(config, card.id)).finally(() => this.inFlight.delete(interrupted.id));
 		this.inFlight.set(interrupted.id, work);
 		return getRun(db, interrupted.id) as StageRun;
 	}
@@ -256,8 +261,9 @@ export class StageRunner {
 			} else {
 				const result: ResultStatus = parsed.ok ? parsed.result.status : "missing";
 				const summary = parsed.ok ? parsed.result.summary : parsed.reason;
-				this.patchRun(live.runId, { ...common, status: "settled", resultStatus: result, resultSummary: summary });
-				outcome = { kind: "settled", stage, result, summary };
+				const questions = parsed.ok ? (parsed.result.questions ?? null) : null;
+				this.patchRun(live.runId, { ...common, status: "settled", resultStatus: result, resultSummary: summary, questions });
+				outcome = { kind: "settled", stage, result, summary, hasQuestions: questions !== null };
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);

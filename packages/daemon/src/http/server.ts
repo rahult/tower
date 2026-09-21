@@ -171,6 +171,19 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(orchestrator.retry(card.id, feedback), 202);
 	});
 
+	app.post("/api/cards/:id/answers", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const body = (await c.req.json()) as { answers?: unknown };
+		const answers = Array.isArray(body.answers) ? body.answers : [];
+		const cleaned = answers
+			.filter((a): a is { question: string; answer: string } => typeof a?.question === "string" && typeof a?.answer === "string")
+			.map((a) => ({ question: a.question.trim(), answer: a.answer.trim() }));
+		if (cleaned.length === 0 || cleaned.length !== answers.length || cleaned.some((a) => !a.question || !a.answer)) {
+			throw new HttpError(400, "Send an answer for each question, as { question, answer } pairs");
+		}
+		return c.json(orchestrator.answer(card.id, cleaned), 202);
+	});
+
 	app.post("/api/cards/:id/resume", (c) => c.json(orchestrator.resume(cardOr404(c.req.param("id")).id), 202));
 
 	app.post("/api/cards/:id/gates/:gateId", async (c) => {

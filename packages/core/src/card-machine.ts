@@ -21,21 +21,25 @@ export type CardEvent =
 	/** The daemon restarted while this card's work was in flight. */
 	| { type: "daemon_restarted" }
 	/** `wasVerifying`: the interrupted work was the verify command, which has no session to reopen. */
-	| { type: "resume"; wasVerifying: boolean };
+	| { type: "resume"; wasVerifying: boolean }
+	/** The person answered the questions a stage asked. `message` is what the agent is told. */
+	| { type: "answers_given"; message: string };
 
 /** Facts the orchestrator gathers (with IO) so the transition itself can stay pure. */
 export interface SettleContext {
 	requiredGates: GateKind[];
 	/** The project has a verify command, so the daemon (not an agent) decides whether testing passes. */
 	hasVerifyCommand: boolean;
+	/** The stage stopped with specific questions for a person. */
+	hasQuestions: boolean;
 	/** What the retry policy says to do if this settle is a testing failure. */
 	onFailure: FailureDecision;
 }
 
 export type Effect =
 	| { type: "start_run"; stage: AgentStage; feedback?: string }
-	/** Reopen the interrupted session (same session id) and tell the agent to carry on. */
-	| { type: "resume_run"; stage: AgentStage }
+	/** Reopen the stage's session (same session id). Without a message the agent is told to carry on after an interruption. */
+	| { type: "resume_run"; stage: AgentStage; message?: string }
 	| { type: "run_verify" }
 	| { type: "open_gate"; kind: GateKind };
 
@@ -81,6 +85,8 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			if (status !== "running") break;
 			// A tester that reports failure is the loop's signal, not a dead end: the retry policy decides.
 			if (stage === "testing" && event.result === "fail") return afterTestFailure(event.context.onFailure);
+			// Questions are answerable, so they get their own state and the session is kept to continue in.
+			if (event.result === "blocked" && event.context.hasQuestions) return { next: rest(stage, "awaiting_input", event.summary), effects: [] };
 			if (event.result !== "pass") {
 				const reason = event.result === "missing" ? event.summary : `${event.result}: ${event.summary}`;
 				return { next: rest(stage, "needs_attention", reason), effects: [] };
@@ -125,9 +131,13 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			if (event.wasVerifying) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
 			return { next: rest(stage, "queued"), effects: [{ type: "resume_run", stage }] };
 
+		case "answers_given":
+			if (status !== "awaiting_input" || !isAgentStage(stage)) break;
+			return { next: rest(stage, "queued"), effects: [{ type: "resume_run", stage, message: event.message }] };
+
 		case "retry":
 			// Re-run the stage the card is stuck or resting in, optionally with guidance.
-			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted")) break;
+			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted" && status !== "awaiting_input")) break;
 			if (stage === "testing" && event.hasVerifyCommand) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
 			return queue(stage, event.feedback);
 			break;

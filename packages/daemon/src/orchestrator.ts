@@ -13,6 +13,7 @@ import {
 	type ReadyCard,
 	requiredGates,
 	type SchedulerState,
+	STAGE_RESULT_FILE,
 	type StageRun,
 	transition,
 } from "@tower/core";
@@ -80,6 +81,19 @@ export class Orchestrator {
 		this.schedule();
 	}
 
+	/** Hands a person's answers to the stage that asked, continuing its session so nothing it learned is lost. */
+	answer(cardId: string, answers: Array<{ question: string; answer: string }>): Card {
+		const lines = answers.map(({ question, answer }, index) => `${index + 1}. ${question}\n   Answer: ${answer}`);
+		const message = [
+			"Here are the answers to your questions:",
+			"",
+			...lines,
+			"",
+			`Treat them as decisions and continue the task from where you stopped. Your original instructions still apply, including writing ${STAGE_RESULT_FILE} when you are done. Ask again only if something new and essential is still open.`,
+		].join("\n");
+		return this.dispatch(cardId, { type: "answers_given", message });
+	}
+
 	retry(cardId: string, feedback?: string): Card {
 		return this.dispatch(cardId, { type: "retry", ...(feedback ? { feedback } : {}), hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
 	}
@@ -141,6 +155,7 @@ export class Orchestrator {
 				context: {
 					requiredGates: outcome.stage === "planning" && outcome.result === "pass" ? this.gatesFor(cardId) : [],
 					hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
+					hasQuestions: outcome.hasQuestions,
 					onFailure: this.failureDecision(cardId, outcome.summary, null),
 				},
 			});
@@ -227,7 +242,7 @@ export class Orchestrator {
 		const started =
 			effect.type === "run_verify"
 				? this.verify(card.id)
-				: (effect.type === "resume_run" ? stages.resume(card.id, effect.stage) : stages.start(card.id, effect.stage, effect.feedback ? { feedback: effect.feedback } : {})).then(() => {});
+				: (effect.type === "resume_run" ? stages.resume(card.id, effect.stage, effect.message) : stages.start(card.id, effect.stage, effect.feedback ? { feedback: effect.feedback } : {})).then(() => {});
 		const work = started
 			.catch((error) => {
 				if (!this.stopping) this.dispatch(card.id, { type: "run_failed", error: error instanceof Error ? error.message : String(error) });
@@ -260,6 +275,7 @@ export class Orchestrator {
 			status: "running",
 			resultStatus: null,
 			resultSummary: null,
+			questions: null,
 			tokens: null,
 			costUsd: null,
 			lastEntryId: null,

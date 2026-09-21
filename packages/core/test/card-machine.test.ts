@@ -12,7 +12,7 @@ const settled = (
 	type: "run_settled",
 	result,
 	summary,
-	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, onFailure: RETRY, ...context },
+	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, onFailure: RETRY, ...context },
 });
 
 describe("transition", () => {
@@ -30,6 +30,9 @@ describe("transition", () => {
 		["failing verification stops when the policy gives up", card("testing", "verifying"), { type: "verify_finished", passed: false, onFailure: GIVE_UP }, { stage: "testing", status: "needs_attention", needsAttentionReason: GIVE_UP.reason }, []],
 		["a tester that reports failure loops back the same way", card("testing", "running"), settled("fail", "red"), { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "2 tests failed" }]],
 		["a tester that passes rests", card("testing", "running"), settled("pass"), { stage: "testing", status: "idle" }, []],
+		["a stage that asks questions waits for answers", card("planning", "running"), settled("blocked", "Two decisions change the plan.", { hasQuestions: true }), { stage: "planning", status: "awaiting_input", needsAttentionReason: "Two decisions change the plan." }, []],
+		["answers continue the same session", card("planning", "awaiting_input"), { type: "answers_given", message: "1. CLI" }, { stage: "planning", status: "queued", needsAttentionReason: null }, [{ type: "resume_run", stage: "planning", message: "1. CLI" }]],
+		["a card waiting for answers can also start its stage over", card("planning", "awaiting_input"), { type: "retry" }, { status: "queued" }, [{ type: "start_run", stage: "planning" }]],
 		["a blocked tester asks the human, it does not loop", card("testing", "running"), settled("blocked", "No test runner"), { stage: "testing", status: "needs_attention" }, []],
 		["a verify command that cannot run asks for attention", card("testing", "verifying"), { type: "run_failed", error: "spawn ENOENT" }, { status: "needs_attention", needsAttentionReason: "spawn ENOENT" }, []],
 		["a failed stage asks for attention", card("building", "running"), settled("fail", "tests red"), { status: "needs_attention", needsAttentionReason: "fail: tests red" }, []],
@@ -66,6 +69,7 @@ describe("transition", () => {
 		["retry a backlog card", card("backlog", "idle"), { type: "retry" }],
 		["abort a resting card", card("building", "idle"), { type: "run_aborted" }],
 		["a restart does not touch a card that is waiting for a human", card("planning", "awaiting_gate"), { type: "daemon_restarted" }],
+		["answer a card that asked nothing", card("planning", "needs_attention"), { type: "answers_given", message: "x" }],
 		["resume a card that was not interrupted", card("building", "idle"), { type: "resume", wasVerifying: false }],
 		["finish a verification that is not running", card("testing", "idle"), { type: "verify_finished", passed: true, onFailure: RETRY }],
 	])("rejects: %s", (_name, from, event) => {

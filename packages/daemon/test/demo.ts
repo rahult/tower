@@ -46,7 +46,26 @@ const driver = new FakeSessionDriver((spec) => {
 	const stage = spec.sessionId.includes("-plan-") ? "plan" : spec.sessionId.includes("-build-") ? "build" : "test";
 	const title = titles.get(spec.sessionId.slice(1, 9)) ?? "";
 	if (title.startsWith("Add retry") && stage === "build") return [busy];
-	if (title.startsWith("Migrate") && stage === "plan") return [result("blocked", "Two ORMs are in use. Which one should the migration target?")];
+	if (title.startsWith("Migrate") && stage === "plan") {
+		return [
+			{
+				events: [{ type: "message", message: { role: "assistant", text: "Two ORMs are in use here, and the schema change touches both. I need two decisions before I can plan this.", thinking: "", toolCalls: [] } }],
+				effect: ({ spec }) =>
+					writeFileSync(
+						join(spec.sessionDir, "..", STAGE_RESULT_FILE),
+						JSON.stringify({
+							status: "blocked",
+							summary: "Two decisions change the plan.",
+							questions: [
+								{ question: "Which ORM should the migration target?", options: ["Drizzle (used by the newer services)", "Prisma (used by billing)", "Both, behind a shared migration runner"] },
+								{ question: "Can the migration take the ledger table offline?", options: ["No, it must be online", "Yes, a short maintenance window is fine"] },
+								{ question: "Anything about the rollout I should know?", options: [] },
+							],
+						}),
+					),
+			},
+		];
+	}
 	if (title.startsWith("Dark mode") && stage === "plan") return [busy];
 	return [stage === "plan" ? planningTurn() : stage === "build" ? buildingTurn() : testerTurn()];
 });

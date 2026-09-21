@@ -8,6 +8,7 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 - **Model tiering.** Planning defaults to `anthropic/claude-fable-5-1`; building and testing default to `zai/glm-5.3`. Override per card.
 - **Isolation.** Every card gets its own git worktree and branch; your checkout is never touched. (One exception: a repository with no commits at all gets an empty first commit, made without touching your files or index, because a branch needs a commit to start from.) Every stage is a fresh pi session that sees only the previous stage's artifacts (for example `plan.md`), never its conversation.
 - **Gates.** A finished plan waits for you: approve it, or send it back with what should change.
+- **Questions, not guesses.** When a decision is yours (what kind of app, which library), the agent stops and asks, with options you answer by clicking on the board. The same session then continues with your answers.
 - **Your tests decide.** A project's verify command runs after each build; its exit code is the verdict. Failures go back to a fresh builder with the output, up to a cap, then the card asks for you.
 - **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff.
 - **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
@@ -54,7 +55,7 @@ A first card, end to end:
 4. A cheap model builds from the plan in the card's worktree and commits on branch `tower/<id>-<title>`. Your verify command runs. If it fails, a fresh builder gets the output and tries again (three builds by default).
 5. Open the card any time to watch the session, **steer** it ("use the existing logger"), abort it, or read its diff under **Changes**.
 
-Click a strip to open its card. Strip colour is state: buff is resting, blue is running, amber needs you, green is done.
+Click a strip to open its card. Colour is state, and means the same everywhere: blue is an agent working, solid amber needs you, green is clear, red is a warning. Plans, replies and files are rendered (Markdown, highlighted code, pretty-printed JSON). The theme follows your system; the status bar has a toggle.
 
 ### Update and remove
 

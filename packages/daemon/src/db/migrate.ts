@@ -91,6 +91,10 @@ const MIGRATIONS: string[] = [
 	ALTER TABLE cards ADD COLUMN queued_effect_json TEXT;
 	ALTER TABLE cards ADD COLUMN queued_at INTEGER;
 	`,
+	`
+	-- What a stage asked a person, when it stopped to ask.
+	ALTER TABLE stage_runs ADD COLUMN questions_json TEXT;
+	`,
 ];
 
 export function migrate(db: DatabaseSync): void {

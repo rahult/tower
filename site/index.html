@@ -89,7 +89,7 @@
 			</section>
 
 			<figure class="shot wide">
-				<img src="assets/session.png" width="1600" height="760" alt="The Tower board with three project lanes. A card's drawer is open showing a live session: the agent's reasoning, a file it read, its reply, a test command that is still running, and a box for steering it." loading="lazy" />
+				<img src="assets/session.png" width="1600" height="820" alt="The Tower board with three project lanes. A card's drawer is open showing a live session: the agent's reasoning, a file it read, its reply, a test command that is still running, and a box for steering it." loading="lazy" />
 				<figcaption>Every session streams to the board. Steer it after its current tool calls finish, abort it, or read its diff.</figcaption>
 			</figure>
 
@@ -103,6 +103,10 @@
 					<div>
 						<dt>A fresh session per stage</dt>
 						<dd>Stages hand off through files such as <code>plan.md</code>, never through a shared conversation. The builder starts with a clean context, and a reviewer never inherits the author's reasoning.</dd>
+					</div>
+					<div>
+						<dt>Questions, not guesses</dt>
+						<dd>An agent that hits a decision that is yours stops and asks, with options you answer by clicking. Its session continues with your answers, so nothing it learned is thrown away.</dd>
 					</div>
 					<div>
 						<dt>Locked-down sessions</dt>
@@ -124,8 +128,13 @@
 			</section>
 
 			<figure class="shot wide">
-				<img src="assets/gate.png" width="1600" height="760" alt="A card waiting for approval. The drawer shows the plan the planner wrote, a box for feedback, and two buttons: Approve plan and build, and Send back to planner." loading="lazy" />
+				<img src="assets/gate.png" width="1600" height="820" alt="A card waiting for approval. The drawer shows the plan the planner wrote, a box for feedback, and two buttons: Approve plan and build, and Send back to planner." loading="lazy" />
 				<figcaption>The plan gate. A cheaper model will build from this plan alone, so it has to stand on its own.</figcaption>
+			</figure>
+
+			<figure class="shot wide">
+				<img src="assets/questions.png" width="1600" height="820" alt="A card waiting for your answer. The drawer lists three questions from the agent, each with clickable options; the first option of each is marked Suggested, and one question takes a typed answer." loading="lazy" />
+				<figcaption>When a decision is yours, the agent asks instead of guessing. Answer with a click, and the same session carries on with what it already worked out.</figcaption>
 			</figure>
 
 			<section id="install" class="wrap prose">

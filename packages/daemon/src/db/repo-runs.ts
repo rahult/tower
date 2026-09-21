@@ -16,6 +16,7 @@ function toRun(row: Row): StageRun {
 		status: row.status as StageRun["status"],
 		resultStatus: row.result_status as StageRun["resultStatus"],
 		resultSummary: row.result_summary as string | null,
+		questions: row.questions_json ? JSON.parse(row.questions_json as string) : null,
 		tokens: row.tokens_json ? JSON.parse(row.tokens_json as string) : null,
 		costUsd: row.cost_usd as number | null,
 		lastEntryId: row.last_entry_id as string | null,
@@ -42,16 +43,20 @@ const COLUMNS = {
 	error: "error",
 } as const;
 
-export type RunPatch = Partial<Pick<StageRun, keyof typeof COLUMNS | "tokens">>;
+export type RunPatch = Partial<Pick<StageRun, keyof typeof COLUMNS | "tokens" | "questions">>;
 
 export function updateRun(db: Db, id: string, patch: RunPatch): void {
-	const { tokens, ...rest } = patch;
+	const { tokens, questions, ...rest } = patch;
 	const keys = Object.keys(rest) as Array<keyof typeof COLUMNS>;
 	const sets = keys.map((key) => `${COLUMNS[key]} = ?`);
 	const values: Array<string | number | null> = keys.map((key) => rest[key] ?? null);
 	if (tokens !== undefined) {
 		sets.push("tokens_json = ?");
 		values.push(tokens ? JSON.stringify(tokens) : null);
+	}
+	if (questions !== undefined) {
+		sets.push("questions_json = ?");
+		values.push(questions ? JSON.stringify(questions) : null);
 	}
 	if (sets.length === 0) return;
 	db.prepare(`UPDATE stage_runs SET ${sets.join(", ")} WHERE id = ?`).run(...values, id);

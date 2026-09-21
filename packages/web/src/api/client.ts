@@ -67,6 +67,7 @@ export const api = {
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),
+	answer: (cardId: string, answers: Array<{ question: string; answer: string }>) => request<Card>("POST", `/api/cards/${cardId}/answers`, { answers }),
 	retry: (cardId: string, feedback?: string) => request<Card>("POST", `/api/cards/${cardId}/retry`, { feedback }),
 	decideGate: (cardId: string, gateId: string, decision: "approve" | "reject", feedback?: string) =>
 		request<Card>("POST", `/api/cards/${cardId}/gates/${gateId}`, { decision, feedback }),

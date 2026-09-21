@@ -8,6 +8,7 @@ import { Markdown } from "../content/Markdown.tsx";
 import { ArtifactsPanel } from "./ArtifactsPanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
 import { GatePanel } from "./GatePanel.tsx";
+import { QuestionsPanel } from "./QuestionsPanel.tsx";
 import { SteerBox } from "./SteerBox.tsx";
 import { Transcript } from "./Transcript.tsx";
 
@@ -41,6 +42,7 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 	const { stage, status, tone } = describeCard(card);
 	const live = isLive(card) && run?.id === runs.at(-1)?.id;
 	const caution = tone === "caution";
+	const asked = card.status === "awaiting_input" ? (runs.at(-1)?.questions ?? null) : null;
 
 	return (
 		<aside aria-label={`Card ${card.title}`} className="flex h-full min-h-0 flex-col bg-sheet">
@@ -63,7 +65,7 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 						<Markdown text={card.brief} />
 					</div>
 				)}
-				{card.needsAttentionReason && <p className="mt-2 text-[14px] font-semibold">{card.needsAttentionReason}</p>}
+				{card.needsAttentionReason && !asked && <p className="mt-2 text-[14px] font-semibold">{card.needsAttentionReason}</p>}
 			</header>
 
 			<nav className="flex shrink-0 items-center gap-4 border-b border-rule px-4">
@@ -95,6 +97,7 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 				<GatePanel cardId={card.id} gate={pendingGate} />
 			) : run ? (
 				<>
+					{asked && run.id === runs.at(-1)?.id && <QuestionsPanel cardId={card.id} summary={card.needsAttentionReason} questions={asked} />}
 					<RunSummary run={run} />
 					<Transcript blocks={blocks} live={live} />
 					{live && run.kind !== "verify" && <SteerBox cardId={card.id} />}

@@ -48,6 +48,13 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 				</StripButton>
 			);
 		}
+		if (card.status === "awaiting_input") {
+			return (
+				<StripButton onClick={() => onOpen(card.id)} kind="onCaution">
+					Answer
+				</StripButton>
+			);
+		}
 		if (card.status === "interrupted") {
 			return (
 				<StripButton onClick={() => resume.mutate(card.id)} disabled={resume.isPending} kind="onCaution">

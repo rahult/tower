@@ -69,6 +69,8 @@ export interface StageRun {
 	status: RunStatus;
 	resultStatus: ResultStatus | null;
 	resultSummary: string | null;
+	/** What the stage asked, when it stopped to ask. */
+	questions: Array<{ question: string; options: string[] }> | null;
 	tokens: TokenUsage | null;
 	costUsd: number | null;
 	lastEntryId: string | null;
