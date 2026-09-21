@@ -14,7 +14,7 @@ import {
 	sessionIdFor,
 	STAGE_RESULT_FILE,
 	STAGE_SPECS,
-} from "@traffic-control/core";
+} from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
 import { getCard, updateCard } from "./db/repo-cards.ts";

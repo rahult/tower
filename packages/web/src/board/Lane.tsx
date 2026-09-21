@@ -1,4 +1,4 @@
-import type { Card, Project } from "@traffic-control/core";
+import type { Card, Project } from "@tower/core";
 import { useMutation } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { api } from "../api/client.ts";

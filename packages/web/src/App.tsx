@@ -21,7 +21,7 @@ export function App() {
 		<div className={`grid h-full ${selectedCardId ? "lg:grid-cols-[minmax(0,1fr)_minmax(28rem,42vw)]" : ""}`}>
 			<main className={`min-h-0 overflow-y-auto p-4 ${selectedCardId ? "hidden lg:block" : ""}`}>
 				<header className="mb-4 flex flex-wrap items-baseline gap-x-6 gap-y-1">
-					<h1 className="condensed text-[26px] font-bold tracking-tight">Traffic Control</h1>
+					<h1 className="condensed text-[26px] font-bold tracking-tight">Tower</h1>
 					{cards.length > 0 && (
 						<p className="text-[14px] text-dust">
 							{inFlight} running, <span className={needYou > 0 ? "font-semibold text-signal" : ""}>{needYou} need you</span>, {cards.length} cards
@@ -63,7 +63,7 @@ function NewProject({ first }: { first: boolean }) {
 					id="repo-path"
 					value={repoPath}
 					onChange={(event) => setRepoPath(event.target.value)}
-					placeholder="/Volumes/Atlas/Code/projects/axiom"
+					placeholder="/Users/you/code/my-project"
 					className="min-w-0 flex-1 rounded-[3px] bg-well px-3 py-1.5 font-mono text-[13px] placeholder:text-dust/60"
 				/>
 				<button type="submit" disabled={!repoPath.trim() || add.isPending} className="condensed cursor-pointer rounded-[3px] bg-chalk px-3 py-1.5 font-semibold text-ink hover:bg-white disabled:cursor-default disabled:opacity-40">

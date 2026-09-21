@@ -1,4 +1,4 @@
-import type { Card, Effect } from "@traffic-control/core";
+import type { Card, Effect } from "@tower/core";
 import type { Db } from "./open.ts";
 
 type Row = Record<string, string | number | null>;

@@ -1,4 +1,4 @@
-import type { RunSpec, TokenUsage } from "@traffic-control/core";
+import type { RunSpec, TokenUsage } from "@tower/core";
 
 /**
  * THE SEAM. Everything outside src/pi talks to agent sessions through these types only,

@@ -34,7 +34,7 @@ async function until(check: () => Promise<boolean>, timeoutMs = 3000): Promise<v
 
 describe("scheduler", () => {
 	it("runs at most the global cap at once and one card per project by default, then drains the queue", async () => {
-		h = await bootHarness(() => [planningTurn({ delayMs: 25 })], { TC_MAX_CONCURRENT: "2" });
+		h = await bootHarness(() => [planningTurn({ delayMs: 25 })], { TOWER_MAX_CONCURRENT: "2" });
 		const a = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
 		const b = (await h.api("POST", "/api/projects", { repoPath: secondRepo(h) })).body;
 		for (const [project, title] of [[a, "a1"], [a, "a2"], [b, "b1"], [b, "b2"]] as const) {

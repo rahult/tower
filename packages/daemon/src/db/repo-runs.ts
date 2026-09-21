@@ -1,4 +1,4 @@
-import type { StageRun } from "@traffic-control/core";
+import type { StageRun } from "@tower/core";
 import type { Db } from "./open.ts";
 
 type Row = Record<string, string | number | null>;

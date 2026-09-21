@@ -1,5 +1,5 @@
 {
-  "name": "@traffic-control/web",
+  "name": "@tower/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,17 +10,17 @@
   "dependencies": {
     "@fontsource-variable/archivo": "^5.2.0",
     "@fontsource/ibm-plex-mono": "^5.2.0",
-    "@tanstack/react-query": "^5.90.0",
-    "@traffic-control/core": "workspace:*",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
-  },
-  "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
+    "@tanstack/react-query": "^5.90.0",
+    "@tower/core": "*",
     "@vitejs/plugin-react": "^5.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "tailwindcss": "^4.1.0",
     "vite": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0"
   }
 }

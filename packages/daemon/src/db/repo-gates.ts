@@ -1,4 +1,4 @@
-import type { GateKind } from "@traffic-control/core";
+import type { GateKind } from "@tower/core";
 import type { Db } from "./open.ts";
 
 export interface Gate {

@@ -24,7 +24,7 @@ describe("renderPrompt", () => {
 			readFileSync(join(prompts, "planning.md"), "utf8"),
 			{
 				worktreePath: "/wt",
-				branchName: "tc/abc",
+				branchName: "tower/abc",
 				title: "Add a thing",
 				brief: "Do it well.",
 				feedbackSection: "",

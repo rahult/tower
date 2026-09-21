@@ -30,7 +30,7 @@ export function branchNameFor(cardId: string, title: string): string {
 		.replace(/^-+|-+$/g, "")
 		.slice(0, 40)
 		.replace(/-+$/, "");
-	return slug ? `tc/${cardId}-${slug}` : `tc/${cardId}`;
+	return slug ? `tower/${cardId}-${slug}` : `tower/${cardId}`;
 }
 
 export interface Worktree {

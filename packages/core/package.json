@@ -1,5 +1,5 @@
 {
-  "name": "@traffic-control/core",
+  "name": "@tower/core",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },

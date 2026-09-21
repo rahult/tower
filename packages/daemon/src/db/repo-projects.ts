@@ -1,4 +1,4 @@
-import type { Project } from "@traffic-control/core";
+import type { Project } from "@tower/core";
 import type { Db } from "./open.ts";
 
 type Row = Record<string, string | number | null>;

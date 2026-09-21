@@ -6,13 +6,13 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { STAGE_RESULT_FILE } from "@traffic-control/core";
+import { STAGE_RESULT_FILE } from "@tower/core";
 import { loadConfig } from "../src/config.ts";
 import { startDaemon } from "../src/daemon.ts";
 import { FakeSessionDriver, type FakeTurn } from "../src/pi/fake-driver.ts";
 import { buildingTurn, planningTurn, testerTurn } from "./harness.ts";
 
-const root = mkdtempSync(join(tmpdir(), "tc-demo-"));
+const root = mkdtempSync(join(tmpdir(), "tower-demo-"));
 function repo(name: string): string {
 	const path = join(root, name);
 	mkdirSync(path, { recursive: true });
@@ -52,7 +52,7 @@ const driver = new FakeSessionDriver((spec) => {
 });
 const titles = new Map<string, string>();
 
-const daemon = await startDaemon(loadConfig({ TC_HOME: join(root, "home"), TC_PORT: "4720", TC_MAX_CONCURRENT: "3" }), driver);
+const daemon = await startDaemon(loadConfig({ TOWER_HOME: join(root, "home"), TOWER_PORT: "4720", TOWER_MAX_CONCURRENT: "3" }), driver);
 const api = async (method: string, path: string, body?: unknown): Promise<any> =>
 	(await fetch(`${daemon.url}${path}`, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined })).json();
 

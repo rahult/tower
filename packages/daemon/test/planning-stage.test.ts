@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { STAGE_RESULT_FILE } from "@traffic-control/core";
+import { STAGE_RESULT_FILE } from "@tower/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootHarness, type Harness, planningTurn } from "./harness.ts";
 
@@ -36,7 +36,7 @@ describe("planning stage through the HTTP surface", () => {
 		expect(run.args).toContain("--no-approve");
 
 		const detail = await h.api("GET", `/api/cards/${card.id}`);
-		expect(detail.body.card).toMatchObject({ stage: "planning", status: "awaiting_gate", attempt: 1, branchName: `tc/${card.id}-add-a-readme-section` });
+		expect(detail.body.card).toMatchObject({ stage: "planning", status: "awaiting_gate", attempt: 1, branchName: `tower/${card.id}-add-a-readme-section` });
 		expect(existsSync(join(detail.body.card.worktreePath, "README.md"))).toBe(true);
 		expect(detail.body.runs[0]).toMatchObject({ status: "settled", resultStatus: "pass", resultSummary: "Plan ready.", tokens: { total: 120 }, lastEntryId: "entry-1" });
 		expect(detail.body.artifacts.map((a: { name: string }) => a.name).sort()).toEqual(["plan.md", STAGE_RESULT_FILE]);
@@ -177,7 +177,7 @@ describe("planning stage through the HTTP surface", () => {
 		expect((await h.api("POST", "/api/cards", { projectId: project.id })).status).toBe(400);
 		expect((await h.api("POST", "/api/cards", { projectId: "nope", title: "x" })).status).toBe(404);
 		expect((await h.api("POST", `/api/cards/${card.id}/steer`, { text: "hi" })).status).toBe(409);
-		expect((await h.api("GET", `/api/cards/${card.id}/artifacts/..%2F..%2Ftc.sqlite`)).status).toBe(404);
+		expect((await h.api("GET", `/api/cards/${card.id}/artifacts/..%2F..%2Ftower.sqlite`)).status).toBe(404);
 		expect((await h.api("GET", "/api/cards/missing")).status).toBe(404);
 	});
 });

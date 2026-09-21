@@ -1,4 +1,4 @@
-import type { Card, Project } from "@traffic-control/core";
+import type { Card, Project } from "@tower/core";
 import { Lane } from "./Lane.tsx";
 import { STAGE_COLUMNS } from "./status.ts";
 

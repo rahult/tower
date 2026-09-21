@@ -1,4 +1,4 @@
-import type { Card } from "@traffic-control/core";
+import type { Card } from "@tower/core";
 
 /** Strip tint encodes state, the way real strip colours encode flight type. */
 export type Tint = "buff" | "sky" | "signal" | "rose" | "sage";

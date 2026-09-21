@@ -1,4 +1,4 @@
-import type { RunSpec } from "@traffic-control/core";
+import type { RunSpec } from "@tower/core";
 
 /**
  * RunSpec → pi CLI arguments (RpcClient adds `--mode rpc` itself). Pure and snapshot-tested:

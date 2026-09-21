@@ -15,7 +15,7 @@ import {
 	type SchedulerState,
 	type StageRun,
 	transition,
-} from "@traffic-control/core";
+} from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
 import { getCard, listExecuting, listQueued, setQueuedEffect, updateCard } from "./db/repo-cards.ts";

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { type Card, InvalidTransition, type Project } from "@traffic-control/core";
+import { type Card, InvalidTransition, type Project } from "@tower/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";

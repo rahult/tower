@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { StageConfigOverrides } from "@traffic-control/core";
+import type { StageConfigOverrides } from "@tower/core";
 
 export interface Config {
 	/** Data root: database, card folders and worktrees. */
@@ -22,21 +22,21 @@ const repoRoot = join(import.meta.dirname, "..", "..", "..");
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	return {
-		home: env.TC_HOME ?? join(homedir(), ".traffic-control"),
+		home: env.TOWER_HOME ?? join(homedir(), ".tower"),
 		// Single-user tool with no auth: never bind anything but loopback.
 		host: "127.0.0.1",
-		port: Number(env.TC_PORT ?? 4700),
-		promptsDir: env.TC_PROMPTS_DIR ?? join(repoRoot, "prompts"),
-		webDist: env.TC_WEB_DIST ?? join(repoRoot, "packages", "web", "dist"),
+		port: Number(env.TOWER_PORT ?? 4700),
+		promptsDir: env.TOWER_PROMPTS_DIR ?? join(repoRoot, "prompts"),
+		webDist: env.TOWER_WEB_DIST ?? join(repoRoot, "packages", "web", "dist"),
 		globalStageConfig: {},
-		maxConcurrent: Number(env.TC_MAX_CONCURRENT ?? 3),
-		maxBuildAttempts: Number(env.TC_MAX_BUILD_ATTEMPTS ?? 3),
-		verifyTimeoutMs: Number(env.TC_VERIFY_TIMEOUT_MS ?? 20 * 60_000),
+		maxConcurrent: Number(env.TOWER_MAX_CONCURRENT ?? 3),
+		maxBuildAttempts: Number(env.TOWER_MAX_BUILD_ATTEMPTS ?? 3),
+		verifyTimeoutMs: Number(env.TOWER_VERIFY_TIMEOUT_MS ?? 20 * 60_000),
 	};
 }
 
 export const paths = {
-	db: (config: Config) => join(config.home, "tc.sqlite"),
+	db: (config: Config) => join(config.home, "tower.sqlite"),
 	cardDir: (config: Config, cardId: string) => join(config.home, "cards", cardId),
 	sessionDir: (config: Config, cardId: string) => join(config.home, "cards", cardId, "sessions"),
 	worktree: (config: Config, projectId: string, cardId: string) => join(config.home, "worktrees", projectId, cardId),

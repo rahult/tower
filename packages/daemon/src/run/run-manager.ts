@@ -1,4 +1,4 @@
-import type { RunSpec } from "@traffic-control/core";
+import type { RunSpec } from "@tower/core";
 import type { Db } from "../db/open.ts";
 import { insertRunEvent, lastRunSeq, listRunEvents } from "../db/repo-events.ts";
 import type { Bus } from "../events/bus.ts";

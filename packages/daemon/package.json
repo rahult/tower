@@ -1,5 +1,5 @@
 {
-  "name": "@traffic-control/daemon",
+  "name": "@tower/daemon",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@hono/node-server": "^1.19.0",
-    "@traffic-control/core": "workspace:*",
+    "@tower/core": "*",
     "hono": "^4.10.0"
   }
 }

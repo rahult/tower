@@ -2,7 +2,7 @@ import type { ChildProcess } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { RpcClient } from "@earendil-works/pi-coding-agent";
-import type { RunSpec } from "@traffic-control/core";
+import type { RunSpec } from "@tower/core";
 import { buildPiArgs } from "./argv.ts";
 import { normalise } from "./normalise.ts";
 import type { DriverEvent, RunHandle, RunStats, SessionDriver, UiAnswer } from "./session-driver.ts";

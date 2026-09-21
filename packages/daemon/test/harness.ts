@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { STAGE_RESULT_FILE } from "@traffic-control/core";
+import { STAGE_RESULT_FILE } from "@tower/core";
 import { loadConfig } from "../src/config.ts";
 import { type Daemon, startDaemon } from "../src/daemon.ts";
 import { type FakeScript, FakeSessionDriver, type FakeTurn } from "../src/pi/fake-driver.ts";
@@ -21,7 +21,7 @@ export interface Harness {
 
 /** Boots the real daemon on an ephemeral port with a real temp git repo, a real SQLite file and a scripted driver. */
 export async function bootHarness(script: FakeScript, env: Record<string, string> = {}): Promise<Harness> {
-	const root = mkdtempSync(join(tmpdir(), "tc-test-"));
+	const root = mkdtempSync(join(tmpdir(), "tower-test-"));
 	const home = join(root, "home");
 	const repo = join(root, "repo");
 	mkdirSync(repo, { recursive: true });
@@ -31,7 +31,7 @@ export async function bootHarness(script: FakeScript, env: Record<string, string
 	git("add", ".");
 	git("-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "init");
 
-	const config = loadConfig({ TC_HOME: home, TC_PORT: "0", ...env });
+	const config = loadConfig({ TOWER_HOME: home, TOWER_PORT: "0", ...env });
 	const readers: SseReader[] = [];
 	const harness = { driver: new FakeSessionDriver(script), daemon: undefined as unknown as Daemon };
 	harness.daemon = await startDaemon(config, harness.driver);

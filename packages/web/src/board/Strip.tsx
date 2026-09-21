@@ -1,4 +1,4 @@
-import type { Card } from "@traffic-control/core";
+import type { Card } from "@tower/core";
 import type { ReactNode } from "react";
 import { describeCard, isLive, TINT_CLASS } from "./status.ts";
 

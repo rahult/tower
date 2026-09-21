@@ -1,4 +1,4 @@
-import type { RunSpec } from "@traffic-control/core";
+import type { RunSpec } from "@tower/core";
 import type { DriverEvent, RunHandle, RunStats, SessionDriver, UiAnswer } from "./session-driver.ts";
 
 /** What a fake session does in response to one prompt. */

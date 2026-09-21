@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { normalise } from "../src/pi/normalise.ts";
 import type { DriverEvent } from "../src/pi/session-driver.ts";
 
-// Real pi 0.85.1 RPC output recorded by spikes/rpc-spike.ts.
+// Real pi 0.85.1 RPC output, recorded by the M0 spike (see git history).
 const raw = readFileSync(join(import.meta.dirname, "fixtures", "spike-events.jsonl"), "utf8")
 	.trim()
 	.split("\n")

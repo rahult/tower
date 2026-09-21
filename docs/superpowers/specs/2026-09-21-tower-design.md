@@ -1,10 +1,10 @@
-# Traffic Control — control tower for pi sessions
+# Tower — control tower for pi sessions
 
 ## Context
 
-Rahul runs the `pi` coding agent (v0.85.1) across many projects at once and has no single place to queue work, see what every session is doing, steer it, or control which model does what. Traffic Control is a local web app backed by a long-running daemon. It owns a kanban board (one swimlane per project), drives each card through `planning → building → testing → feedback → pull request → done`, and spawns and steers pi sessions to do the work: expensive models (Fable 5.1, Astra) plan and review, cheap models (GLM 5.3, Kimi K3, DeepSeek V4, Qwen 3.8) write code.
+Rahul runs the `pi` coding agent (v0.85.1) across many projects at once and has no single place to queue work, see what every session is doing, steer it, or control which model does what. Tower is a local web app backed by a long-running daemon. It owns a kanban board (one swimlane per project), drives each card through `planning → building → testing → feedback → pull request → done`, and spawns and steers pi sessions to do the work: expensive models (Fable 5.1, Astra) plan and review, cheap models (GLM 5.3, Kimi K3, DeepSeek V4, Qwen 3.8) write code.
 
-The repo `/Volumes/Atlas/Code/projects/traffic-control` is empty (no commits). Greenfield.
+The repo is empty (no commits). Greenfield.
 
 ## Decisions made with the user
 
@@ -19,7 +19,7 @@ The repo `/Volumes/Atlas/Code/projects/traffic-control` is empty (no commits). G
 
 ## Verified facts the design relies on
 
-`$PI` = `/Volumes/Atlas/mac-offload/caches/fnm/node-versions/v24.15.0/installation/lib/node_modules/@earendil-works/pi-coding-agent`
+`$PI` = the installed `@earendil-works/pi-coding-agent` package directory
 
 - Package is published (`@earendil-works/pi-coding-agent`, pin `0.85.1`), ESM-only, `exports` exposes only `"."` — import `RpcClient` from the root; no deep imports. ~0.8 s import cost.
 - `RpcClient` spawns `node <cliPath>`; default `cliPath` is relative → config must hold **absolute `node` and `cliPath`** (fnm shim paths do not survive launchd).
@@ -27,7 +27,7 @@ The repo `/Volumes/Atlas/Code/projects/traffic-control` is empty (no commits). G
 - `extension_ui_request` reaches `onEvent` (untyped) but **cannot be answered through the public API** (`send()` is private and overwrites the id). Fix: subclass that writes `{type:"extension_ui_response", id, ...}` to the child's stdin, as `$PI/examples/rpc-extension-ui.ts` does. Only `select/confirm/input/editor` block; `notify/setStatus/...` are fire-and-forget.
 - `entry_appended` fires **only for extension custom entries**, never for messages (verified in M0 spike) → the durable transcript anchors on `message_end` (authoritative; `message_update` is delta-only) and uses `getEntries(since)` at settle time as the restart-safe cursor.
 - `--session-id <id>` creates-or-resumes (cwd-scoped; ids match `^[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]$`). `--session-dir <dir>` keeps a card's sessions in the card folder.
-- Skills: `/skill:<name> <args>` as prompt text (via `prompt`, not `steer`); `--skill <path>` force-loads. `--append-system-prompt` accepts a file. pi core has **no agents concept** — `~/.pi/agent/agents/*.md` frontmatter (`model`, `tools`, `thinking`, body) must be translated to CLI flags by Traffic Control.
+- Skills: `/skill:<name> <args>` as prompt text (via `prompt`, not `steer`); `--skill <path>` force-loads. `--append-system-prompt` accepts a file. pi core has **no agents concept** — `~/.pi/agent/agents/*.md` frontmatter (`model`, `tools`, `thinking`, body) must be translated to CLI flags by Tower.
 - `--approve`/`-na` is **project trust**, not tool approval; pi has no tool-approval gate. With the user's `defaultProjectTrust: "always"` and 10 globally installed extension packages, stage defaults are **`--no-extensions` + `-na`**, with a per-project extension allowlist and trust opt-in. Worktree isolation is the only write guard.
 - No session or repo locks in pi → one git worktree per card, one writer per session file, one write-lease per worktree.
 - zai / deepseek / minimax / moonshot auth via env vars → daemon passes its env to children and must be started from a shell that has them.
@@ -46,7 +46,7 @@ Browser (React) ──REST + one multiplexed SSE stream──▶ Daemon (Node 24
                                                         ├─ FlowRunner (review flows, ad hoc skills/agents)
                                                         ├─ WorktreeManager (git worktree per card)
                                                         └─ PrWatcher (gh: create, CI status, merge, comments)
-~/.traffic-control/  config.json · tc.sqlite · worktrees/<project>/<card>/ · cards/<id>/{plan.md, test-report.md, reviews/, stage-result.json, sessions/}
+~/.tower/  config.json · tower.sqlite · worktrees/<project>/<card>/ · cards/<id>/{plan.md, test-report.md, reviews/, stage-result.json, sessions/}
 ```
 
 **Stack:** pnpm workspace; TypeScript run via Node 24 native type stripping (erasable syntax only), `tsc --noEmit` for checking; **Hono** + `@hono/node-server`; **SSE** (not WebSocket — `Last-Event-ID` gives reconnect/replay for free; one multiplexed `GET /api/stream?topics=board,run:<id>`); **`node:sqlite`** with `PRAGMA user_version` + ordered SQL-string migrations, WAL; React 19 + Vite + Tailwind v4 + TanStack Query, transcript via `useSyncExternalStore` (never per-delta React state); **Vitest**. Dev: Vite proxies `/api` to the daemon. Prod: daemon serves `packages/web/dist`.
@@ -55,13 +55,13 @@ Browser (React) ──REST + one multiplexed SSE stream──▶ Daemon (Node 24
 
 **Stage contract:** prompt template (`prompts/<stage>.md`) + model + thinking + tool allowlist + expected artifact + a `stage-result.json` (`{status: pass|fail|blocked, summary}`) written by the agent to the card folder by absolute path. Missing result → one follow-up nudge → `needs_attention`. In testing, the project's `verify_command` run by the daemon is authoritative when set. New worktrees run the project's `setup_command` once (fresh worktrees have no `node_modules`).
 
-**Flows:** YAML files (`flows/*.flow.yaml`, plus `~/.traffic-control/flows/`). A flow is an ordered list of steps; each step = skill ref | agent-file ref | prompt file, with model, thinking, read-only vs write tools, and an output artifact under `cards/<id>/reviews/`. Sequential in v1. Ships with `adversarial-review` and `solid-review` (read-only, expensive model, never sees the builder's session). Findings can be sent to building as a fix prompt. Ad hoc actions from the card drawer: run flow, run `/skill:x`, run agent file, send prompt with model X.
+**Flows:** YAML files (`flows/*.flow.yaml`, plus `~/.tower/flows/`). A flow is an ordered list of steps; each step = skill ref | agent-file ref | prompt file, with model, thinking, read-only vs write tools, and an output artifact under `cards/<id>/reviews/`. Sequential in v1. Ships with `adversarial-review` and `solid-review` (read-only, expensive model, never sees the builder's session). Findings can be sent to building as a fix prompt. Ad hoc actions from the card drawer: run flow, run `/skill:x`, run agent file, send prompt with model X.
 
 **Transcript:** per-run monotonic `seq`; in-memory ring buffer (5 000 items / 4 MB) with text deltas coalesced on a 50 ms flush; SSE handler emits the buffered snapshot first when `since=0`, then live. SQLite `events` stores anchors only (`message_end`, tool start/end, stage/gate/run changes, verify output) — never deltas — so finished runs replay exactly.
 
 **Recovery:** on boot, runs left `running` become `interrupted`; Resume respawns with the same `--session-id`, `--session-dir`, cwd and a continue prompt. `git worktree list --porcelain` is reconciled against the DB.
 
-**Open in TUI:** `cd <worktree> && pi --session-dir ~/.traffic-control/cards/<id>/sessions --session <sessionId>`, enabled only when no RPC child holds that session.
+**Open in TUI:** `cd <worktree> && pi --session-dir ~/.tower/cards/<id>/sessions --session <sessionId>`, enabled only when no RPC child holds that session.
 
 ### SQLite tables
 `projects` (repo_path, default_branch, setup_command, verify_command, trust_project_pi, extensions_json, concurrency_limit, stage_config_json) · `cards` (project_id, title, brief, stage, status, priority, position, branch_name, worktree_path, base_commit, attempt, stage_config_json, pr_url, pr_state, needs_attention_reason) · `stage_runs` (id = pi session id e.g. `c42-build-3`; kind stage|flow_step|adhoc; model, thinking, args_json, status, result_status, tokens_json, cost_usd, last_entry_id, pid) · `gates` (kind plan_approval|feedback, status, feedback; unique pending gate per card) · `artifacts` · `flow_runs` · `ui_requests` · `events` (seq autoincrement, card_id, run_id, type, payload_json) · `settings`. Cost roll-ups are `GROUP BY` queries over `stage_runs`; no ledger table.
@@ -100,7 +100,7 @@ Only `pi/*` knows pi exists; everything else talks to `SessionDriver`, so a pi u
 
 ## Milestones (each a usable vertical slice)
 
-**M0 — Spike (throwaway, one file).** First commit the design doc to `docs/superpowers/specs/2026-09-21-traffic-control-design.md`. Then `spikes/rpc-spike.ts` proves, printing a pass/fail checklist: import `RpcClient` from an npm dependency; spawn with absolute `cliPath` in a git worktree with `--session-dir`, `--session-id`, `--no-extensions`, `-na`, `--model zai/glm-5.3`; stream deltas and see `agent_settled` after `agent_end`; steer mid-run; `getSessionStats` tokens non-zero; kill and resume by the same session id with `getEntries(since)`; **write an artifact outside the worktree by absolute path** (verified: pi's write tool is not cwd-confined); answer an `extension_ui_request` via stdin; use a model not in `enabledModels`. Save the raw event JSONL to `packages/daemon/test/fixtures/`.
+**M0 — Spike (throwaway, one file).** First commit the design doc to `docs/superpowers/specs/2026-09-21-tower-design.md`. Then `spikes/rpc-spike.ts` proves, printing a pass/fail checklist: import `RpcClient` from an npm dependency; spawn with absolute `cliPath` in a git worktree with `--session-dir`, `--session-id`, `--no-extensions`, `-na`, `--model zai/glm-5.3`; stream deltas and see `agent_settled` after `agent_end`; steer mid-run; `getSessionStats` tokens non-zero; kill and resume by the same session id with `getEntries(since)`; **write an artifact outside the worktree by absolute path** (verified: pi's write tool is not cwd-confined); answer an `extension_ui_request` via stdin; use a model not in `enabledModels`. Save the raw event JSONL to `packages/daemon/test/fixtures/`.
 
 **M1 — One project, one card, planning runs live in the browser.** core types/stage-spec/prompt-render/stage-result; daemon config, db, pi driver, run-manager, transcript-buffer, stage-runner, worktree-manager, SSE, HTTP; minimal web (card list, drawer, transcript, steer box, abort). Verify: add a project, create a card, Run → worktree created, transcript streams, `plan.md` + `stage-result.json` appear; close and reopen the tab → transcript replays and continues.
 
@@ -129,10 +129,10 @@ Four small pure functions in `packages/core/src/policy/` are where the product o
 
 - **core:** table-driven tests per transition row; property tests (fast-check) for invariants — at most one active run per card, `attempt ≤ cap + 1`, `awaiting_gate` ⇔ exactly one pending gate, `abort` reachable everywhere. Snapshot tests for rendered prompts and for `argv.ts` (the regression guard for pi CLI drift).
 - **daemon:** integration only, through the real HTTP/SSE surface on port 0 with a temp SQLite file, a temp `git init` repo and `FakeSessionDriver` replaying M0 fixtures. Cases: full happy path, plan rejection, fail loop to cap, crash → needs_attention, missing result → nudge, pause/resume, abort, restart mid-run, concurrency caps, mid-run drawer open with no duplicate or missing `seq`, SSE reconnect via `Last-Event-ID`. `gh` tested with a fake `gh` script on PATH. `WorktreeManager` tested against a temp repo.
-- **Real-pi smoke test:** opt-in via `TC_REAL_PI=1`; one planning stage on a temp repo with `zai/glm-5.3`, `--no-extensions`, `--tools read,write,ls`; asserts `plan.md`, a valid `stage-result.json`, non-zero tokens.
+- **Real-pi smoke test:** opt-in via `TOWER_REAL_PI=1`; one planning stage on a temp repo with `zai/glm-5.3`, `--no-extensions`, `--tools read,write,ls`; asserts `plan.md`, a valid `stage-result.json`, non-zero tokens.
 
 ## End-to-end verification
 
 1. `pnpm test` green (core + daemon integration); `pnpm typecheck` clean.
-2. `TC_REAL_PI=1 pnpm -C packages/daemon test smoke` passes.
+2. `TOWER_REAL_PI=1 pnpm -C packages/daemon test smoke` passes.
 3. `pnpm dev`, open the board, add two real projects, queue cards in each, and drive one card all the way: approve plan → build by a cheap model → verify passes → adversarial + SOLID findings present at the feedback gate → approve → PR opens → merge → card in Done, worktree gone. During the run: steer mid-build, pause/resume, restart the daemon once and resume the interrupted run, open the session in the pi TUI with the copied command.

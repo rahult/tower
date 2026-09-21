@@ -1,63 +1,132 @@
-# Traffic Control
+# Tower
 
-A control tower for [pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) coding-agent sessions: queue work per project, watch every session live, steer it, and decide which model does what.
+A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for many projects on one board, let an expensive model plan and a cheap model build, have your test suite judge the result, and step in only where a decision is yours.
 
-Design and roadmap: [`docs/superpowers/specs/2026-09-21-traffic-control-design.md`](docs/superpowers/specs/2026-09-21-traffic-control-design.md).
+- **One board, every project.** A swimlane per project, a column per stage: backlog, planning, building, testing, feedback, pull request, done.
+- **Model tiering.** Planning defaults to `anthropic/claude-fable-5-1`; building and testing default to `zai/glm-5.3`. Override per card.
+- **Isolation.** Every card gets its own git worktree and branch; your checkout is never touched. Every stage is a fresh pi session that sees only the previous stage's artifacts (for example `plan.md`), never its conversation.
+- **Gates.** A finished plan waits for you: approve it, or send it back with what should change.
+- **Your tests decide.** A project's verify command runs after each build; its exit code is the verdict. Failures go back to a fresh builder with the output, up to a cap, then the card asks for you.
+- **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff.
+- **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
 
-## Status
+Status: milestones 0 to 4 of 6. The feedback gate with review flows, pull requests with CI watching, routing on retry, cost roll-ups and ad hoc skills are not built yet; a card that passes testing currently rests there. See the [design and roadmap](docs/superpowers/specs/2026-09-21-tower-design.md).
 
-Milestone 4 of 6. The board has one **swimlane per project** and one column per stage. A card goes from the backlog through **planning** (expensive model), waits at a **plan approval gate**, is **built** by a cheap model in a fresh session that sees only the plan, and is then **tested**: the project's verify command runs in the card's worktree and its exit code decides; failures go back to a fresh builder with the output, up to a cap. A **scheduler** starts queued work under a global cap and a per-project cap, the queue survives restarts, and sessions interrupted by a restart can be **resumed** in the same pi session. Every session streams live and can be steered and aborted.
+## Install as a pi package
 
-Still to come: the feedback gate with review flows (adversarial, SOLID), pull requests with CI watching (milestone 5), and model routing on retry, cost roll-ups, ad hoc skills and extension questions (milestone 6). Backlog drag-and-drop ordering was deferred: nothing reads the order yet.
-
-## Run it
-
-Requires Node 24+ and pnpm. Start the daemon from a shell that has your provider API keys: pi sessions inherit the daemon's environment.
+Requires [pi](https://pi.dev), git, npm and **Node 22.18 or newer** (the daemon runs its TypeScript directly).
 
 ```sh
-pnpm install
-pnpm build    # build the web UI
-pnpm start    # daemon + UI on http://127.0.0.1:4700
+pi install git:github.com/rahult/tower
 ```
 
-For development, `pnpm dev` runs the daemon with `--watch` and Vite on http://127.0.0.1:4701.
+pi clones the repository to `~/.pi/agent/git/github.com/rahult/tower` and installs its dependencies. That adds one command, `/tower`, to every pi session. To try it without installing: `pi -e git:github.com/rahult/tower`.
+
+> pi packages run with full access to your machine, and Tower runs coding agents that execute shell commands in your repositories. Read the source first.
+
+### Start using it
+
+Start pi **from a shell that has your provider API keys** (`ZAI_API_KEY`, `DEEPSEEK_API_KEY`, and so on). The daemon inherits that environment, and the sessions it spawns inherit it from the daemon. Providers you logged into with pi's `/login` work as usual.
+
+```text
+/tower
+```
+
+The first run builds the board UI (a few seconds), starts the daemon in the background and opens <http://127.0.0.1:4700>. The daemon keeps running after you quit pi.
+
+| Command | What it does |
+|---|---|
+| `/tower` | Start the daemon if needed and open the board |
+| `/tower add <title>` | Add a card for the current repository to its backlog. The repository becomes a project the first time |
+| `/tower run <title>` | Add a card and start it: planning begins when a slot is free |
+| `/tower status` | What is running, and what is waiting for you |
+| `/tower stop` | Stop the daemon. Sessions that were running can be resumed from the board next time |
+
+A first card, end to end:
+
+1. In a pi session inside one of your repositories: `/tower run Add retry with backoff to the HTTP client`.
+2. On the board, open the project's **Settings** and set a **verify command** (for example `pnpm test && pnpm typecheck`) and, if a fresh checkout needs it, a **setup command** (for example `pnpm install --prefer-offline`). Without a verify command an agent judges the build instead of your tests.
+3. The card plans, then turns amber: **Review**. Read the plan; approve it, or send it back with a note.
+4. A cheap model builds from the plan in the card's worktree and commits on branch `tower/<id>-<title>`. Your verify command runs. If it fails, a fresh builder gets the output and tries again (three builds by default).
+5. Open the card any time to watch the session, **steer** it ("use the existing logger"), abort it, or read its diff under **Changes**.
+
+Click a strip to open its card. Strip colour is state: buff is resting, blue is running, amber needs you, green is done.
+
+### Update and remove
+
+```sh
+pi update git:github.com/rahult/tower
+pi remove git:github.com/rahult/tower
+```
+
+Your data lives in `~/.tower` and is not touched by either.
+
+## Run it without pi's package manager
+
+```sh
+git clone https://github.com/rahult/tower && cd tower
+pnpm install        # or: npm install
+pnpm build          # build the board UI
+pnpm start          # daemon and board on http://127.0.0.1:4700
+```
+
+## Configuration
+
+Environment variables, read when the daemon starts:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TC_HOME` | `~/.traffic-control` | Database, card folders (`cards/<id>/`), worktrees |
-| `TC_PORT` | `4700` | Daemon port (always bound to 127.0.0.1) |
-| `TC_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
-| `TC_MAX_CONCURRENT` | `3` | Sessions and verify commands running at once, across all projects |
+| `TOWER_HOME` | `~/.tower` | Database, card folders (`cards/<id>/`), worktrees, `daemon.log` |
+| `TOWER_PORT` | `4700` | Port. The daemon only ever binds `127.0.0.1`; there is no authentication |
+| `TOWER_MAX_CONCURRENT` | `3` | Sessions and verify commands running at once, across all projects |
+| `TOWER_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
 
-Per project (Settings on its bay): a **verify command** (for example `pnpm test && pnpm typecheck`) and a **setup command** that runs once in each new worktree (for example `pnpm install --prefer-offline`). Without a verify command, a tester agent judges the build instead.
+Per project, under **Settings** on its lane: the verify command, the setup command, and how many of its cards may run at once (default 1).
 
-## How a stage runs
-
-Each stage is a fresh `pi --mode rpc` process in the card's worktree, with `--no-extensions` and no project trust unless the project opts in. Stages hand off through files in `cards/<id>/` (for example `plan.md`), and every stage must finish by writing `stage-result.json`; the daemon nudges once if it is missing, then flags the card.
-
-The card lifecycle is one pure function, `transition(card, event)` in `packages/core/src/card-machine.ts`; the daemon's orchestrator is its only caller. Policies you are meant to edit live in `packages/core/src/policy/`.
-
-Stage defaults live in `packages/core/src/stage-spec.ts` (expensive model plans, cheap model builds) and can be overridden per card with `stageConfig`.
-
-## Layout
-
-- `packages/core` — pure domain: types, stage specs, config precedence, prompt rendering, policies. No IO.
-- `packages/daemon` — Hono API + SSE, SQLite, stage runner. Only `src/pi/` knows pi exists; everything else uses the `SessionDriver` interface, and tests run the whole daemon against a scripted fake.
-- `packages/web` — React UI.
-- `prompts/` — stage prompt templates.
-- `spikes/` — throwaway M0 spike that verified the pi integration and recorded the test fixture.
-
-## See the UI without spending tokens
+Per card, models can be overridden when creating it through the API:
 
 ```sh
-pnpm build && node packages/daemon/test/demo.ts   # http://127.0.0.1:4720
+curl -X POST http://127.0.0.1:4700/api/cards -H 'content-type: application/json' -d '{
+  "projectId": "<id>", "title": "Add a farewell function",
+  "stageConfig": { "planning": { "model": "zai/glm-5.3", "thinking": "low" } }
+}'
 ```
 
-Boots the real daemon on a scripted fake driver and seeds three projects with cards in every state.
+Model names are pi's `provider/model-id` selectors (`pi --list-models`). Stage defaults are in `packages/core/src/stage-spec.ts`.
 
-## Test
+### How sessions are run
+
+Each stage is a `pi --mode rpc` process in the card's worktree, started with `--no-extensions` and without project trust, because pi has no tool-approval step and your global pi config may load many extensions. Stages hand off through files in `~/.tower/cards/<id>/`, and every stage ends by writing `stage-result.json`; the daemon asks once more if it is missing, then flags the card.
+
+You can open any card's session in the normal pi TUI while Tower is not running it:
 
 ```sh
-pnpm test        # unit + daemon integration (no model calls)
-pnpm typecheck
+cd <the card's worktree> && pi --session-dir ~/.tower/cards/<id>/sessions --session <session id>
 ```
+
+## Make it yours
+
+Four small functions in `packages/core/src/policy/` hold the product's opinions. Each ships with a deliberately naive default and a comment describing the trade-off:
+
+| Function | Default | The question |
+|---|---|---|
+| `requiredGates` in `gates.ts` | always gate | When may a small plan skip your approval? |
+| `decideAfterFailure` in `retry.ts` | count to the cap | Stop early when the same error repeats? How much output does the builder get? |
+| `pickNext` in `scheduler.ts` | oldest first | Keep every lane moving, or finish what is started? |
+| `pickModel` in `model-routing.ts` | configured model | Escalate to a stronger model after a failed build? |
+
+The concurrency caps are enforced outside `pickNext`, so a policy can only choose among cards that are allowed to start.
+
+## Development
+
+```sh
+pnpm dev                                  # daemon with --watch, Vite on http://127.0.0.1:4701
+pnpm test && pnpm typecheck               # no model calls
+pnpm build && node packages/daemon/test/demo.ts   # seeded board on the fake driver, http://127.0.0.1:4720
+```
+
+- `packages/core`: pure domain with no IO. The card lifecycle is one function, `transition(card, event)` in `card-machine.ts`; the daemon's orchestrator is its only caller.
+- `packages/daemon`: Hono API and SSE, SQLite (`node:sqlite`), scheduler, stage runner, verifier. Only `src/pi/` knows pi exists; everything else talks to the `SessionDriver` interface, and the tests run the whole daemon against a scripted fake.
+- `packages/web`: the React board.
+- `pi/tower.ts`: the pi extension.
+- `prompts/`: stage prompt templates. They are not pi prompt templates; the explicit `pi` manifest in `package.json` keeps pi from loading them.

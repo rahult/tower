@@ -1,4 +1,4 @@
-import type { Card, Project, StageRun } from "@traffic-control/core";
+import type { Card, Project, StageRun } from "@tower/core";
 
 export interface Board {
 	projects: Project[];

@@ -1,6 +1,9 @@
 packages:
   - "packages/*"
-  - "spikes"
+
+# Workspace packages depend on each other with a plain "*" range so that npm (which pi uses to install
+# packages) and pnpm both resolve them locally.
+linkWorkspacePackages: true
 
 # esbuild is needed by Vite/Vitest; the other two are pi transitive deps we never execute.
 allowBuilds:

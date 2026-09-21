@@ -44,7 +44,7 @@ export function runVerify(options: { command: string; cwd: string; timeoutMs: nu
 	child.stderr.on("data", onData);
 	const flusher = setInterval(flush, FLUSH_MS);
 	const timer = setTimeout(() => {
-		output += `\n[traffic-control] verify command timed out after ${Math.round(timeoutMs / 1000)}s`;
+		output += `\n[tower] verify command timed out after ${Math.round(timeoutMs / 1000)}s`;
 		killTree();
 	}, timeoutMs);
 
