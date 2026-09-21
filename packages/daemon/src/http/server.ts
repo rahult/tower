@@ -97,6 +97,11 @@ export function createApp(deps: AppDeps): Hono {
 		for (const key of ["setupCommand", "verifyCommand"] as const) {
 			if (typeof body[key] === "string") settings[key] = (body[key] as string).trim() || null;
 		}
+		if (body.concurrencyLimit !== undefined) {
+			const limit = Number(body.concurrencyLimit);
+			if (!Number.isInteger(limit) || limit < 1 || limit > 16) throw new HttpError(400, '"concurrencyLimit" must be a whole number from 1 to 16');
+			settings.concurrencyLimit = limit;
+		}
 		const project = updateProject(db, id, settings);
 		bus.publish({ topic: "board", type: "project_upserted", data: project });
 		return c.json(project);
@@ -146,6 +151,8 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(orchestrator.retry(card.id, feedback), 202);
 	});
 
+	app.post("/api/cards/:id/resume", (c) => c.json(orchestrator.resume(cardOr404(c.req.param("id")).id), 202));
+
 	app.post("/api/cards/:id/gates/:gateId", async (c) => {
 		const card = cardOr404(c.req.param("id"));
 		const body = (await c.req.json()) as Record<string, unknown>;
@@ -172,7 +179,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.post("/api/cards/:id/abort", async (c) => {
 		const card = cardOr404(c.req.param("id"));
-		if (!runs.liveRunForCard(card.id)) throw new HttpError(409, "Nothing is running for this card");
+		if (!orchestrator.isBusy(card.id)) throw new HttpError(409, "Nothing is running or queued for this card");
 		await orchestrator.abort(card.id);
 		return c.json({ ok: true });
 	});

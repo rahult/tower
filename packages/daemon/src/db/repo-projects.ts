@@ -48,9 +48,9 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "concurrencyLimit">>;
 
-const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command" } as const;
+const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", concurrencyLimit: "concurrency_limit" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
 	const keys = Object.keys(settings) as Array<keyof typeof SETTING_COLUMNS>;

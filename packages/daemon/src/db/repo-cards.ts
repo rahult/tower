@@ -1,4 +1,4 @@
-import type { Card } from "@traffic-control/core";
+import type { Card, Effect } from "@traffic-control/core";
 import type { Db } from "./open.ts";
 
 type Row = Record<string, string | number | null>;
@@ -75,4 +75,24 @@ export function listCards(db: Db): Card[] {
 export function getCard(db: Db, id: string): Card | null {
 	const row = db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as Row | undefined;
 	return row ? toCard(row) : null;
+}
+
+export interface QueuedCard {
+	card: Card;
+	effect: Effect;
+	queuedAt: number;
+}
+
+export function setQueuedEffect(db: Db, id: string, effect: Effect | null): void {
+	db.prepare("UPDATE cards SET queued_effect_json = ?, queued_at = ? WHERE id = ?").run(effect ? JSON.stringify(effect) : null, effect ? Date.now() : null, id);
+}
+
+export function listQueued(db: Db): QueuedCard[] {
+	const rows = db.prepare("SELECT * FROM cards WHERE queued_effect_json IS NOT NULL ORDER BY queued_at").all() as Row[];
+	return rows.map((row) => ({ card: toCard(row), effect: JSON.parse(row.queued_effect_json as string), queuedAt: row.queued_at as number }));
+}
+
+/** Cards whose work is actually executing (not merely waiting for a slot). */
+export function listExecuting(db: Db): Card[] {
+	return (db.prepare("SELECT * FROM cards WHERE status IN ('running', 'verifying') AND queued_effect_json IS NULL").all() as Row[]).map(toCard);
 }

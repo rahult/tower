@@ -73,3 +73,13 @@ export function listActiveRuns(db: Db): StageRun[] {
 export function countRunsForStage(db: Db, cardId: string, stage: string): number {
 	return (db.prepare("SELECT count(*) AS n FROM stage_runs WHERE card_id = ? AND stage = ?").get(cardId, stage) as { n: number }).n;
 }
+
+export function lastRunForCard(db: Db, cardId: string): StageRun | null {
+	const row = db.prepare("SELECT * FROM stage_runs WHERE card_id = ? ORDER BY started_at DESC, rowid DESC LIMIT 1").get(cardId) as Row | undefined;
+	return row ? toRun(row) : null;
+}
+
+/** Marks every run the previous daemon process left in flight. Returns how many there were. */
+export function interruptActiveRuns(db: Db): number {
+	return Number(db.prepare("UPDATE stage_runs SET status = 'interrupted', ended_at = ? WHERE status IN ('starting', 'running')").run(Date.now()).changes);
+}

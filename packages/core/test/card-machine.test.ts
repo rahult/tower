@@ -41,6 +41,11 @@ describe("transition", () => {
 		["retry re-runs the stuck stage with guidance", card("building", "needs_attention"), { type: "retry", feedback: "Use pnpm" }, { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "Use pnpm" }]],
 		["retrying testing re-runs the verify command when there is one", card("testing", "needs_attention"), { type: "retry", hasVerifyCommand: true }, { stage: "testing", status: "verifying" }, [{ type: "run_verify" }]],
 		["aborting a verification rests the card", card("testing", "verifying"), { type: "run_aborted" }, { stage: "testing", status: "idle" }, []],
+		["a restart interrupts running work", card("building", "running"), { type: "daemon_restarted" }, { stage: "building", status: "interrupted" }, []],
+		["a restart interrupts a verification", card("testing", "verifying"), { type: "daemon_restarted" }, { stage: "testing", status: "interrupted" }, []],
+		["resume reopens the interrupted session", card("building", "interrupted"), { type: "resume", wasVerifying: false }, { stage: "building", status: "queued" }, [{ type: "resume_run", stage: "building" }]],
+		["resuming an interrupted verification runs the command again", card("testing", "interrupted"), { type: "resume", wasVerifying: true }, { stage: "testing", status: "verifying" }, [{ type: "run_verify" }]],
+		["an interrupted card can also start its stage over", card("building", "interrupted"), { type: "retry" }, { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building" }]],
 		["retry works on a resting stage", card("planning", "idle"), { type: "retry" }, { status: "queued" }, [{ type: "start_run", stage: "planning" }]],
 	])("%s", (_name, from, event, expected, effects) => {
 		const { next, effects: actual } = transition(from, event);
@@ -60,6 +65,8 @@ describe("transition", () => {
 		["retry a running card", card("building", "running"), { type: "retry" }],
 		["retry a backlog card", card("backlog", "idle"), { type: "retry" }],
 		["abort a resting card", card("building", "idle"), { type: "run_aborted" }],
+		["a restart does not touch a card that is waiting for a human", card("planning", "awaiting_gate"), { type: "daemon_restarted" }],
+		["resume a card that was not interrupted", card("building", "idle"), { type: "resume", wasVerifying: false }],
 		["finish a verification that is not running", card("testing", "idle"), { type: "verify_finished", passed: true, onFailure: RETRY }],
 	])("rejects: %s", (_name, from, event) => {
 		expect(() => transition(from, event)).toThrow(InvalidTransition);

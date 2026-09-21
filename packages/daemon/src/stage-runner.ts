@@ -19,12 +19,14 @@ import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
 import { getCard, updateCard } from "./db/repo-cards.ts";
 import { getProject } from "./db/repo-projects.ts";
-import { countRunsForStage, getRun, insertRun, type RunPatch, updateRun } from "./db/repo-runs.ts";
+import { countRunsForStage, getRun, insertRun, listRunsForCard, type RunPatch, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import { runSetup } from "./git/setup.ts";
 import { branchNameFor, ensureWorktree } from "./git/worktree-manager.ts";
 import { buildPiArgs } from "./pi/argv.ts";
 import type { LiveRun, RunManager } from "./run/run-manager.ts";
+
+const RESUME = `You were interrupted by a restart of the orchestrator; nothing else changed. Check the state of your work, then continue the task from where you left off. Your original instructions still apply, including writing ${STAGE_RESULT_FILE} when you are done.`;
 
 const NUDGE = `You stopped without writing the required result file. Write ${STAGE_RESULT_FILE} now, exactly as specified in your instructions, then stop.`;
 
@@ -50,6 +52,15 @@ export class StageRunner {
 	private readonly aborts = new Map<string, () => void>();
 	/** Settles when the background work of a run is finished. Tests and shutdown await these. */
 	readonly inFlight = new Map<string, Promise<void>>();
+	private stopping = false;
+
+	/**
+	 * The daemon is shutting down: sessions are about to be killed. Record nothing about how they end, so the
+	 * runs stay "running" in the database and the next boot marks them interrupted and offers to resume them.
+	 */
+	beginShutdown(): void {
+		this.stopping = true;
+	}
 
 	constructor(deps: StageRunnerDeps) {
 		this.deps = deps;
@@ -116,6 +127,33 @@ export class StageRunner {
 		const work = this.drive(live, stage, prompt, cardDir).finally(() => this.inFlight.delete(run.id));
 		this.inFlight.set(run.id, work);
 		return getRun(db, run.id) as StageRun;
+	}
+
+	/**
+	 * Reopens the session a restart interrupted (same session id, so pi restores its history) and tells the agent
+	 * to carry on. Falls back to a fresh run when there is nothing to reopen.
+	 */
+	async resume(cardId: string, stage: AgentStage): Promise<StageRun> {
+		const { config, db, runs } = this.deps;
+		const interrupted = listRunsForCard(db, cardId).findLast((run) => run.kind === "stage" && run.stage === stage && run.status === "interrupted");
+		const card = getCard(db, cardId);
+		const project = card && getProject(db, card.projectId);
+		if (!interrupted || !card?.worktreePath || !project) return this.start(cardId, stage);
+
+		const spec = { ...this.buildSpec(card, project, stage, interrupted.attempt, card.worktreePath), model: interrupted.model, thinking: interrupted.thinking };
+		let live: LiveRun;
+		try {
+			live = await runs.start(card.id, spec);
+		} catch (error) {
+			this.patchRun(interrupted.id, { status: "failed", error: error instanceof Error ? error.message : String(error), endedAt: Date.now() });
+			throw error;
+		}
+		this.patchRun(interrupted.id, { status: "running", endedAt: null, error: null });
+		this.deps.onStarted(card.id);
+		runs.note(live.runId, "resumed", {});
+		const work = this.drive(live, stage, RESUME, paths.cardDir(config, card.id)).finally(() => this.inFlight.delete(interrupted.id));
+		this.inFlight.set(interrupted.id, work);
+		return getRun(db, interrupted.id) as StageRun;
 	}
 
 	async steer(cardId: string, text: string): Promise<void> {
@@ -216,15 +254,15 @@ export class StageRunner {
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			this.patchRun(live.runId, { status: "failed", error: message, endedAt: Date.now() });
+			if (!this.stopping) this.patchRun(live.runId, { status: "failed", error: message, endedAt: Date.now() });
 			outcome = { kind: "failed", error: message };
 		} finally {
 			this.aborts.delete(live.runId);
-			runs.note(live.runId, "run_finished", { status: getRun(this.deps.db, live.runId)?.status });
+			if (!this.stopping) runs.note(live.runId, "run_finished", { status: getRun(this.deps.db, live.runId)?.status });
 			await runs.finish(live.runId);
 		}
 		// After finish(): the card's worktree lease is released before the next stage may start.
-		this.deps.onOutcome(live.cardId, outcome);
+		if (!this.stopping) this.deps.onOutcome(live.cardId, outcome);
 	}
 
 	private patchCard(cardId: string, patch: Parameters<typeof updateCard>[2]): void {

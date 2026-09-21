@@ -1,6 +1,6 @@
 import type { RunSpec } from "@traffic-control/core";
 import type { Db } from "../db/open.ts";
-import { insertRunEvent, listRunEvents } from "../db/repo-events.ts";
+import { insertRunEvent, lastRunSeq, listRunEvents } from "../db/repo-events.ts";
 import type { Bus } from "../events/bus.ts";
 import type { DriverEvent, RunHandle, SessionDriver } from "../pi/session-driver.ts";
 import { TranscriptBuffer, type TranscriptItem } from "./transcript-buffer.ts";
@@ -13,6 +13,8 @@ export interface LiveRun {
 	buffer: TranscriptBuffer;
 	/** Stops recording driver events into the transcript. */
 	detach: () => void;
+	/** Set when this run continues an interrupted one: the last seq persisted before the interruption. */
+	resumedFromSeq?: number;
 }
 
 /**
@@ -39,7 +41,8 @@ export class RunManager {
 		this.byCard.set(cardId, runId);
 		try {
 			const handle = await this.driver.start(spec);
-			const live: LiveRun = { runId, cardId, handle, buffer: this.createBuffer(cardId, runId), detach: () => {} };
+			const resumedFromSeq = lastRunSeq(this.db, runId);
+			const live: LiveRun = { runId, cardId, handle, buffer: this.createBuffer(cardId, runId), detach: () => {}, ...(resumedFromSeq > 0 ? { resumedFromSeq } : {}) };
 			live.detach = handle.onEvent((event) => this.record(live, event));
 			this.byRun.set(runId, live);
 			return live;
@@ -59,12 +62,16 @@ export class RunManager {
 	}
 
 	private createBuffer(cardId: string, runId: string): TranscriptBuffer {
-		return new TranscriptBuffer({
-			onItem: (item, durable) => {
-				if (durable) insertRunEvent(this.db, cardId, runId, item);
-				this.bus.publish({ topic: `run:${runId}`, type: item.type, data: item, seq: item.seq });
+		// A resumed run continues its seq after what is already persisted, so cursors held by clients stay valid.
+		return new TranscriptBuffer(
+			{
+				onItem: (item, durable) => {
+					if (durable) insertRunEvent(this.db, cardId, runId, item);
+					this.bus.publish({ topic: `run:${runId}`, type: item.type, data: item, seq: item.seq });
+				},
 			},
-		});
+			lastRunSeq(this.db, runId),
+		);
 	}
 
 	private record(live: LiveRun, event: DriverEvent): void {
@@ -91,7 +98,10 @@ export class RunManager {
 		const live = this.byRun.get(runId);
 		if (live) {
 			const { items, droppedBefore } = live.buffer.snapshot(since);
-			return { items, lastSeq: live.buffer.lastSeq, droppedBefore, live: true };
+			// A resumed run's earlier history lives only in the database; the live buffer starts after it, so no overlap.
+			const resumedFrom = live.resumedFromSeq ?? 0;
+			const earlier = since < resumedFrom ? listRunEvents(this.db, runId, since).filter((item) => item.seq <= resumedFrom) : [];
+			return { items: [...earlier, ...items], lastSeq: live.buffer.lastSeq, droppedBefore, live: true };
 		}
 		const items = listRunEvents(this.db, runId, since);
 		return { items, lastSeq: items.at(-1)?.seq ?? since, droppedBefore: 0, live: false };

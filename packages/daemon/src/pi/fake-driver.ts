@@ -8,6 +8,8 @@ export interface FakeTurn {
 	effect?: (ctx: { spec: RunSpec; prompt: string }) => void | Promise<void>;
 	/** Delay between events, so tests can steer or abort mid-turn. */
 	delayMs?: number;
+	/** Never settle: the session stays busy until it is aborted or stopped. */
+	hang?: boolean;
 }
 
 export type FakeScript = (spec: RunSpec) => FakeTurn[];
@@ -84,7 +86,7 @@ export class FakeRunHandle implements RunHandle {
 			this.emit({ type: "exit", code: 1, stderr: error instanceof Error ? error.message : String(error) });
 			return;
 		}
-		this.emit({ type: "settled" });
+		if (!turn.hang) this.emit({ type: "settled" });
 	}
 
 	async steer(text: string): Promise<void> {

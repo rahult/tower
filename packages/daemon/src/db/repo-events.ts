@@ -25,3 +25,7 @@ export function listRunEvents(db: Db, runId: string, sinceSeq = 0): StoredItem[]
 		.all(runId, sinceSeq) as Array<{ run_seq: number; ts: number; type: string; payload_json: string }>;
 	return rows.map((row) => ({ seq: row.run_seq, ts: row.ts, type: row.type, payload: JSON.parse(row.payload_json) }));
 }
+
+export function lastRunSeq(db: Db, runId: string): number {
+	return (db.prepare("SELECT coalesce(max(run_seq), 0) AS seq FROM events WHERE run_id = ?").get(runId) as { seq: number }).seq;
+}

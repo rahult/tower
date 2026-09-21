@@ -14,11 +14,13 @@ export interface Harness {
 	repo: string;
 	api<T = any>(method: string, path: string, body?: unknown): Promise<{ status: number; body: T }>;
 	stream(topics: string, options?: { since?: number; lastEventId?: string }): SseReader;
+	/** Stops the daemon the way SIGTERM does and boots a new one on the same data directory. */
+	restart(script?: FakeScript): Promise<void>;
 	close(): Promise<void>;
 }
 
 /** Boots the real daemon on an ephemeral port with a real temp git repo, a real SQLite file and a scripted driver. */
-export async function bootHarness(script: FakeScript): Promise<Harness> {
+export async function bootHarness(script: FakeScript, env: Record<string, string> = {}): Promise<Harness> {
 	const root = mkdtempSync(join(tmpdir(), "tc-test-"));
 	const home = join(root, "home");
 	const repo = join(root, "repo");
@@ -29,17 +31,28 @@ export async function bootHarness(script: FakeScript): Promise<Harness> {
 	git("add", ".");
 	git("-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "init");
 
-	const driver = new FakeSessionDriver(script);
-	const daemon = await startDaemon({ ...loadConfig({ TC_HOME: home, TC_PORT: "0" }) }, driver);
+	const config = loadConfig({ TC_HOME: home, TC_PORT: "0", ...env });
 	const readers: SseReader[] = [];
+	const harness = { driver: new FakeSessionDriver(script), daemon: undefined as unknown as Daemon };
+	harness.daemon = await startDaemon(config, harness.driver);
 
 	return {
-		daemon,
-		driver,
+		get daemon() {
+			return harness.daemon;
+		},
+		get driver() {
+			return harness.driver;
+		},
 		home,
 		repo,
+		async restart(nextScript = script) {
+			for (const reader of readers.splice(0)) reader.close();
+			await harness.daemon.close();
+			harness.driver = new FakeSessionDriver(nextScript);
+			harness.daemon = await startDaemon(config, harness.driver);
+		},
 		async api(method, path, body) {
-			const response = await fetch(`${daemon.url}${path}`, {
+			const response = await fetch(`${harness.daemon.url}${path}`, {
 				method,
 				headers: body === undefined ? {} : { "content-type": "application/json" },
 				body: body === undefined ? undefined : JSON.stringify(body),
@@ -48,13 +61,13 @@ export async function bootHarness(script: FakeScript): Promise<Harness> {
 			return { status: response.status, body: text && response.headers.get("content-type")?.includes("json") ? JSON.parse(text) : text };
 		},
 		stream(topics, options = {}) {
-			const reader = new SseReader(`${daemon.url}/api/stream?topics=${topics}&since=${options.since ?? 0}`, options.lastEventId);
+			const reader = new SseReader(`${harness.daemon.url}/api/stream?topics=${topics}&since=${options.since ?? 0}`, options.lastEventId);
 			readers.push(reader);
 			return reader;
 		},
 		async close() {
 			for (const reader of readers) reader.close();
-			await daemon.close();
+			await harness.daemon.close();
 			rmSync(root, { recursive: true, force: true });
 		},
 	};

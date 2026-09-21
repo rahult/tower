@@ -6,18 +6,22 @@ import {
 	type CardEvent,
 	decideAfterFailure,
 	type Effect,
+	eligible,
 	type FailureDecision,
 	type GateKind,
+	pickNext,
+	type ReadyCard,
 	requiredGates,
+	type SchedulerState,
 	type StageRun,
 	transition,
 } from "@traffic-control/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
-import { getCard, updateCard } from "./db/repo-cards.ts";
+import { getCard, listExecuting, listQueued, setQueuedEffect, updateCard } from "./db/repo-cards.ts";
 import { decideGate, getGate, insertGate } from "./db/repo-gates.ts";
-import { getProject } from "./db/repo-projects.ts";
-import { countRunsForStage, getRun, insertRun, updateRun } from "./db/repo-runs.ts";
+import { getProject, listProjects } from "./db/repo-projects.ts";
+import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
@@ -41,6 +45,9 @@ export class Orchestrator {
 	private readonly deps: OrchestratorDeps;
 	private readonly pending = new Set<Promise<void>>();
 	private readonly verifyAborts = new Map<string, () => void>();
+	/** Cards taken off the queue whose work has not reported "running" yet; they already occupy a slot. */
+	private readonly launching = new Map<string, string>();
+	private stopping = false;
 
 	constructor(deps: OrchestratorDeps) {
 		this.deps = deps;
@@ -55,7 +62,22 @@ export class Orchestrator {
 		const updated = updateCard(db, cardId, next);
 		bus.publish({ topic: "board", type: "card_upserted", data: updated });
 		for (const effect of effects) this.execute(cardId, effect);
+		// Any transition can free a slot or add work, so let the scheduler look again.
+		this.schedule();
 		return updated;
+	}
+
+	resume(cardId: string): Card {
+		return this.dispatch(cardId, { type: "resume", wasVerifying: lastRunForCard(this.deps.db, cardId)?.kind === "verify" });
+	}
+
+	/** Boot-time recovery: whatever the previous process left in flight is now interrupted; the queue simply continues. */
+	recover(): void {
+		const { db } = this.deps;
+		const executing = listExecuting(db);
+		interruptActiveRuns(db);
+		for (const card of executing) this.dispatch(card.id, { type: "daemon_restarted" });
+		this.schedule();
 	}
 
 	retry(cardId: string, feedback?: string): Card {
@@ -65,9 +87,29 @@ export class Orchestrator {
 	/** Stops whatever is running for the card: an agent session or the verify command. */
 	async abort(cardId: string): Promise<void> {
 		const stopVerify = this.verifyAborts.get(cardId);
-		if (stopVerify) stopVerify();
+		if (listQueued(this.deps.db).some((queued) => queued.card.id === cardId)) {
+			// Still waiting for a slot: take it off the queue.
+			setQueuedEffect(this.deps.db, cardId, null);
+			this.dispatch(cardId, { type: "run_aborted" });
+		} else if (stopVerify) stopVerify();
 		else await this.deps.stages.abort(cardId);
-		await this.whenIdle();
+		await this.settled(cardId);
+	}
+
+	/** Stops starting work and kills verify commands without recording how they ended, so the next boot can recover them. */
+	beginShutdown(): void {
+		this.stopping = true;
+		this.deps.stages.beginShutdown();
+		for (const stop of this.verifyAborts.values()) stop();
+	}
+
+	/** True while the card is queued, launching or executing. */
+	isBusy(cardId: string): boolean {
+		return this.launching.has(cardId) || this.deps.runs.liveRunForCard(cardId) !== null || listQueued(this.deps.db).some((queued) => queued.card.id === cardId);
+	}
+
+	private async settled(cardId: string): Promise<void> {
+		while (this.launching.has(cardId) || this.deps.runs.liveRunForCard(cardId)) await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 
 	decideGate(cardId: string, gateId: string, decision: "approve" | "reject", feedback: string): Card {
@@ -82,6 +124,8 @@ export class Orchestrator {
 	}
 
 	handleStarted(cardId: string): void {
+		// From here the card's "running" status holds its slot.
+		this.launching.delete(cardId);
 		this.dispatch(cardId, { type: "run_started" });
 	}
 
@@ -142,14 +186,57 @@ export class Orchestrator {
 			this.deps.bus.publish({ topic: "board", type: "gate_opened", data: gate });
 			return;
 		}
-		// M4 puts the scheduler between "queued" and these calls; until then queued work starts immediately.
-		const work = (
+		// Work is queued, not started: the scheduler decides when it gets a slot.
+		setQueuedEffect(this.deps.db, cardId, effect);
+	}
+
+	/** Starts queued work while the caps allow it. Which eligible card goes next is the pickNext policy's call. */
+	private schedule(): void {
+		const { db, config } = this.deps;
+		if (this.stopping) return;
+		for (;;) {
+			const queued = listQueued(db);
+			if (queued.length === 0) return;
+			const executing = listExecuting(db).filter((card) => !this.launching.has(card.id));
+			const state: SchedulerState = {
+				ready: queued.map(({ card, queuedAt }): ReadyCard => ({
+					cardId: card.id,
+					projectId: card.projectId,
+					stage: card.stage,
+					priority: card.priority,
+					queuedAt,
+					buildAttempt: countRunsForStage(db, card.id, "building"),
+				})),
+				running: [...executing.map((card) => ({ cardId: card.id, projectId: card.projectId })), ...[...this.launching].map(([cardId, projectId]) => ({ cardId, projectId }))],
+				caps: { global: config.maxConcurrent, perProject: Object.fromEntries(listProjects(db).map((project) => [project.id, project.concurrencyLimit])) },
+			};
+			const candidates = eligible(state);
+			const pickedId = pickNext(candidates, state);
+			// The policy chooses among candidates; it cannot start something the caps do not allow.
+			const picked = queued.find((entry) => entry.card.id === pickedId && candidates.some((candidate) => candidate.cardId === pickedId));
+			if (!picked) return;
+			this.launch(picked.card, picked.effect);
+		}
+	}
+
+	private launch(card: Card, effect: Effect): void {
+		if (effect.type === "open_gate") return;
+		const { stages } = this.deps;
+		setQueuedEffect(this.deps.db, card.id, null);
+		this.launching.set(card.id, card.projectId);
+		const started =
 			effect.type === "run_verify"
-				? this.verify(cardId)
-				: this.deps.stages.start(cardId, effect.stage, effect.feedback ? { feedback: effect.feedback } : {}).then(() => {})
-		)
-			.catch((error) => void this.dispatch(cardId, { type: "run_failed", error: error instanceof Error ? error.message : String(error) }))
-			.finally(() => this.pending.delete(work));
+				? this.verify(card.id)
+				: (effect.type === "resume_run" ? stages.resume(card.id, effect.stage) : stages.start(card.id, effect.stage, effect.feedback ? { feedback: effect.feedback } : {})).then(() => {});
+		const work = started
+			.catch((error) => {
+				if (!this.stopping) this.dispatch(card.id, { type: "run_failed", error: error instanceof Error ? error.message : String(error) });
+			})
+			.finally(() => {
+				this.pending.delete(work);
+				this.launching.delete(card.id);
+				this.schedule();
+			});
 		this.pending.add(work);
 	}
 
@@ -189,6 +276,10 @@ export class Orchestrator {
 			const { done, abort } = runVerify({ command, cwd: card.worktreePath, timeoutMs: config.verifyTimeoutMs, buffer: live.buffer });
 			this.verifyAborts.set(cardId, abort);
 			const result = await done;
+			if (this.stopping) {
+				await runs.finish(run.id);
+				return;
+			}
 
 			const cardDir = paths.cardDir(config, cardId);
 			mkdirSync(cardDir, { recursive: true });

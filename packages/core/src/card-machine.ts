@@ -17,7 +17,11 @@ export type CardEvent =
 	| { type: "run_failed"; error: string }
 	| { type: "run_aborted" }
 	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string }
-	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean };
+	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean }
+	/** The daemon restarted while this card's work was in flight. */
+	| { type: "daemon_restarted" }
+	/** `wasVerifying`: the interrupted work was the verify command, which has no session to reopen. */
+	| { type: "resume"; wasVerifying: boolean };
 
 /** Facts the orchestrator gathers (with IO) so the transition itself can stay pure. */
 export interface SettleContext {
@@ -30,6 +34,8 @@ export interface SettleContext {
 
 export type Effect =
 	| { type: "start_run"; stage: AgentStage; feedback?: string }
+	/** Reopen the interrupted session (same session id) and tell the agent to carry on. */
+	| { type: "resume_run"; stage: AgentStage }
 	| { type: "run_verify" }
 	| { type: "open_gate"; kind: GateKind };
 
@@ -110,9 +116,18 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			}
 			break;
 
+		case "daemon_restarted":
+			if (status === "running" || status === "verifying") return { next: rest(stage, "interrupted"), effects: [] };
+			break;
+
+		case "resume":
+			if (status !== "interrupted" || !isAgentStage(stage)) break;
+			if (event.wasVerifying) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
+			return { next: rest(stage, "queued"), effects: [{ type: "resume_run", stage }] };
+
 		case "retry":
 			// Re-run the stage the card is stuck or resting in, optionally with guidance.
-			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle")) break;
+			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted")) break;
 			if (stage === "testing" && event.hasVerifyCommand) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
 			return queue(stage, event.feedback);
 			break;

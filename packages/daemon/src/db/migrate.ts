@@ -86,6 +86,11 @@ const MIGRATIONS: string[] = [
 	-- A card waits on at most one human decision at a time.
 	CREATE UNIQUE INDEX one_pending_gate ON gates(card_id) WHERE status = 'pending';
 	`,
+	`
+	-- Work a card is waiting to start, persisted so the queue survives a restart.
+	ALTER TABLE cards ADD COLUMN queued_effect_json TEXT;
+	ALTER TABLE cards ADD COLUMN queued_at INTEGER;
+	`,
 ];
 
 export function migrate(db: DatabaseSync): void {

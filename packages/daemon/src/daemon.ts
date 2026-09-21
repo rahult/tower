@@ -34,6 +34,8 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	});
 	orchestrator = new Orchestrator({ config, db, bus, runs, stages });
 	const app = createApp({ config, db, bus, runs, stages, orchestrator });
+	// Whatever the previous process left in flight is interrupted; queued work carries on.
+	orchestrator.recover();
 
 	const server: ServerType = await new Promise((resolve) => {
 		const started = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, () => resolve(started));
@@ -44,6 +46,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 		url: `http://${config.host}:${port}`,
 		whenIdle: () => orchestrator.whenIdle(),
 		async close() {
+			orchestrator.beginShutdown();
 			await runs.stopAll();
 			await orchestrator.whenIdle();
 			await new Promise<void>((resolve) => {
