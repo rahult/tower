@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import type { AgentStage, Card, Project } from "@traffic-control/core";
+import { type Card, InvalidTransition, type Project } from "@traffic-control/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
 import { getCard, insertCard, listCards } from "../db/repo-cards.ts";
 import { getProject, insertProject, listProjects } from "../db/repo-projects.ts";
+import { listGatesForCard } from "../db/repo-gates.ts";
 import { listActiveRuns, listRunsForCard } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
+import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, isGitRepo } from "../git/worktree-manager.ts";
+import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import type { RunManager } from "../run/run-manager.ts";
 import type { StageRunner } from "../stage-runner.ts";
 import { serveWeb } from "./static.ts";
@@ -21,6 +24,7 @@ export interface AppDeps {
 	bus: Bus;
 	runs: RunManager;
 	stages: StageRunner;
+	orchestrator: Orchestrator;
 }
 
 class HttpError extends Error {
@@ -40,11 +44,12 @@ function requireString(body: Record<string, unknown>, key: string): string {
 }
 
 export function createApp(deps: AppDeps): Hono {
-	const { config, db, bus, runs, stages } = deps;
+	const { config, db, bus, runs, stages, orchestrator } = deps;
 	const app = new Hono();
 
 	app.onError((error, c) => {
 		if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
+		if (error instanceof InvalidTransition || error instanceof ConflictError) return c.json({ error: error.message }, 409);
 		console.error(error);
 		return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
 	});
@@ -114,18 +119,32 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/cards/:id", (c) => {
 		const card = cardOr404(c.req.param("id"));
-		return c.json({ card, runs: listRunsForCard(db, card.id), artifacts: listArtifacts(config, card.id) });
+		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id) });
 	});
 
-	// M1: run a single stage directly. M2 replaces this with enqueue + the card state machine.
-	app.post("/api/cards/:id/run", async (c) => {
+	app.post("/api/cards/:id/enqueue", (c) => c.json(orchestrator.dispatch(cardOr404(c.req.param("id")).id, { type: "enqueue" }), 202));
+
+	app.post("/api/cards/:id/retry", async (c) => {
 		const card = cardOr404(c.req.param("id"));
 		const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-		const stage = (body.stage ?? "planning") as AgentStage;
-		if (stage !== "planning") throw new HttpError(400, "Only the planning stage can be run in this milestone");
-		if (runs.liveRunForCard(card.id)) throw new HttpError(409, "This card already has a running session");
-		const feedback = typeof body.feedback === "string" ? body.feedback : undefined;
-		return c.json(await stages.start(card.id, stage, feedback ? { feedback } : {}), 202);
+		const feedback = typeof body.feedback === "string" && body.feedback.trim() ? body.feedback.trim() : undefined;
+		return c.json(orchestrator.dispatch(card.id, { type: "retry", ...(feedback ? { feedback } : {}) }), 202);
+	});
+
+	app.post("/api/cards/:id/gates/:gateId", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const body = (await c.req.json()) as Record<string, unknown>;
+		if (body.decision !== "approve" && body.decision !== "reject") throw new HttpError(400, '"decision" must be "approve" or "reject"');
+		const feedback = typeof body.feedback === "string" ? body.feedback.trim() : "";
+		if (body.decision === "reject" && !feedback) throw new HttpError(400, "Say what should change so the planner can act on it");
+		if (!listGatesForCard(db, card.id).some((gate) => gate.id === c.req.param("gateId"))) throw new HttpError(404, "Gate not found");
+		return c.json(orchestrator.decideGate(card.id, c.req.param("gateId"), body.decision, feedback));
+	});
+
+	app.get("/api/cards/:id/diff", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		if (!card.worktreePath || !card.baseCommit) return c.json({ diff: "", untracked: [] });
+		return c.json(await cardDiff(card.worktreePath, card.baseCommit));
 	});
 
 	app.post("/api/cards/:id/steer", async (c) => {

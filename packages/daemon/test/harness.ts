@@ -149,3 +149,17 @@ export function planningTurn(options: { writeResult?: boolean; delayMs?: number 
 		},
 	};
 }
+
+/** A scripted building turn: changes a file in the worktree, commits it, and reports a pass. */
+export function buildingTurn(): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Implemented.", thinking: "", toolCalls: [] } }],
+		effect: ({ spec }) => {
+			writeFileSync(join(spec.cwd, "feature.txt"), "new feature\n");
+			writeFileSync(join(spec.cwd, "scratch.tmp"), "left untracked\n");
+			execFileSync("git", ["add", "feature.txt"], { cwd: spec.cwd });
+			execFileSync("git", ["-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "Add feature"], { cwd: spec.cwd });
+			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Built." }));
+		},
+	};
+}

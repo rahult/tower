@@ -16,10 +16,11 @@ async function seedCard(harness: Harness, title = "Add a README section") {
 }
 
 async function runToCompletion(harness: Harness, cardId: string) {
-	const started = await harness.api("POST", `/api/cards/${cardId}/run`, {});
+	const started = await harness.api("POST", `/api/cards/${cardId}/enqueue`);
 	expect(started.status).toBe(202);
-	await harness.daemon.stages.inFlight.get(started.body.id);
-	return started.body;
+	expect(started.body).toMatchObject({ stage: "planning", status: "queued" });
+	await harness.daemon.whenIdle();
+	return (await harness.api("GET", `/api/cards/${cardId}`)).body.runs[0];
 }
 
 describe("planning stage through the HTTP surface", () => {
@@ -35,7 +36,7 @@ describe("planning stage through the HTTP surface", () => {
 		expect(run.args).toContain("--no-approve");
 
 		const detail = await h.api("GET", `/api/cards/${card.id}`);
-		expect(detail.body.card).toMatchObject({ stage: "planning", status: "idle", attempt: 1, branchName: `tc/${card.id}-add-a-readme-section` });
+		expect(detail.body.card).toMatchObject({ stage: "planning", status: "awaiting_gate", attempt: 1, branchName: `tc/${card.id}-add-a-readme-section` });
 		expect(existsSync(join(detail.body.card.worktreePath, "README.md"))).toBe(true);
 		expect(detail.body.runs[0]).toMatchObject({ status: "settled", resultStatus: "pass", resultSummary: "Plan ready.", tokens: { total: 120 }, lastEntryId: "entry-1" });
 		expect(detail.body.artifacts.map((a: { name: string }) => a.name).sort()).toEqual(["plan.md", STAGE_RESULT_FILE]);
@@ -48,7 +49,9 @@ describe("planning stage through the HTTP surface", () => {
 		expect(handle?.prompts[0]).toContain(join(h.home, "cards", card.id, "plan.md"));
 		expect(handle?.stopped).toBe(true);
 
-		await board.waitFor((f) => f.type === "card_upserted" && f.data.status === "idle" && f.data.stage === "planning");
+		const statuses = () => board.frames.filter((f) => f.type === "card_upserted").map((f) => f.data.status);
+		await board.waitFor((f) => f.type === "card_upserted" && f.data.status === "awaiting_gate");
+		expect(statuses().filter((status, i, all) => status !== all[i - 1])).toEqual(["queued", "running", "awaiting_gate"]);
 	});
 
 	it("streams the transcript live and replays it exactly for a finished run", async () => {
@@ -84,12 +87,12 @@ describe("planning stage through the HTTP surface", () => {
 		h = await bootHarness(() => [planningTurn({ delayMs: 40 })]);
 		const { card } = await seedCard(h);
 		const runId = `c${card.id}-plan-1`;
-		const started = await h.api("POST", `/api/cards/${card.id}/run`, {});
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
 		const first = h.stream(`run:${runId}`);
 		await first.waitFor((f) => f.type === "tool_start");
 
 		const late = h.stream(`run:${runId}`);
-		await h.daemon.stages.inFlight.get(started.body.id);
+		await h.daemon.whenIdle();
 		await late.waitFor((f) => f.type === "run_finished");
 		await first.waitFor((f) => f.type === "run_finished");
 		expect(late.frames.map((f) => f.data.seq)).toEqual(first.frames.map((f) => f.data.seq));
@@ -135,30 +138,34 @@ describe("planning stage through the HTTP surface", () => {
 	it("steers a running session and records the steer in the transcript", async () => {
 		h = await bootHarness(() => [planningTurn({ delayMs: 40 })]);
 		const { card } = await seedCard(h);
-		const started = await h.api("POST", `/api/cards/${card.id}/run`, {});
+		const board = h.stream("board");
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await board.waitFor((f) => f.type === "card_upserted" && f.data.status === "running");
 		expect((await h.api("POST", `/api/cards/${card.id}/steer`, { text: "Keep it short." })).status).toBe(200);
-		await h.daemon.stages.inFlight.get(started.body.id);
+		await h.daemon.whenIdle();
 
 		expect(h.driver.handles[0]?.steers).toEqual(["Keep it short."]);
-		const cold = await h.api("GET", `/api/runs/${started.body.id}/transcript`);
+		const cold = await h.api("GET", `/api/runs/c${card.id}-plan-1/transcript`);
 		expect(cold.body.items.some((i: { type: string; payload: { text: string } }) => i.type === "steer" && i.payload.text === "Keep it short.")).toBe(true);
 	});
 
 	it("aborts a running session and frees the card for another run", async () => {
 		h = await bootHarness(() => [planningTurn({ delayMs: 100 })]);
 		const { card } = await seedCard(h);
-		await h.api("POST", `/api/cards/${card.id}/run`, {});
-		expect((await h.api("POST", `/api/cards/${card.id}/run`, {})).status).toBe(409);
+		const board = h.stream("board");
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await board.waitFor((f) => f.type === "card_upserted" && f.data.status === "running");
+		expect((await h.api("POST", `/api/cards/${card.id}/enqueue`)).status).toBe(409);
+		expect((await h.api("POST", `/api/cards/${card.id}/retry`)).status).toBe(409);
 		expect((await h.api("POST", `/api/cards/${card.id}/abort`)).status).toBe(200);
 
 		const detail = await h.api("GET", `/api/cards/${card.id}`);
-		expect(detail.body.card.status).toBe("idle");
+		expect(detail.body.card).toMatchObject({ stage: "planning", status: "idle" });
 		expect(detail.body.runs[0].status).toBe("aborted");
 
-		const again = await h.api("POST", `/api/cards/${card.id}/run`, {});
-		expect(again.status).toBe(202);
-		expect(again.body.id).toBe(`c${card.id}-plan-2`);
-		await h.daemon.stages.inFlight.get(again.body.id);
+		expect((await h.api("POST", `/api/cards/${card.id}/retry`)).status).toBe(202);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.runs.map((r: { id: string }) => r.id)).toEqual([`c${card.id}-plan-1`, `c${card.id}-plan-2`]);
 	});
 
 	it("validates input and rejects actions that make no sense", async () => {

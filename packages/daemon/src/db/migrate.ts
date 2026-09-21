@@ -73,6 +73,19 @@ const MIGRATIONS: string[] = [
 	);
 	CREATE INDEX events_by_run ON events(run_id, run_seq);
 	`,
+	`
+	CREATE TABLE gates (
+		id TEXT PRIMARY KEY,
+		card_id TEXT NOT NULL REFERENCES cards(id),
+		kind TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		feedback TEXT,
+		created_at INTEGER NOT NULL,
+		decided_at INTEGER
+	);
+	-- A card waits on at most one human decision at a time.
+	CREATE UNIQUE INDEX one_pending_gate ON gates(card_id) WHERE status = 'pending';
+	`,
 ];
 
 export function migrate(db: DatabaseSync): void {

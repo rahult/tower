@@ -4,6 +4,7 @@ import {
 	type AgentStage,
 	type Card,
 	type Project,
+	type ResultStatus,
 	type RunSpec,
 	type StageRun,
 	parseStageResult,
@@ -26,11 +27,20 @@ import type { LiveRun, RunManager } from "./run/run-manager.ts";
 
 const NUDGE = `You stopped without writing the required result file. Write ${STAGE_RESULT_FILE} now, exactly as specified in your instructions, then stop.`;
 
+/** How a stage run ended. The orchestrator turns this into a card transition. */
+export type RunOutcome =
+	| { kind: "settled"; stage: AgentStage; result: ResultStatus; summary: string }
+	| { kind: "failed"; error: string }
+	| { kind: "aborted" };
+
 export interface StageRunnerDeps {
 	config: Config;
 	db: Db;
 	bus: Bus;
 	runs: RunManager;
+	/** Called synchronously once the session is up, before any work is driven, so it always precedes onOutcome. */
+	onStarted: (cardId: string) => void;
+	onOutcome: (cardId: string, outcome: RunOutcome) => void;
 }
 
 /** Executes one agent stage for a card: worktree, prompt, session, result validation, bookkeeping. */
@@ -86,15 +96,7 @@ export class StageRunner {
 			error: null,
 		};
 		insertRun(db, run);
-		this.patchCard(card.id, {
-			stage,
-			status: "running",
-			attempt,
-			worktreePath: worktree.path,
-			branchName: worktree.branchName,
-			baseCommit: worktree.baseCommit,
-			needsAttentionReason: null,
-		});
+		this.patchCard(card.id, { attempt, worktreePath: worktree.path, branchName: worktree.branchName, baseCommit: worktree.baseCommit });
 
 		let live: LiveRun;
 		try {
@@ -102,13 +104,13 @@ export class StageRunner {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			this.patchRun(run.id, { status: "failed", error: message, endedAt: Date.now() });
-			this.patchCard(card.id, { status: "needs_attention", needsAttentionReason: message });
 			throw error;
 		}
 		this.patchRun(run.id, { status: "running" });
+		this.deps.onStarted(card.id);
 
 		const prompt = this.renderStagePrompt(card, stage, worktree.path, worktree.branchName, options.feedback);
-		const work = this.drive(live, prompt, cardDir).finally(() => this.inFlight.delete(run.id));
+		const work = this.drive(live, stage, prompt, cardDir).finally(() => this.inFlight.delete(run.id));
 		this.inFlight.set(run.id, work);
 		return getRun(db, run.id) as StageRun;
 	}
@@ -165,8 +167,9 @@ export class StageRunner {
 	}
 
 	/** Prompt → settle → validate result (one nudge if missing) → record outcome. Never throws. */
-	private async drive(live: LiveRun, prompt: string, cardDir: string): Promise<void> {
+	private async drive(live: LiveRun, stage: AgentStage, prompt: string, cardDir: string): Promise<void> {
 		const { runs } = this.deps;
+		let outcome: RunOutcome;
 		let aborted = false;
 		const abortSignal = new Promise<void>((resolve) => {
 			this.aborts.set(live.runId, () => {
@@ -199,28 +202,24 @@ export class StageRunner {
 
 			if (aborted) {
 				this.patchRun(live.runId, { ...common, status: "aborted" });
-				this.patchCard(live.cardId, { status: "idle" });
-			} else if (!parsed.ok) {
-				this.patchRun(live.runId, { ...common, status: "settled", resultStatus: "missing", resultSummary: parsed.reason });
-				this.patchCard(live.cardId, { status: "needs_attention", needsAttentionReason: parsed.reason });
+				outcome = { kind: "aborted" };
 			} else {
-				const { status, summary } = parsed.result;
-				this.patchRun(live.runId, { ...common, status: "settled", resultStatus: status, resultSummary: summary });
-				// M1 has no state machine yet: a passing stage simply rests. M2 replaces this with core.transition().
-				this.patchCard(
-					live.cardId,
-					status === "pass" ? { status: "idle" } : { status: "needs_attention", needsAttentionReason: `${status}: ${summary}` },
-				);
+				const result: ResultStatus = parsed.ok ? parsed.result.status : "missing";
+				const summary = parsed.ok ? parsed.result.summary : parsed.reason;
+				this.patchRun(live.runId, { ...common, status: "settled", resultStatus: result, resultSummary: summary });
+				outcome = { kind: "settled", stage, result, summary };
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			this.patchRun(live.runId, { status: "failed", error: message, endedAt: Date.now() });
-			this.patchCard(live.cardId, { status: "needs_attention", needsAttentionReason: message });
+			outcome = { kind: "failed", error: message };
 		} finally {
 			this.aborts.delete(live.runId);
 			runs.note(live.runId, "run_finished", { status: getRun(this.deps.db, live.runId)?.status });
 			await runs.finish(live.runId);
 		}
+		// After finish(): the card's worktree lease is released before the next stage may start.
+		this.deps.onOutcome(live.cardId, outcome);
 	}
 
 	private patchCard(cardId: string, patch: Parameters<typeof updateCard>[2]): void {
