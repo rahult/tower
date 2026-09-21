@@ -38,6 +38,26 @@ export interface Settings {
 	knownModels: string[];
 }
 
+export interface FlowInfo {
+	name: string;
+	title: string;
+	description: string;
+}
+
+export interface UsageRow {
+	key: string;
+	runs: number;
+	tokens: number;
+	costUsd: number;
+}
+
+export interface Usage {
+	byDay: UsageRow[];
+	byProject: UsageRow[];
+	byModel: UsageRow[];
+	byCard: UsageRow[];
+}
+
 export interface CardDiff {
 	diff: string;
 	untracked: string[];
@@ -59,11 +79,16 @@ export const api = {
 	board: () => request<Board>("GET", "/api/board"),
 	card: (id: string) => request<CardDetail>("GET", `/api/cards/${id}`),
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
+	flows: () => request<{ flows: FlowInfo[]; defaults: string[] }>("GET", "/api/flows"),
+	usage: () => request<Usage>("GET", "/api/usage"),
+	adhoc: (cardId: string, body: Record<string, string | undefined>) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/adhoc`, body),
+	checkPr: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/check-pr`),
+	answerUi: (runId: string, requestId: string, answer: Record<string, unknown>) => request<{ ok: true }>("POST", `/api/runs/${runId}/ui/${requestId}`, answer),
 	settings: () => request<Settings>("GET", "/api/settings"),
 	saveSettings: (models: Record<string, { model: string; thinking: string } | null>) => request<Settings>("PUT", "/api/settings", { models }),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
-	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; concurrencyLimit: number }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
+	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; concurrencyLimit: number; reviewFlows: string[] | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),

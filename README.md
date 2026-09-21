@@ -10,10 +10,13 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 - **Gates.** A finished plan waits for you: approve it, or send it back with what should change.
 - **Questions, not guesses.** When a decision is yours (what kind of app, which library), the agent stops and asks, with options you answer by clicking on the board. The same session then continues with your answers.
 - **Your tests decide.** A project's verify command runs after each build; its exit code is the verdict. Failures go back to a fresh builder with the output, up to a cap, then the card asks for you.
+- **Reviews before you look.** Once tests pass, review flows run in fresh sessions that never saw the builder's work: an adversarial review that tries to break the change, and a SOLID design review. Their findings are waiting at the feedback gate.
+- **Pull requests, watched.** Approve the work and Tower pushes the branch and opens the pull request with `gh`. Failing CI goes to a builder with the failing checks (twice at most), a merge finishes the card and removes its worktree. A repository with no remote simply finishes with the branch ready to merge.
+- **Run anything on a card.** A review flow, any pi skill, one of your `~/.pi/agent/agents` roles, or a plain prompt with the model you choose.
 - **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff.
 - **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
 
-Status: milestones 0 to 4 of 6. The feedback gate with review flows, pull requests with CI watching, routing on retry, cost roll-ups and ad hoc skills are not built yet; a card that passes testing currently rests there. See the [design and roadmap](docs/superpowers/specs/2026-09-21-tower-design.md).
+Status: all six milestones are built. Everything is covered by tests that run the whole daemon, and the plan, build, test and question flows have been run against real pi sessions. The pull request stage is tested against a fake `gh` and a local remote, and has not yet been run against a real GitHub repository. See the [design](docs/superpowers/specs/2026-09-21-tower-design.md).
 
 ## Install as a pi package
 
@@ -53,7 +56,9 @@ A first card, end to end:
 2. On the board, open the project's **Settings** and set a **verify command** (for example `pnpm test && pnpm typecheck`) and, if a fresh checkout needs it, a **setup command** (for example `pnpm install --prefer-offline`). Without a verify command an agent judges the build instead of your tests.
 3. The card plans, then turns amber: **Review**. Read the plan; approve it, or send it back with a note.
 4. A cheap model builds from the plan in the card's worktree and commits on branch `tower/<id>-<title>`. Your verify command runs. If it fails, a fresh builder gets the output and tries again (three builds by default).
-5. Open the card any time to watch the session, **steer** it ("use the existing logger"), abort it, or read its diff under **Changes**.
+5. Reviews run, then the card turns amber again: **Review work**. Read the findings and the diff; approve, or send it back ("Ask it to fix the findings" writes the note for you).
+6. Tower opens the pull request and watches it. When you merge it on GitHub, the card moves to Done.
+7. Open the card any time to watch the session, **steer** it ("use the existing logger"), abort it, or read its diff under **Changes**.
 
 Click a strip to open its card. Colour is state, and means the same everywhere: blue is an agent working, solid amber needs you, green is clear, red is a warning. Plans, replies and files are rendered (Markdown, highlighted code, pretty-printed JSON). The theme follows your system; the status bar has a toggle.
 
@@ -85,6 +90,9 @@ Environment variables, read when the daemon starts:
 | `TOWER_PORT` | `4700` | Port. The daemon only ever binds `127.0.0.1`; there is no authentication |
 | `TOWER_MAX_CONCURRENT` | `3` | Sessions and verify commands running at once, across all projects |
 | `TOWER_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
+| `TOWER_REVIEW_FLOWS` | `adversarial-review,solid-review` | Review flows a project runs unless its Settings say otherwise. Empty turns them off |
+| `TOWER_MAX_CI_FIX_ATTEMPTS` | `2` | Times a failing pull request is repaired before the card asks for you |
+| `TOWER_PR_POLL_MS` | `120000` | How often open pull requests are checked |
 
 ### Models
 
@@ -103,7 +111,7 @@ Names are pi's `provider/model-id` selectors (`pi --list-models`). A stage you l
 
 If a provider rejects a request (no credit, a bad key, an unknown model), the card stops and shows the provider's own message.
 
-Per project, under **Settings** on its lane: the verify command, the setup command, and how many of its cards may run at once (default 1).
+Per project, under **Settings** on its lane: the verify command, the setup command, which review flows run, and how many of its cards may run at once (default 1).
 
 Per card, models can be overridden when creating it through the API:
 
@@ -115,6 +123,21 @@ curl -X POST http://127.0.0.1:4700/api/cards -H 'content-type: application/json'
 ```
 
 Stage defaults are in `packages/core/src/stage-spec.ts`.
+
+### Review flows
+
+A flow is a JSON file: shipped ones are in `flows/`, yours go in `~/.tower/flows/` (same name overrides). Each step is a prompt file, a pi skill, or one of your agent roles:
+
+```json
+{
+  "name": "security-review",
+  "title": "Security review",
+  "description": "Looks for injection, secrets and unsafe defaults in the change.",
+  "steps": [{ "name": "scan", "skill": "security-review", "model": "planning", "access": "read-and-run" }]
+}
+```
+
+`model` is a stage name (`planning` means whatever plans for you) or an explicit `provider/model`. `access` is `read-only`, `read-and-run` or `write`. Pull requests need the [`gh` CLI](https://cli.github.com) logged in.
 
 ### How sessions are run
 

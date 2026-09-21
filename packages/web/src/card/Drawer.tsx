@@ -7,8 +7,10 @@ import { BAR_CLASS, CHIP_CLASS, describeCard, isLive } from "../board/status.ts"
 import { Markdown } from "../content/Markdown.tsx";
 import { ArtifactsPanel } from "./ArtifactsPanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
+import { FeedbackPanel } from "./FeedbackPanel.tsx";
 import { GatePanel } from "./GatePanel.tsx";
 import { QuestionsPanel } from "./QuestionsPanel.tsx";
+import { RunPanel } from "./RunPanel.tsx";
 import { SteerBox } from "./SteerBox.tsx";
 import { Transcript } from "./Transcript.tsx";
 
@@ -21,7 +23,7 @@ interface DrawerProps {
 
 export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 	const detail = useQuery({ queryKey: ["card", cardId], queryFn: () => api.card(cardId) });
-	const [tab, setTab] = useState<"session" | "changes" | "files">("session");
+	const [tab, setTab] = useState<"session" | "changes" | "files" | "run">("session");
 	const [pickedRunId, setPickedRunId] = useState<string | null>(null);
 
 	const runs = detail.data?.runs ?? [];
@@ -40,8 +42,10 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 	const { card, artifacts, gates } = detail.data;
 	const pendingGate = gates.find((gate) => gate.status === "pending") ?? null;
 	const { stage, status, tone } = describeCard(card);
-	const live = isLive(card) && run?.id === runs.at(-1)?.id;
+	const live = run?.id === runs.at(-1)?.id && (isLive(card) || run?.status === "running" || run?.status === "starting");
 	const caution = tone === "caution";
+	const totals = runs.reduce((sum, r) => ({ tokens: sum.tokens + (r.tokens?.total ?? 0), cost: sum.cost + (r.costUsd ?? 0) }), { tokens: 0, cost: 0 });
+	const usage = totals.tokens > 0 ? `${totals.tokens.toLocaleString()} tokens across ${runs.filter((r) => r.kind !== "verify").length} sessions${totals.cost > 0 ? `, $${totals.cost.toFixed(2)}` : ""}` : null;
 	const asked = card.status === "awaiting_input" ? (runs.at(-1)?.questions ?? null) : null;
 
 	return (
@@ -65,6 +69,15 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 						<Markdown text={card.brief} />
 					</div>
 				)}
+				{card.prUrl && (
+					<p className="mt-2 text-[14px]">
+						<a href={card.prUrl} target="_blank" rel="noreferrer noopener" className="font-semibold text-primary underline underline-offset-4">
+							{card.prUrl.replace("https://github.com/", "")}
+						</a>
+						{card.stage === "pull_request" && card.status === "idle" && <span className="text-slate"> is open. Tower checks it every couple of minutes.</span>}
+					</p>
+				)}
+				{usage && <p className="mt-1 text-[12px] text-slate">{usage}</p>}
 				{card.needsAttentionReason && !asked && <p className="mt-2 text-[14px] font-semibold">{card.needsAttentionReason}</p>}
 			</header>
 
@@ -78,11 +91,16 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 				<TabButton active={tab === "files"} onClick={() => setTab("files")}>
 					Files <span className="text-slate">{artifacts.length}</span>
 				</TabButton>
+				{card.worktreePath && (
+					<TabButton active={tab === "run"} onClick={() => setTab("run")}>
+						Run
+					</TabButton>
+				)}
 				{tab === "session" && runs.length > 1 && (
 					<select aria-label="Session to show" value={run?.id ?? ""} onChange={(event) => setPickedRunId(event.target.value)} className="ml-auto rounded border border-rule bg-sheet px-2 py-1 text-[13px]">
 						{runs.map((r) => (
 							<option key={r.id} value={r.id}>
-								{r.kind === "verify" ? "verify command" : r.stage} {r.attempt}
+								{r.kind === "verify" ? "verify command" : r.kind === "stage" ? r.stage : r.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, "").replaceAll("-", " ")} {r.attempt}
 							</option>
 						))}
 					</select>
@@ -93,13 +111,17 @@ export function Drawer({ cardId, onClose, onRunOpen }: DrawerProps) {
 				<ArtifactsPanel cardId={card.id} artifacts={artifacts} />
 			) : tab === "changes" ? (
 				<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
-			) : pendingGate?.kind === "plan_approval" ? (
+			) : tab === "run" ? (
+				<RunPanel cardId={card.id} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
+			) : pendingGate?.kind === "plan_approval" && !live ? (
 				<GatePanel cardId={card.id} gate={pendingGate} />
+			) : pendingGate?.kind === "feedback" && !live ? (
+				<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} />
 			) : run ? (
 				<>
 					{asked && run.id === runs.at(-1)?.id && <QuestionsPanel cardId={card.id} summary={card.needsAttentionReason} questions={asked} />}
 					<RunSummary run={run} />
-					<Transcript blocks={blocks} live={live} />
+					<Transcript blocks={blocks} live={live} runId={run.id} />
 					{live && run.kind !== "verify" && <SteerBox cardId={card.id} />}
 				</>
 			) : (

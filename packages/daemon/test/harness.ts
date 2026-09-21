@@ -229,13 +229,31 @@ export function testerTurn(): FakeTurn {
 	};
 }
 
+const CLEAR_REVIEW = "The change is small and follows the conventions around it. Nothing here will cost the next person.\n";
+
+const BLOCKING_REVIEW = [
+	"## Retries are not capped on a non-idempotent request",
+	"",
+	"**Severity: blocking.** `src/http/client.ts:42`",
+	"",
+	"`withRetry` wraps `POST /payouts` as well as reads. A timeout after the server accepted the request is retried, and the payout is made twice. Reproduced with a stub server that answers after the client's timeout:",
+	"",
+	"```sh",
+	"$ node probe.mjs",
+	"payouts created: 2",
+	"```",
+	"",
+	"Fix: retry only idempotent methods, or send an idempotency key.",
+	"",
+].join("\n");
+
 /** A scripted review step: writes its report and a verdict. */
 export function reviewTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
 	return {
 		events: [{ type: "message", message: { role: "assistant", text: "Review written.", thinking: "", toolCalls: [] } }],
 		effect: ({ spec, prompt }) => {
 			const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
-			if (report) writeFileSync(report, `# Review by ${spec.sessionId}\n\nOne finding.\n`);
+			if (report) writeFileSync(report, `# Review by ${spec.sessionId}\n\nOne finding.\n\n${verdict === "pass" ? CLEAR_REVIEW : BLOCKING_REVIEW}`);
 			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
 		},
 	};

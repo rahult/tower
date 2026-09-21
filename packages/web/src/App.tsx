@@ -12,6 +12,9 @@ import { button, monoField } from "./ui.ts";
 export function App() {
 	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
 	const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+	// Refetched with the board, so today's spend keeps up with finished sessions.
+	const usage = useQuery({ queryKey: ["board", "usage"], queryFn: api.usage });
+	const today = usage.data?.byDay.find((row) => row.key === new Date().toLocaleDateString("en-CA"));
 	const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 	const [openRunId, setOpenRunId] = useState<string | null>(null);
 	const [showingModels, setShowingModels] = useState(false);
@@ -45,6 +48,15 @@ export function App() {
 					</span>
 				</p>
 				<div className="ml-auto flex items-center gap-1">
+					{today && (
+						<span className="px-2 text-[13px] text-bar-dim" title="Tokens used by sessions started today. Subscription models report no cost.">
+							Today <b className="font-semibold text-bar-ink">{today.tokens >= 1_000_000 ? `${(today.tokens / 1_000_000).toFixed(1)}M` : `${Math.round(today.tokens / 1000)}k`}</b> tokens							{today.costUsd > 0 && (
+								<>
+									, <b className="font-semibold text-bar-ink">${today.costUsd.toFixed(2)}</b>
+								</>
+							)}
+						</span>
+					)}
 					<button type="button" onClick={() => setShowingModels((on) => !on)} aria-expanded={showingModels} className={barButton} title="Which model runs each stage">
 						<span className="text-bar-dim">Plans with </span>
 						<span className="font-mono text-[12px]">{shortModel(settings.data?.models.planning.model)}</span>

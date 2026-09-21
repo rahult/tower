@@ -47,7 +47,11 @@ const STAGE_LABEL: Record<Card["stage"], string> = {
 
 export function describeCard(card: Card): { stage: string; status: string; tone: Tone } {
 	const status = STATUS[card.status];
-	return { stage: STAGE_LABEL[card.stage], status: status.label, tone: card.stage === "done" ? "ok" : status.tone };
+	const stage = STAGE_LABEL[card.stage];
+	if (card.stage === "done") return { stage, status: "Done", tone: "ok" };
+	// An open pull request is not idle in any useful sense: Tower is watching it.
+	if (card.stage === "pull_request" && card.status === "idle") return { stage, status: "Open, being watched", tone: "work" };
+	return { stage, status: status.label, tone: status.tone };
 }
 
 export const isLive = (card: Card) => card.status === "running" || card.status === "verifying";

@@ -1,11 +1,14 @@
-import { memo, useEffect, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { memo, useEffect, useRef, useState } from "react";
+import { api } from "../api/client.ts";
+import { button, field } from "../ui.ts";
 import { CodeBlock } from "../content/CodeBlock.tsx";
 import { languageFor, prettyJson } from "../content/language.ts";
 import { Markdown } from "../content/Markdown.tsx";
 import { type Block, describeTool } from "./transcript-model.ts";
 
 /** A session as it happened: what was asked of the agent, what it thought and said, and every tool it ran. */
-export function Transcript({ blocks, live }: { blocks: Block[]; live: boolean }) {
+export function Transcript({ blocks, live, runId }: { blocks: Block[]; live: boolean; runId: string }) {
 	const end = useRef<HTMLDivElement>(null);
 	const pinned = useRef(true);
 	const scroller = useRef<HTMLDivElement>(null);
@@ -30,7 +33,7 @@ export function Transcript({ blocks, live }: { blocks: Block[]; live: boolean })
 			<ol className="flex flex-col gap-3">
 				{blocks.map((block) => (
 					<li key={`${block.kind}-${block.seq}`}>
-						<BlockView block={block} />
+						<BlockView block={block} runId={runId} live={live} />
 					</li>
 				))}
 			</ol>
@@ -40,7 +43,7 @@ export function Transcript({ blocks, live }: { blocks: Block[]; live: boolean })
 }
 
 // Blocks are immutable, so an unchanged block keeps its identity and skips re-rendering (Markdown parsing is not free).
-const BlockView = memo(function BlockView({ block }: { block: Block }) {
+const BlockView = memo(function BlockView({ block, runId, live }: { block: Block; runId: string; live: boolean }) {
 	switch (block.kind) {
 		case "prompt":
 			return (
@@ -74,6 +77,8 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
 					<pre className="max-h-[32rem] overflow-auto px-3 py-2 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap">{block.output || "(no output yet)"}</pre>
 				</div>
 			);
+		case "ui":
+			return <ExtensionQuestion block={block} runId={runId} live={live} />;
 		case "note":
 			return block.tone === "error" ? (
 				<p className="rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-[14px] text-danger">{block.text}</p>
@@ -82,6 +87,40 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
 			);
 	}
 });
+
+/** A dialog a pi extension opened. The agent is stopped until it is answered, so it is amber and answerable right here. */
+function ExtensionQuestion({ block, runId, live }: { block: Extract<Block, { kind: "ui" }>; runId: string; live: boolean }) {
+	const [value, setValue] = useState("");
+	const answer = useMutation({ mutationFn: (body: Record<string, unknown>) => api.answerUi(runId, block.id, body) });
+	const { title, message, options, placeholder } = block.payload as { title?: string; message?: string; options?: string[]; placeholder?: string };
+	const waiting = block.outcome === null && live;
+	return (
+		<div className={`rounded-md border px-3 py-2 ${waiting ? "border-caution bg-caution-soft" : "border-rule bg-sheet"}`}>
+			<p className="text-[12px] font-semibold text-slate">{waiting ? "An extension is waiting for your answer" : block.outcome === "expired" ? "Nobody answered in time, so this was cancelled" : "An extension asked"}</p>
+			<p className="font-semibold">{title ?? message}</p>
+			{title && message && <p className="text-[14px]">{message}</p>}
+			{waiting && (
+				<div className="mt-2 flex flex-wrap items-center gap-2">
+					{block.method === "confirm" && (
+						<>
+							<button type="button" className={button.primary} onClick={() => answer.mutate({ confirmed: true })}>Yes</button>
+							<button type="button" className={button.quiet} onClick={() => answer.mutate({ confirmed: false })}>No</button>
+						</>
+					)}
+					{block.method === "select" && (options ?? []).map((option) => <button key={option} type="button" className={button.quiet} onClick={() => answer.mutate({ value: option })}>{option}</button>)}
+					{(block.method === "input" || block.method === "editor") && (
+						<>
+							<input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} className={`${field} !w-auto min-w-0 flex-1`} />
+							<button type="button" className={button.primary} disabled={!value.trim()} onClick={() => answer.mutate({ value })}>Send</button>
+						</>
+					)}
+					<button type="button" className={button.link} onClick={() => answer.mutate({ cancelled: true })}>Dismiss</button>
+					{answer.error && <span className="text-[13px] text-danger">{answer.error.message}</span>}
+				</div>
+			)}
+		</div>
+	);
+}
 
 /** Reasoning is long and rarely what you came for: open while it streams, folded away once the agent moves on. */
 function Reasoning({ text, streaming }: { text: string; streaming: boolean }) {

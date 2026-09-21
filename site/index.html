@@ -85,6 +85,20 @@
 							with the output. After three builds the loop stops and the card asks for you.
 						</p>
 					</li>
+					<li>
+						<h3>Reviewers who never saw the work</h3>
+						<p>
+							Review flows run in fresh sessions with no edit access: an adversarial review that tries to break the change and shows how, and a SOLID design review. You can add your own,
+							built from a prompt, any pi skill, or one of your agent roles.
+						</p>
+					</li>
+					<li>
+						<h3>You approve the work, and it becomes a pull request</h3>
+						<p>
+							The findings and the diff wait for you at the feedback gate. Approve, and Tower opens the pull request with <code>gh</code> and watches it: failing CI goes back to a builder,
+							a merge finishes the card. A repository with no remote just finishes, with the branch ready to merge.
+						</p>
+					</li>
 				</ol>
 			</section>
 
@@ -130,6 +144,11 @@
 			<figure class="shot wide">
 				<img src="assets/gate.png" width="1600" height="820" alt="A card waiting for approval. The drawer shows the plan the planner wrote, a box for feedback, and two buttons: Approve plan and build, and Send back to planner." loading="lazy" />
 				<figcaption>The plan gate. A cheaper model will build from this plan alone, so it has to stand on its own.</figcaption>
+			</figure>
+
+			<figure class="shot wide">
+				<img src="assets/feedback.png" width="1600" height="820" alt="A card at the feedback gate. The drawer says one review found something blocking, shows the checks as clear, and the adversarial review's finding with the file, an explanation and the command that reproduced it. Below are buttons to approve and open a pull request, or send the work back to the builder." loading="lazy" />
+				<figcaption>The feedback gate. A reviewer that never saw the builder's session reproduced a double payout; one click sends it back with the findings.</figcaption>
 			</figure>
 
 			<figure class="shot wide">
@@ -213,13 +232,14 @@ export function pickNext(candidates, state) {
 			<section class="wrap prose">
 				<h2>Where it stands</h2>
 				<p>
-					Tower is early. Planning, the plan gate, building, testing with the retry loop, the scheduler and restart recovery work today, and have been run end to end against real pi
-					sessions. A card that passes its tests currently rests in Testing.
+					Tower is early, and complete from backlog to merged pull request: planning, the plan gate, building, testing with the retry loop, review flows, the feedback gate, pull
+					requests with CI repair, scheduling, restart recovery, questions, model settings and on-demand runs. Tests run the whole daemon end to end, and planning, building, testing and
+					questions have been run against real pi sessions.
 				</p>
 				<p>
-					Still to build: a feedback gate with adversarial and SOLID review flows, pull requests with CI watching, moving to a stronger model on retry, cost roll-ups, and running any
-					pi skill against a card. The <a href="https://github.com/rahult/tower/blob/main/docs/superpowers/specs/2026-09-21-tower-design.md">design and roadmap</a> are in the
-					repository.
+					Not yet proven against the real thing: the pull request stage has only met a stand-in for GitHub. Expect rough edges there, and
+					<a href="https://github.com/rahult/tower/issues">say so</a> when you find one. The
+					<a href="https://github.com/rahult/tower/blob/main/docs/superpowers/specs/2026-09-21-tower-design.md">design</a> is in the repository.
 				</p>
 			</section>
 		</main>

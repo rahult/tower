@@ -58,6 +58,14 @@ describe("provider errors", () => {
 	});
 });
 
+describe("extension questions", () => {
+	it("shows a blocking dialog until it is resolved, and ignores notifications", () => {
+		const asked = fold([item("ui_request", { id: "u1", method: "confirm", blocking: true, payload: { title: "Run it?" } }), item("ui_request", { id: "u2", method: "notify", blocking: false, payload: {} })]);
+		expect(asked).toMatchObject([{ kind: "ui", id: "u1", method: "confirm", outcome: null }]);
+		expect(applyItem(asked, item("ui_resolved", { id: "u1", outcome: "expired" }))).toMatchObject([{ kind: "ui", outcome: "expired" }]);
+	});
+});
+
 describe("verify runs", () => {
 	it("accumulates the command's output into one block", () => {
 		const blocks = fold([

@@ -10,7 +10,7 @@ import { STAGE_RESULT_FILE } from "@tower/core";
 import { loadConfig } from "../src/config.ts";
 import { startDaemon } from "../src/daemon.ts";
 import { FakeSessionDriver, type FakeTurn } from "../src/pi/fake-driver.ts";
-import { buildingTurn, planningTurn, testerTurn } from "./harness.ts";
+import { buildingTurn, planningTurn, reviewTurn, testerTurn } from "./harness.ts";
 
 const root = mkdtempSync(join(tmpdir(), "tower-demo-"));
 function repo(name: string): string {
@@ -43,7 +43,9 @@ const busy: FakeTurn = {
 
 // The card's title decides how its sessions behave.
 const driver = new FakeSessionDriver((spec) => {
-	const stage = spec.sessionId.includes("-plan-") ? "plan" : spec.sessionId.includes("-build-") ? "build" : "test";
+	const stage = spec.sessionId.includes("-plan-") ? "plan" : spec.sessionId.includes("-build-") ? "build" : spec.sessionId.includes("-test-") ? "test" : "review";
+	// One reviewer finds something blocking, so the feedback gate has something to show.
+	if (stage === "review") return [reviewTurn(spec.sessionId.includes("adversarial") ? "fail" : "pass")];
 	const title = titles.get(spec.sessionId.slice(1, 9)) ?? "";
 	if (title.startsWith("Add retry") && stage === "build") return [busy];
 	if (title.startsWith("Migrate") && stage === "plan") {

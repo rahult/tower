@@ -11,6 +11,8 @@ export type Block =
 	| { kind: "assistant"; seq: number; text: string; thinking: string; streaming: boolean }
 	| { kind: "tool"; seq: number; id: string; name: string; args: unknown; output: string | null; isError: boolean }
 	| { kind: "verify"; seq: number; command: string; output: string }
+	/** A blocking question from a pi extension. `outcome` is null while it waits for an answer. */
+	| { kind: "ui"; seq: number; id: string; method: string; payload: Record<string, any>; outcome: "answered" | "expired" | null }
 	| { kind: "note"; seq: number; text: string; tone?: "error" };
 
 /**
@@ -55,6 +57,13 @@ export function applyItem(blocks: Block[], item: TranscriptItem): Block[] {
 			if (index === -1) return [...blocks, { kind: "verify", seq, command: "", output: payload.text }];
 			const open = blocks[index] as Extract<Block, { kind: "verify" }>;
 			return blocks.with(index, { ...open, output: open.output + payload.text });
+		}
+		case "ui_request":
+			// Notifications and status updates are not questions; only dialogs wait for someone.
+			return payload.blocking ? [...blocks, { kind: "ui", seq, id: payload.id, method: payload.method, payload: payload.payload ?? {}, outcome: null }] : blocks;
+		case "ui_resolved": {
+			const index = blocks.findLastIndex((block) => block.kind === "ui" && block.id === payload.id);
+			return index === -1 ? blocks : blocks.with(index, { ...(blocks[index] as Extract<Block, { kind: "ui" }>), outcome: payload.outcome });
 		}
 		case "exit":
 			return [...blocks, { kind: "note", seq, text: `Session process exited (code ${payload.code}).` }];

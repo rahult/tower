@@ -1,5 +1,5 @@
 import type { Card, Project } from "@tower/core";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { api } from "../api/client.ts";
 import { button, field, monoField } from "../ui.ts";
@@ -23,7 +23,8 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 	const retry = useMutation({ mutationFn: (cardId: string) => api.retry(cardId), onSuccess: open });
 	const resume = useMutation({ mutationFn: api.resume, onSuccess: open });
 	const abort = useMutation({ mutationFn: api.abort });
-	const failure = start.error ?? retry.error ?? resume.error ?? abort.error;
+	const checkPr = useMutation({ mutationFn: api.checkPr });
+	const failure = start.error ?? retry.error ?? resume.error ?? abort.error ?? checkPr.error;
 	const edge = last ? "" : "border-b";
 
 	const actionFor = (card: Card) => {
@@ -44,7 +45,15 @@ export function Lane({ project, cards, selectedCardId, onOpen, last }: LaneProps
 		if (card.status === "awaiting_gate") {
 			return (
 				<StripButton onClick={() => onOpen(card.id)} kind="onCaution">
-					Review plan
+					{card.stage === "feedback" ? "Review work" : "Review plan"}
+				</StripButton>
+			);
+		}
+		if (card.stage === "done") return null;
+		if (card.stage === "pull_request" && card.status === "idle") {
+			return (
+				<StripButton onClick={() => checkPr.mutate(card.id)} disabled={checkPr.isPending}>
+					Check now
 				</StripButton>
 			);
 		}
@@ -118,7 +127,10 @@ function ProjectSettings({ project, onDone }: { project: Project; onDone: () => 
 	const [setupCommand, setSetupCommand] = useState(project.setupCommand ?? "");
 	const [verifyCommand, setVerifyCommand] = useState(project.verifyCommand ?? "");
 	const [concurrencyLimit, setConcurrencyLimit] = useState(project.concurrencyLimit);
-	const save = useMutation({ mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, concurrencyLimit }), onSuccess: onDone });
+	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
+	const [reviewFlows, setReviewFlows] = useState<string[] | null>(project.reviewFlows);
+	const chosen = reviewFlows ?? flows.data?.defaults ?? [];
+	const save = useMutation({ mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, concurrencyLimit, reviewFlows }), onSuccess: onDone });
 	return (
 		<form
 			onSubmit={(event: FormEvent) => {
@@ -137,6 +149,26 @@ function ProjectSettings({ project, onDone }: { project: Project; onDone: () => 
 				<span className="block text-[13px] font-normal text-slate">Runs once when a card's worktree is created. New worktrees have no installed dependencies.</span>
 				<input value={setupCommand} onChange={(event) => setSetupCommand(event.target.value)} placeholder="pnpm install --prefer-offline" className={`mt-1 ${monoField}`} />
 			</label>
+			<fieldset>
+				<legend className="font-semibold">Reviews after the tests pass</legend>
+				<p className="text-[13px] text-slate">Each runs in a fresh session that never saw the builder's work, on your planning model. Their findings wait for you at the feedback gate.</p>
+				<div className="mt-1.5 flex flex-col gap-1">
+					{flows.data?.flows.map((flow) => (
+						<label key={flow.name} className="flex cursor-pointer items-start gap-2 text-[14px]">
+							<input
+								type="checkbox"
+								className="mt-1 size-4 accent-[var(--primary)]"
+								checked={chosen.includes(flow.name)}
+								onChange={(event) => setReviewFlows(event.target.checked ? [...chosen, flow.name] : chosen.filter((name) => name !== flow.name))}
+							/>
+							<span>
+								<span className="font-semibold">{flow.title}</span>
+								<span className="block text-[13px] text-slate">{flow.description}</span>
+							</span>
+						</label>
+					))}
+				</div>
+			</fieldset>
 			<label className="block font-semibold">
 				Cards at once
 				<span className="block text-[13px] font-normal text-slate">How many of this project's cards may run at the same time. Each runs in its own worktree.</span>
