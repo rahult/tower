@@ -10,6 +10,8 @@ export interface LiveRun {
 	cardId: string;
 	handle: RunHandle;
 	buffer: TranscriptBuffer;
+	/** Stops recording driver events into the transcript. */
+	detach: () => void;
 }
 
 /**
@@ -42,8 +44,8 @@ export class RunManager {
 					this.bus.publish({ topic: `run:${runId}`, type: item.type, data: item, seq: item.seq });
 				},
 			});
-			const live: LiveRun = { runId, cardId, handle, buffer };
-			handle.onEvent((event) => this.record(live, event));
+			const live: LiveRun = { runId, cardId, handle, buffer, detach: () => {} };
+			live.detach = handle.onEvent((event) => this.record(live, event));
 			this.byRun.set(runId, live);
 			return live;
 		} catch (error) {
@@ -85,6 +87,8 @@ export class RunManager {
 	async finish(runId: string): Promise<void> {
 		const live = this.byRun.get(runId);
 		if (!live) return;
+		// Detach first: stopping the session kills the process, and our own cleanup is not a transcript event.
+		live.detach();
 		live.buffer.close();
 		this.byRun.delete(runId);
 		this.byCard.delete(live.cardId);

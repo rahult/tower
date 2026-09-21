@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+@theme {
+	--color-rack: #26323b;
+	--color-rail: #1b242b;
+	--color-well: #1f2a32;
+	--color-seam: #3a4954;
+	--color-chalk: #dce3e8;
+	--color-dust: #93a3af;
+	--color-ink: #1a1d21;
+	--color-buff: #efe6cc;
+	--color-sky: #cbe0ec;
+	--color-signal: #f2c14e;
+	--color-rose: #e9b7b0;
+	--color-sage: #cfe3c8;
+
+	--font-sans: "Archivo Variable", system-ui, sans-serif;
+	--font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	background: var(--color-rail);
+	color: var(--color-chalk);
+	font-family: var(--font-sans);
+	font-size: 15px;
+	line-height: 1.5;
+}
+
+/* Strip fields are set condensed, like the printed boxes on a flight progress strip. */
+.condensed {
+	font-stretch: 75%;
+	letter-spacing: 0.01em;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-signal);
+	outline-offset: 2px;
+}
+
+/* The only ambient motion in the app: a sweep along the holder edge of a strip whose session is running. */
+.sweep {
+	background: linear-gradient(180deg, transparent 0%, var(--color-ink) 50%, transparent 100%);
+	background-size: 100% 200%;
+	animation: sweep 1.6s linear infinite;
+}
+@keyframes sweep {
+	from {
+		background-position: 0 100%;
+	}
+	to {
+		background-position: 0 -100%;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.sweep {
+		animation: none;
+		background: var(--color-ink);
+	}
+}

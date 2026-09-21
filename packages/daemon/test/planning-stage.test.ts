@@ -72,6 +72,9 @@ describe("planning stage through the HTTP surface", () => {
 		const coldTypes = cold.body.items.map((i: { type: string }) => i.type);
 		expect(coldTypes).not.toContain("text");
 		expect(coldTypes).not.toContain("thinking");
+		// The daemon stopping the session after it finished is cleanup, not something that happened in the session.
+		expect(coldTypes).not.toContain("exit");
+		expect(coldTypes.at(-1)).toBe("run_finished");
 		expect(cold.body.items.find((i: { type: string }) => i.type === "message").payload.message.text).toBe("Plan written.");
 		const liveBySeq = new Map(live.frames.map((f) => [f.data.seq, f.type]));
 		for (const item of cold.body.items) expect(liveBySeq.get(item.seq)).toBe(item.type);

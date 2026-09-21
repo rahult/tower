@@ -105,5 +105,7 @@ export class FakeRunHandle implements RunHandle {
 
 	async stop(): Promise<void> {
 		this.stopped = true;
+		// Like real pi: stopping kills the process, which reports an exit.
+		this.emit({ type: "exit", code: 143, stderr: "" });
 	}
 }
