@@ -1,0 +1,107 @@
+export const STAGES = ["backlog", "planning", "building", "testing", "feedback", "pull_request", "done"] as const;
+export type Stage = (typeof STAGES)[number];
+
+/** Stages that are executed by a pi session. */
+export type AgentStage = "planning" | "building" | "testing";
+
+export type CardStatus =
+	| "idle"
+	| "queued"
+	| "running"
+	| "verifying"
+	| "awaiting_gate"
+	| "awaiting_input"
+	| "needs_attention"
+	| "paused"
+	| "interrupted"
+	| "abandoned";
+
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type RunKind = "stage" | "flow_step" | "adhoc";
+export type RunStatus = "starting" | "running" | "settled" | "interrupted" | "failed" | "aborted";
+export type ResultStatus = "pass" | "fail" | "blocked" | "missing";
+
+export interface Project {
+	id: string;
+	name: string;
+	repoPath: string;
+	defaultBranch: string;
+	setupCommand: string | null;
+	verifyCommand: string | null;
+	trustProjectPi: boolean;
+	extensions: string[];
+	concurrencyLimit: number;
+	stageConfig: StageConfigOverrides;
+	createdAt: number;
+}
+
+export interface Card {
+	id: string;
+	projectId: string;
+	title: string;
+	brief: string;
+	stage: Stage;
+	status: CardStatus;
+	priority: number;
+	position: number;
+	branchName: string | null;
+	worktreePath: string | null;
+	baseCommit: string | null;
+	attempt: number;
+	stageConfig: StageConfigOverrides;
+	prUrl: string | null;
+	prState: string | null;
+	needsAttentionReason: string | null;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface StageRun {
+	id: string;
+	cardId: string;
+	kind: RunKind;
+	stage: Stage;
+	attempt: number;
+	model: string;
+	thinking: ThinkingLevel;
+	args: string[];
+	status: RunStatus;
+	resultStatus: ResultStatus | null;
+	resultSummary: string | null;
+	tokens: TokenUsage | null;
+	costUsd: number | null;
+	lastEntryId: string | null;
+	startedAt: number;
+	endedAt: number | null;
+	error: string | null;
+}
+
+export interface TokenUsage {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	total: number;
+}
+
+export interface StageModelConfig {
+	model: string;
+	thinking: ThinkingLevel;
+}
+
+/** Partial per-stage overrides, stored on projects and cards. Precedence: card > project > global > stage default. */
+export type StageConfigOverrides = Partial<Record<AgentStage, Partial<StageModelConfig>>>;
+
+/** Everything the session driver needs to spawn one pi session. The pi-specific translation lives in the daemon. */
+export interface RunSpec {
+	sessionId: string;
+	cwd: string;
+	sessionDir: string;
+	model: string;
+	thinking: ThinkingLevel;
+	tools: string[];
+	extensions: string[];
+	trustProject: boolean;
+	appendSystemPromptFiles: string[];
+}

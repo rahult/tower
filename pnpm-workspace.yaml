@@ -1,7 +1,9 @@
 packages:
   - "packages/*"
   - "spikes"
+
+# esbuild is needed by Vite/Vitest; the other two are pi transitive deps we never execute.
 allowBuilds:
-  '@google/genai': set this to true or false
-  esbuild: set this to true or false
-  protobufjs: set this to true or false
+  esbuild: true
+  "@google/genai": false
+  protobufjs: false
