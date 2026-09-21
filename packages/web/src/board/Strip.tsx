@@ -25,7 +25,7 @@ export function Strip({ card, selected, onOpen, action }: StripProps) {
 		>
 			<span aria-hidden className={`w-1.5 shrink-0 ${isLive(card) ? "sweep" : BAR_CLASS[tone]}`} />
 			<div className="flex min-w-0 flex-1 flex-col @2xl:flex-row @2xl:items-stretch">
-				<button type="button" onClick={onOpen} className="min-w-0 flex-1 cursor-pointer px-2.5 py-2 text-left">
+				<button type="button" onClick={onOpen} title={card.title} className="min-w-0 flex-1 cursor-pointer px-2.5 py-2 text-left">
 					<span className="line-clamp-2 leading-snug font-semibold">{card.title}</span>
 					<span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
 						<span className={`rounded px-1.5 py-px text-[12px] font-semibold whitespace-nowrap ${CHIP_CLASS[tone]}`}>{status}</span>

@@ -1,9 +1,10 @@
 import type { Project, StageRun } from "@tower/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../api/client.ts";
 import { useTranscript } from "../api/stream.ts";
 import { BAR_CLASS, CHIP_CLASS, describeCard, isLive } from "../board/status.ts";
+import { ConfirmButton, ErrorNote } from "../app/bits.tsx";
 import { Markdown } from "../content/Markdown.tsx";
 import { ArtifactsPanel } from "./ArtifactsPanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
@@ -38,6 +39,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	// Follow the newest run unless the reader deliberately picked an older one.
 	const run = runs.find((r) => r.id === pickedRunId) ?? runs.at(-1) ?? null;
 	const blocks = useTranscript(run?.id ?? null);
+	const heading = useRef<HTMLHeadingElement>(null);
 	const abort = useMutation({
 		mutationFn: (cardId: string) => api.abort(cardId),
 		onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board"] }),
@@ -61,14 +63,37 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 		if (!decision && sawDecision) setSawDecision(false);
 	}, [decision, sawDecision]);
 
+	// Opening the drawer is a change of place: put the reader's focus on the card's name.
+	useEffect(() => {
+		heading.current?.focus();
+	}, [cardId]);
+	// Escape leaves the drawer — unless a dialog is open on top of it, which closes itself first.
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape" && !document.querySelector('[role="dialog"]')) onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
+
 	const runId = run?.id ?? null;
 	useEffect(() => {
 		onRunOpen(runId);
 		return () => onRunOpen(null);
 	}, [runId, onRunOpen]);
 
-	if (detail.isPending) return <aside className="h-full bg-sheet p-4 text-slate">Loading card…</aside>;
-	if (detail.error) return <aside className="h-full bg-sheet p-4 text-danger">{detail.error.message}</aside>;
+	if (detail.isPending)
+		return (
+			<aside aria-label="Card" className="h-full bg-sheet p-4 text-slate">
+				Loading card…
+			</aside>
+		);
+	if (detail.error)
+		return (
+			<aside aria-label="Card" className="h-full bg-sheet p-4">
+				<ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
+			</aside>
+		);
 	if (!detail.data) return null;
 	const { card, artifacts } = detail.data;
 	const project = projects.find((p) => p.id === card.projectId);
@@ -82,18 +107,32 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	// A decision that resolved while the reader watched another tab leaves no empty pane behind.
 	const chosen: Tab = tab ?? (decision ? "decision" : "session");
 	const activeTab: Tab = chosen === "decision" && !decision ? "session" : chosen;
+	const tabs: Array<{ id: Tab; label: ReactNode; tone?: "caution" }> = [
+		...(decision ? [{ id: "decision" as Tab, label: "Decision" as ReactNode, tone: "caution" as const }] : []),
+		{ id: "session" as Tab, label: "Session" },
+		{ id: "changes" as Tab, label: "Changes" },
+		{ id: "files" as Tab, label: <>Files <span className="text-slate">{artifacts.length}</span></> },
+		...(card.worktreePath ? [{ id: "run" as Tab, label: "Run" }] : []),
+	];
+	const onTabArrow = (event: React.KeyboardEvent) => {
+		if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+		event.preventDefault();
+		const index = tabs.findIndex((t) => t.id === activeTab);
+		const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+		if (!next) return;
+		setTab(next.id);
+		// Roving focus follows the selection, so the next Tab press starts from the new tab.
+		requestAnimationFrame(() => document.getElementById(`drawer-tab-${next.id}`)?.focus());
+	};
 
 	return (
 		<aside aria-label={`Card ${card.title}`} className="flex h-full min-h-0 flex-col bg-sheet">
 			<div aria-hidden className={`h-1 shrink-0 ${isLive(card) ? "bg-primary" : caution ? "bg-caution" : BAR_CLASS[tone]}`} />
 			<header className={`shrink-0 border-b border-rule px-4 py-3 ${caution ? "bg-caution-soft" : ""}`}>
 				<div className="flex items-start gap-3">
-					<h2 className="min-w-0 flex-1 text-[19px] leading-snug font-bold">{card.title}</h2>
-					{isLive(card) && (
-						<button type="button" onClick={() => abort.mutate(card.id)} disabled={abort.isPending} className="cursor-pointer rounded-md border border-danger/40 bg-sheet px-2 py-1 text-[13px] font-semibold text-danger hover:bg-danger-soft">
-							Abort
-						</button>
-					)}
+					<h2 ref={heading} tabIndex={-1} className="min-w-0 flex-1 text-[19px] leading-snug font-bold outline-none">
+						{card.title}
+					</h2>
 					<button type="button" onClick={onClose} className="cursor-pointer rounded px-2 py-0.5 text-[14px] text-slate hover:bg-wash hover:text-ink">
 						Close
 					</button>
@@ -112,6 +151,12 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 						</>
 					)}
 					<span className="font-mono text-[12px] text-slate/70">{card.id}</span>
+					{/* Abort lives on the meta row, a row away from Close, so the two are never a mistimed click apart. */}
+					{isLive(card) && (
+						<span className="ml-auto">
+							<ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />
+						</span>
+					)}
 				</p>
 				{card.brief && (
 					<details className="mt-2 text-[14px]">
@@ -133,60 +178,52 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 				{card.needsAttentionReason && card.status !== "awaiting_input" && <p className="mt-2 text-[14px] font-semibold">{card.needsAttentionReason}</p>}
 			</header>
 
-			<nav className="flex shrink-0 items-center gap-4 overflow-x-auto border-b border-rule px-4">
-				{decision && (
-					<TabButton active={activeTab === "decision"} onClick={() => setTab("decision")} tone="caution">
-						Decision
+			<nav className="flex shrink-0 items-center gap-4 overflow-x-auto border-b border-rule px-4" role="tablist" aria-label="Card sections" onKeyDown={onTabArrow}>
+				{tabs.map(({ id, label, tone }) => (
+					<TabButton key={id} id={id} active={activeTab === id} onSelect={() => setTab(id)} tone={tone}>
+						{label}
 					</TabButton>
-				)}
-				<TabButton active={activeTab === "session"} onClick={() => setTab("session")}>
-					Session
-				</TabButton>
-				<TabButton active={activeTab === "changes"} onClick={() => setTab("changes")}>
-					Changes
-				</TabButton>
-				<TabButton active={activeTab === "files"} onClick={() => setTab("files")}>
-					Files <span className="text-slate">{artifacts.length}</span>
-				</TabButton>
-				{card.worktreePath && (
-					<TabButton active={activeTab === "run"} onClick={() => setTab("run")}>
-						Run
-					</TabButton>
-				)}
+				))}
 			</nav>
 
-			{activeTab === "files" ? (
-				<ArtifactsPanel cardId={card.id} artifacts={artifacts} />
-			) : activeTab === "changes" ? (
-				<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
-			) : activeTab === "run" ? (
-				<RunPanel cardId={card.id} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
-			) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
-				<GatePanel cardId={card.id} gate={pendingGate} />
-			) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (
-				<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} />
-			) : activeTab === "decision" && asked ? (
-				<QuestionsPanel cardId={card.id} summary={card.needsAttentionReason} questions={asked} className="flex min-h-0 flex-1 flex-col" />
-			) : run ? (
-				<>
-					<RunsRail runs={runs} picked={run.id} onPick={setPickedRunId} />
-					<RunSummary run={run} />
-					<Transcript blocks={blocks} live={live} runId={run.id} />
-					{live && run.kind !== "verify" && <SteerBox cardId={card.id} />}
-				</>
-			) : (
-				<p className="p-4 text-[14px] text-slate">No session has run for this card yet. Start it from the Focus view to plan it.</p>
-			)}
+			<div key={activeTab} role="tabpanel" id={`drawer-panel-${activeTab}`} aria-labelledby={`drawer-tab-${activeTab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col outline-none">
+				{activeTab === "files" ? (
+					<ArtifactsPanel cardId={card.id} artifacts={artifacts} />
+				) : activeTab === "changes" ? (
+					<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
+				) : activeTab === "run" ? (
+					<RunPanel cardId={card.id} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
+				) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
+					<GatePanel cardId={card.id} gate={pendingGate} />
+				) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (
+					<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} />
+				) : activeTab === "decision" && asked ? (
+					<QuestionsPanel cardId={card.id} summary={card.needsAttentionReason} questions={asked} className="flex min-h-0 flex-1 flex-col" />
+				) : run ? (
+					<>
+						<RunsRail runs={runs} picked={run.id} onPick={setPickedRunId} />
+						<RunSummary run={run} />
+						<Transcript blocks={blocks} live={live} runId={run.id} />
+						{live && run.kind !== "verify" && <SteerBox cardId={card.id} />}
+					</>
+				) : (
+					<p className="p-4 text-[14px] text-slate">No session has run for this card yet. Start it from the Focus view to plan it.</p>
+				)}
+			</div>
 		</aside>
 	);
 }
 
-function TabButton({ active, onClick, tone, children }: { active: boolean; onClick: () => void; tone?: "caution"; children: ReactNode }) {
+function TabButton({ id, active, onSelect, tone, children }: { id: string; active: boolean; onSelect: () => void; tone?: "caution"; children: ReactNode }) {
 	return (
 		<button
 			type="button"
-			onClick={onClick}
-			aria-pressed={active}
+			role="tab"
+			id={`drawer-tab-${id}`}
+			aria-selected={active}
+			aria-controls={`drawer-panel-${id}`}
+			tabIndex={active ? 0 : -1}
+			onClick={onSelect}
 			className={`-mb-px cursor-pointer border-b-2 py-2 text-[14px] font-semibold whitespace-nowrap ${active ? (tone === "caution" ? "border-caution text-ink" : "border-primary text-ink") : "border-transparent text-slate hover:text-ink"}`}
 		>
 			{children}

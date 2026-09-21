@@ -3,7 +3,7 @@ import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
 import { type Artifact, api, type CardDetail, type Gate } from "../api/client.ts";
 import { describeCard, isLive, needsYou, STAGE_LABEL } from "../board/status.ts";
-import { TrayHeading, useElapsed, usePastDelay } from "../app/bits.tsx";
+import { ConfirmButton, ErrorNote, TrayHeading, useElapsed, usePastDelay } from "../app/bits.tsx";
 import { NewProjectForm } from "../app/quickadd.tsx";
 import { button, field } from "../ui.ts";
 import { QuestionsPanel } from "../card/QuestionsPanel.tsx";
@@ -16,29 +16,69 @@ interface FocusProps {
 	onAddWork: (projectId?: string) => void;
 }
 
+const FILTER_KEY = "tower-filter";
+
 /**
  * The default view, ordered by how much the reader is needed: the decisions that block an agent first,
  * then work in flight, then everything waiting, then what finished. A tray that is empty does not render.
+ * Many projects can be narrowed to one with the filter chips without losing the global counts.
  */
 export function Focus({ projects, cards, activeRuns, onOpen, onAddWork }: FocusProps) {
-	const attention = cards.filter(needsYou);
-	const queued = cards.filter((card) => card.status === "queued");
-	const backlog = cards.filter((card) => card.stage === "backlog" && card.status === "idle");
+	const [filter, setFilter] = useState(() => {
+		try {
+			return localStorage.getItem(FILTER_KEY) ?? "all";
+		} catch {
+			return "all";
+		}
+	});
+	const pickFilter = (id: string) => {
+		setFilter(id);
+		try {
+			localStorage.setItem(FILTER_KEY, id);
+		} catch {
+			// Storage refused; the choice lasts for this visit.
+		}
+	};
+	const scope = (list: Card[]) => (filter === "all" ? list : list.filter((card) => card.projectId === filter));
+
+	// Attention is ordered by the card's own priority first, then by age — not by board order.
+	const byImportance = (a: Card, b: Card) => b.priority - a.priority || a.createdAt - b.createdAt;
+	const attention = scope(cards.filter((card) => needsYou(card) || card.status === "abandoned")).sort(byImportance);
+	const queued = scope(cards.filter((card) => card.status === "queued"));
+	const backlog = scope(cards.filter((card) => card.stage === "backlog" && card.status === "idle"));
 	const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-	const finished = cards.filter((card) => card.stage === "done" && card.updatedAt > dayAgo).sort((a, b) => b.updatedAt - a.updatedAt);
+	const finished = scope(cards.filter((card) => card.stage === "done" && card.updatedAt > dayAgo)).sort((a, b) => b.updatedAt - a.updatedAt);
 	const names = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 
 	const inFlight = useMemo(() => {
+		const ids = new Set(scope(cards).map((card) => card.id));
 		const byCard = new Map<string, StageRun[]>();
-		for (const run of activeRuns) byCard.set(run.cardId, [...(byCard.get(run.cardId) ?? []), run]);
+		for (const run of activeRuns) if (ids.has(run.cardId)) byCard.set(run.cardId, [...(byCard.get(run.cardId) ?? []), run]);
 		return [...byCard.entries()].sort((a, b) => (a[1][0]?.startedAt ?? 0) - (b[1][0]?.startedAt ?? 0));
-	}, [activeRuns]);
+	}, [activeRuns, cards, filter]);
 
 	if (projects.length === 0) return <EmptyBoard />;
 
+	const waitingTotal = cards.filter(needsYou).length;
 	const quiet = attention.length === 0 && inFlight.length === 0 && queued.length === 0;
 	return (
 		<div className="mx-auto flex w-full max-w-[64rem] flex-col gap-8">
+			{projects.length > 1 && (
+				<div role="group" aria-label="Filter by project" className="flex flex-wrap items-center gap-1.5">
+					<FilterChip active={filter === "all"} onClick={() => pickFilter("all")} waiting={waitingTotal}>
+						All projects
+					</FilterChip>
+					{projects.map((project) => {
+						const waiting = cards.filter((card) => card.projectId === project.id && (needsYou(card) || card.status === "abandoned")).length;
+						return (
+							<FilterChip key={project.id} active={filter === project.id} onClick={() => pickFilter(project.id)} waiting={waiting}>
+								{project.name}
+							</FilterChip>
+						);
+					})}
+				</div>
+			)}
+
 			{quiet && cards.length > 0 && (
 				<section className="rounded-lg border border-rule bg-sheet px-5 py-6 text-center">
 					<p className="display text-[22px] font-extrabold">All clear.</p>
@@ -103,7 +143,7 @@ export function Focus({ projects, cards, activeRuns, onOpen, onAddWork }: FocusP
 					</ul>
 					{finished.length > 6 && (
 						<p className="mt-2 text-[13px] text-slate">
-							And {finished.length - 6} more — see the <button type="button" onClick={() => (window.location.hash = "#board")} className={button.link}>board</button>.
+							And {finished.length - 6} more — the <button type="button" onClick={() => (window.location.hash = "#board")} className={button.link}>board</button> keeps the rest (unfold Done there).
 						</p>
 					)}
 				</section>
@@ -205,6 +245,16 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 		context = card.needsAttentionReason ?? `The agent stopped to ask ${asked.length === 1 ? "a question" : `${asked.length} questions`}.`;
 		actions = <RowButton onClick={openRow}>Open</RowButton>;
 		expand = <QuestionsPanel cardId={card.id} summary={null} questions={asked} className="mt-2 max-h-[26rem] overflow-y-auto rounded-md border border-caution/50 bg-sheet" />;
+	} else if (card.status === "abandoned") {
+		context = card.needsAttentionReason ?? "This card was abandoned and went no further. Running it again starts a fresh session on the same branch.";
+		actions = (
+			<>
+				<RowButton kind="primary" busy={retry.isPending} onClick={() => retry.mutate()}>
+					Run again
+				</RowButton>
+				<RowButton onClick={openRow}>Open</RowButton>
+			</>
+		);
 	} else if (card.status === "interrupted") {
 		context = "A restart cut this session off. Resume continues the same pi session where it stopped.";
 		actions = (
@@ -239,12 +289,13 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 		}
 	}
 
+	const abandoned = card.status === "abandoned";
 	return (
-		<li className={`flex flex-col rounded-lg border ${status === "Waiting for your answer" || gate ? "border-caution bg-caution-soft" : "border-caution/50 bg-caution-soft/60"}`}>
+		<li className={`flex flex-col rounded-lg border ${abandoned ? "border-danger/40 bg-danger-soft" : status === "Waiting for your answer" || gate ? "border-caution bg-caution-soft" : "border-caution/50 bg-caution-soft/60"}`}>
 			<div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
 				<div className="min-w-0 flex-1 basis-56">
 					<p className="flex items-center gap-2 text-[12px] text-slate">
-						<span className="rounded bg-caution-ink/12 px-1.5 py-px font-semibold text-caution-ink">{gate ? (gate.kind === "plan_approval" ? "Plan approval" : "Review work") : status}</span>
+						<span className={`rounded px-1.5 py-px font-semibold ${abandoned ? "bg-danger-soft text-danger" : "bg-caution/15 text-caution-text"}`}>{gate ? (gate.kind === "plan_approval" ? "Plan approval" : "Review work") : status}</span>
 						{projectName && <span className="truncate">{projectName}</span>}
 					</p>
 					<button type="button" onClick={() => onOpen(card.id)} className="mt-0.5 block cursor-pointer text-left leading-snug font-semibold hover:underline">
@@ -255,7 +306,11 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 				<div className="flex flex-wrap items-center gap-2">{actions}</div>
 			</div>
 			{expand && <div className="border-t border-caution/25 px-4 py-3">{expand}</div>}
-			{(decide.error ?? resume.error ?? retry.error) && <p className="border-t border-caution/25 px-4 py-2 text-[13px] text-danger">{(decide.error ?? resume.error ?? retry.error)?.message}</p>}
+			{(decide.error ?? resume.error ?? retry.error) && (
+				<div className="border-t border-caution/25 px-4 py-2">
+					<ErrorNote error={(decide.error ?? resume.error ?? retry.error) ?? null} onRetry={refresh} />
+				</div>
+			)}
 		</li>
 	);
 }
@@ -307,9 +362,7 @@ function FlightRow({ card, runs, onOpen }: { card: Card | undefined; runs: Stage
 			</div>
 			<div className="flex items-center gap-2">
 				<RowButton onClick={() => onOpen(card.id)}>Open</RowButton>
-				<RowButton kind="danger" busy={abort.isPending} onClick={() => abort.mutate(card.id)}>
-					Abort
-				</RowButton>
+				<ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />
 			</div>
 		</li>
 	);
@@ -328,9 +381,7 @@ function QueueRow({ card, projectName, onOpen }: { card: Card; projectName: stri
 			</div>
 			<div className="flex items-center gap-2">
 				<RowButton onClick={() => onOpen(card.id)}>Open</RowButton>
-				<RowButton kind="danger" busy={remove.isPending} onClick={() => remove.mutate()}>
-					Remove
-				</RowButton>
+				<ConfirmButton small label="Remove" confirmLabel="Confirm remove?" onConfirm={() => remove.mutate()} busy={remove.isPending} />
 			</div>
 		</li>
 	);
@@ -377,6 +428,8 @@ function BacklogRow({ card, projectName, onOpen }: { card: Card; projectName: st
 }
 
 function DoneRow({ card, onOpen }: { card: Card; onOpen: (id: string) => void }) {
+	// A slow tick keeps the age honest without re-rendering every second.
+	useElapsed(card.updatedAt, true, 30_000);
 	return (
 		<li className="flex flex-wrap items-center gap-x-3 rounded-lg border border-ok/25 bg-ok-soft/50 px-4 py-2">
 			<span aria-hidden className="size-1.5 shrink-0 rounded-full bg-ok" />
@@ -394,6 +447,20 @@ function DoneRow({ card, onOpen }: { card: Card; onOpen: (id: string) => void })
 }
 
 // --- shared row plumbing ---------------------------------------------------
+
+function FilterChip({ active, onClick, waiting, children }: { active: boolean; onClick: () => void; waiting: number; children: ReactNode }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			aria-pressed={active}
+			className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium ${active ? "border-primary bg-primary-soft font-semibold text-primary" : "border-rule bg-sheet text-slate hover:text-ink"}`}
+		>
+			{children}
+			{waiting > 0 && <span className="rounded-full bg-caution px-1.5 font-mono text-[11px] font-bold text-caution-ink">{waiting}</span>}
+		</button>
+	);
+}
 
 function RowButton({ kind = "quiet", busy, disabled, onClick, children }: { kind?: keyof typeof button; busy?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
 	return (

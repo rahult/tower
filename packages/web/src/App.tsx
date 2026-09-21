@@ -125,11 +125,11 @@ export function App() {
 					<button type="button" onClick={() => setAddingWork({})} className="mr-1 cursor-pointer rounded-md bg-primary px-2.5 py-1 text-[13px] font-bold text-primary-ink hover:brightness-110" title="Add work (n)">
 						+ Add work
 					</button>
-					<button type="button" onClick={() => setPaletteOpen(true)} className={barButton} title="Command palette (⌘K)">
+					<button type="button" onClick={() => setPaletteOpen(true)} className={barButton} title="Command palette (⌘K)" aria-label="Open the command palette (⌘K)">
 						<span className="font-mono text-[12px] text-bar-dim">⌘K</span>
 					</button>
 					{today && (
-						<button type="button" onClick={() => navigate({ view: "usage" })} className={barButton} title="Tokens used by sessions started today. Subscription models report no cost.">
+						<button type="button" onClick={() => navigate({ view: "usage" })} className={barButton} title="Tokens used by sessions started today. Subscription models report no cost." aria-label="Tokens used today — open Usage">
 							<span className="text-bar-dim">Today </span>
 							<span className="font-mono text-[12px]">{formatTokens(today.tokens)}</span>
 							{today.costUsd > 0 && <span className="font-mono text-[12px]"> · ${today.costUsd.toFixed(2)}</span>}
@@ -139,18 +139,19 @@ export function App() {
 						<span aria-hidden>{notify ? "🔔" : "🔕"}</span>
 						<span className="text-bar-dim">{notify ? "On" : "Off"}</span>
 					</button>
-					<button type="button" onClick={() => setModelsOpen(true)} className={barButton} title="Which model runs each stage">
+					<button type="button" onClick={() => setModelsOpen(true)} className={barButton} title="Which model runs each stage" aria-label="Model settings">
 						<span className="text-bar-dim">Models</span>
 					</button>
-					<button type="button" onClick={cycleTheme} className={barButton} title="Switch between following your system, light and dark">
-						{theme === "auto" ? "Auto" : theme === "light" ? "Light" : "Dark"}
+					<button type="button" onClick={cycleTheme} className={barButton} title="Switch between following your system, light and dark" aria-label={`Theme is ${theme}; click for the next one`}>
+						<span className="text-bar-dim">Theme:</span> {theme}
 					</button>
 				</div>
 			</header>
 
 			<div className={`grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] ${route.cardId ? "lg:grid-cols-[minmax(0,1fr)_minmax(30rem,44vw)]" : ""}`}>
 				<main className={`min-h-0 overflow-y-auto p-4 ${route.cardId ? "hidden lg:block" : ""}`}>
-					{board.error && (
+					{board.isPending && <p className="mx-auto mb-4 max-w-[64rem] animate-pulse text-[14px] text-slate">Connecting to the Tower daemon…</p>}
+						{board.error && (
 						<p className="mx-auto mb-4 max-w-[64rem] rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-danger">
 							Cannot reach Tower's daemon: {board.error.message}. Start it with <span className="font-mono text-[13px]">/tower</span> in pi.
 						</p>
@@ -175,6 +176,9 @@ export function App() {
 					<ModelSettings onDone={() => setModelsOpen(false)} />
 				</Modal>
 			)}
+			<div role="status" aria-live="polite" className="sr-only">
+				{waiting > 0 ? `${waiting} ${waiting === 1 ? "card needs" : "cards need"} your attention` : "Nothing needs your attention"}
+			</div>
 		</div>
 	);
 }

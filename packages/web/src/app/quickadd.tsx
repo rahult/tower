@@ -66,7 +66,7 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard }: { p
 							</select>
 							<label className="flex cursor-pointer items-center gap-2 text-[13px] text-slate">
 								<input type="checkbox" className="size-4 accent-[var(--primary)]" checked={newRepo} onChange={(event) => setNewRepo(event.target.checked)} />
-								It is a new repository
+								New repository — add it by path
 							</label>
 						</div>
 					</div>

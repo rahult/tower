@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react";
 import { api } from "../api/client.ts";
 import { describeCard, STAGE_COLUMNS } from "./status.ts";
 import { button, field } from "../ui.ts";
+import { ConfirmButton, ErrorNote } from "../app/bits.tsx";
 import { ProjectSettings } from "../projects/ProjectSettings.tsx";
 import { Strip, StripButton } from "./Strip.tsx";
 
@@ -35,10 +36,15 @@ export function Lane({ project, cards, selectedCardId, onOpen, showDone, last }:
 
 	const actionFor = (card: Card) => {
 		if (card.status === "running" || card.status === "verifying" || card.status === "queued") {
+			// Killing a session (or dropping a queued card) is not undoable, so it asks twice.
 			return (
-				<StripButton onClick={() => abort.mutate(card.id)} disabled={abort.isPending} kind="danger">
-					{card.status === "queued" ? "Remove from queue" : "Abort"}
-				</StripButton>
+				<ConfirmButton
+					small
+					label={card.status === "queued" ? "Remove from queue" : "Abort"}
+					confirmLabel={card.status === "queued" ? "Confirm remove?" : "Confirm abort?"}
+					onConfirm={() => abort.mutate(card.id)}
+					busy={abort.isPending}
+				/>
 			);
 		}
 		if (card.stage === "backlog") {
@@ -77,6 +83,13 @@ export function Lane({ project, cards, selectedCardId, onOpen, showDone, last }:
 				</StripButton>
 			);
 		}
+		if (card.status === "abandoned") {
+			return (
+				<StripButton onClick={() => retry.mutate(card.id)} disabled={retry.isPending} kind="primary">
+					Run again
+				</StripButton>
+			);
+		}
 		if (card.status === "needs_attention" || card.status === "idle") {
 			return (
 				<StripButton onClick={() => retry.mutate(card.id)} disabled={retry.isPending} kind={card.status === "needs_attention" ? "onCaution" : "quiet"}>
@@ -98,7 +111,7 @@ export function Lane({ project, cards, selectedCardId, onOpen, showDone, last }:
 					<p className="text-[12px] leading-snug">
 						{running > 0 && <span className="font-semibold text-primary">{running} running</span>}
 						{running > 0 && waiting > 0 && <span className="text-slate"> · </span>}
-						{waiting > 0 && <span className="font-semibold text-caution-ink">{waiting} need you</span>}
+						{waiting > 0 && <span className="font-semibold text-caution-text">{waiting} need you</span>}
 					</p>
 				)}
 				<p className="text-[12px] leading-snug text-slate">{project.verifyCommand ? "Your verify command judges builds" : "No verify command, so an agent judges builds"}</p>
@@ -110,7 +123,7 @@ export function Lane({ project, cards, selectedCardId, onOpen, showDone, last }:
 						{configuring ? "Close settings" : "Settings"}
 					</button>
 				</div>
-				{failure && <p className="rounded bg-danger-soft px-2 py-1 text-[13px] text-danger">{failure.message}</p>}
+				<ErrorNote error={failure ?? null} onRetry={invalidate} />
 			</header>
 
 			{configuring ? (

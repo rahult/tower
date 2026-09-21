@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { button } from "../ui.ts";
 
 /** A centred dialog over a dimmed backdrop. Esc and a backdrop click both close it. */
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -37,14 +38,14 @@ export function TrayHeading({ label, count, tone, hint }: { label: string; count
 	);
 }
 
-/** Seconds since `from`, re-rendered every second while `live`. */
-export function useElapsed(from: number | undefined, live: boolean): string {
+/** Seconds since `from`, re-rendered on an interval while `live`. Ticks every second unless told otherwise. */
+export function useElapsed(from: number | undefined, live: boolean, intervalMs = 1000): string {
 	const [, tick] = useState(0);
 	useEffect(() => {
 		if (!live || from === undefined) return;
-		const timer = setInterval(() => tick((n) => n + 1), 1000);
+		const timer = setInterval(() => tick((n) => n + 1), intervalMs);
 		return () => clearInterval(timer);
-	}, [live, from]);
+	}, [live, from, intervalMs]);
 	return formatElapsed(from);
 }
 
@@ -72,4 +73,58 @@ export function usePastDelay(pending: boolean, delay = 250): boolean {
 		return () => clearTimeout(timer);
 	}, [pending, delay]);
 	return pending && past;
+}
+
+/**
+ * A destructive action that asks twice: the first click arms it, the second fires, and arming
+ * wears off after three seconds. One stray click can no longer kill a running session.
+ */
+export function ConfirmButton({ label, confirmLabel, onConfirm, disabled, busy, small }: { label: string; confirmLabel: string; onConfirm: () => void; disabled?: boolean; busy?: boolean; small?: boolean }) {
+	const [armed, setArmed] = useState(false);
+	useEffect(() => {
+		if (!armed) return;
+		const timer = setTimeout(() => setArmed(false), 3000);
+		return () => clearTimeout(timer);
+	}, [armed]);
+	const size = small ? "!px-2.5 !py-1 !text-[13px]" : "";
+	return (
+		<button
+			type="button"
+			onClick={() => (armed ? (setArmed(false), onConfirm()) : setArmed(true))}
+			disabled={disabled || busy}
+			aria-label={armed ? confirmLabel : label}
+			className={`${armed ? `${button.danger} !bg-danger-soft font-bold` : button.danger} ${size} whitespace-nowrap`}
+		>
+			{busy ? "…" : armed ? confirmLabel : label}
+		</button>
+	);
+}
+
+/** A mutation failure in the reader's language, with the way out one click away. */
+export function ErrorNote({ error, onRetry }: { error: { message: string } | null; onRetry: () => void }) {
+	if (!error) return null;
+	const raw = error.message ?? String(error);
+	// fetch failures arrive as browser internals; everything else is the daemon's own words.
+	const friendly = /failed to fetch|networkerror|load failed/i.test(raw) ? "Cannot reach the Tower daemon — it may be restarting. Retry in a moment." : raw;
+	return (
+		<p className="rounded bg-danger-soft px-2 py-1 text-[13px] text-danger">
+			{friendly}{" "}
+			<button type="button" onClick={onRetry} className={`${button.link} !text-[13px]`}>
+				Retry
+			</button>
+		</p>
+	);
+}
+
+/** Subscribes to a media query; matches start true so first paint is already right. */
+export function useMediaQuery(query: string): boolean {
+	const [matches, setMatches] = useState(() => (typeof window === "undefined" ? false : window.matchMedia(query).matches));
+	useEffect(() => {
+		const list = window.matchMedia(query);
+		const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
+		setMatches(list.matches);
+		list.addEventListener("change", onChange);
+		return () => list.removeEventListener("change", onChange);
+	}, [query]);
+	return matches;
 }

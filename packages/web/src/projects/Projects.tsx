@@ -61,7 +61,7 @@ function ProjectPanel({ project, cards, spend, onOpen, onAddWork, onConfigure }:
 
 			<div className="mt-3 flex flex-wrap items-center gap-1.5">
 				{running > 0 && <span className="rounded bg-primary-soft px-1.5 py-px text-[12px] font-semibold text-primary">{running} running</span>}
-				{waiting > 0 && <span className="rounded bg-caution-ink/12 px-1.5 py-px text-[12px] font-semibold text-caution-ink">{waiting} need you</span>}
+				{waiting > 0 && <span className="rounded bg-caution-soft px-1.5 py-px text-[12px] font-semibold text-caution-text">{waiting} need you</span>}
 				{[...byStage.entries()].map(([stage, count]) => (
 					<span key={stage} className="rounded bg-wash px-1.5 py-px text-[12px] text-slate">
 						{STAGE_LABEL[stage as Card["stage"]] ?? stage} {count}
@@ -74,7 +74,7 @@ function ProjectPanel({ project, cards, spend, onOpen, onAddWork, onConfigure }:
 				<div className="flex items-baseline gap-2">
 					<dt className="w-16 shrink-0 text-slate">Verify</dt>
 					<dd className="min-w-0">
-						{project.verifyCommand ? <code className="rounded bg-wash px-1.5 py-px font-mono text-[12px]">{project.verifyCommand}</code> : <span className="text-caution-ink">not set — an agent judges builds</span>}
+						{project.verifyCommand ? <code className="rounded bg-wash px-1.5 py-px font-mono text-[12px]">{project.verifyCommand}</code> : <span className="text-caution-text">not set — an agent judges builds</span>}
 					</dd>
 				</div>
 				{project.setupCommand && (

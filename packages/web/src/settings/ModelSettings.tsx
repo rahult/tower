@@ -33,6 +33,7 @@ export function ModelSettings({ onDone }: { onDone: () => void }) {
 	if (settings.error) return <p className="mb-3 rounded-md bg-danger-soft px-3 py-2 text-danger">{settings.error.message}</p>;
 	if (!settings.data || !draft) return <p className="mb-3 text-[14px] text-slate">Loading models…</p>;
 	const set = (stage: string, patch: Partial<Draft[string]>) => setDraft({ ...draft, [stage]: { ...(draft[stage] as Draft[string]), ...patch } });
+	const known = new Set(settings.data?.knownModels ?? []);
 
 	return (
 		<form
@@ -64,8 +65,12 @@ export function ModelSettings({ onDone }: { onDone: () => void }) {
 							value={draft[stage]?.model ?? ""}
 							onChange={(event) => set(stage, { model: event.target.value })}
 							spellCheck={false}
-							className={monoField}
+							aria-invalid={draft[stage]?.model !== "" && !known.has(draft[stage]?.model ?? "")}
+							className={`${monoField} ${draft[stage]?.model !== "" && !known.has(draft[stage]?.model ?? "") ? "border-caution" : ""}`}
 						/>
+						{draft[stage]?.model !== "" && !known.has(draft[stage]?.model ?? "") && (
+							<p className="text-[13px] text-caution-text">Not in pi's known models — check the spelling (provider/model) or the stage will fail to start.</p>
+						)}
 						<select aria-label={`${label} thinking level`} value={draft[stage]?.thinking} onChange={(event) => set(stage, { thinking: event.target.value })} className={monoField}>
 							{THINKING.map((level) => (
 								<option key={level} value={level}>

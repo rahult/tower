@@ -25,8 +25,10 @@
 	--primary-soft: #e6eefc;
 	--caution: #f5b301;
 	--caution-ink: #2a1e00;
+	/* Amber-coloured text on light surfaces: dark enough to read where --caution itself is not. */
+	--caution-text: #7a5200;
 	--caution-soft: #fff4d1;
-	--ok: #157f4b;
+	--ok: #146b40;
 	--ok-soft: #e1f3e8;
 	--danger: #c4302b;
 	--danger-soft: #fce9e7;
@@ -59,6 +61,8 @@
 		--primary-soft: #16294a;
 		--caution: #f5b301;
 		--caution-ink: #2a1e00;
+		/* Amber-coloured text on dark surfaces: --caution-ink stays dark because it sits ON amber. */
+		--caution-text: #ffd75e;
 		--caution-soft: #3a2f0a;
 		--ok: #3fc483;
 		--ok-soft: #0f2f22;
@@ -91,6 +95,8 @@
 	--primary-soft: #16294a;
 	--caution: #f5b301;
 	--caution-ink: #2a1e00;
+	/* Amber-coloured text on dark surfaces: --caution-ink stays dark because it sits ON amber. */
+	--caution-text: #ffd75e;
 	--caution-soft: #3a2f0a;
 	--ok: #3fc483;
 	--ok-soft: #0f2f22;
@@ -122,6 +128,7 @@
 	--color-primary-soft: var(--primary-soft);
 	--color-caution: var(--caution);
 	--color-caution-ink: var(--caution-ink);
+	--color-caution-text: var(--caution-text);
 	--color-caution-soft: var(--caution-soft);
 	--color-ok: var(--ok);
 	--color-ok-soft: var(--ok-soft);

@@ -84,6 +84,9 @@ export function RunPanel({ cardId, busy, onStarted }: { cardId: string; busy: bo
 						Model
 						<input value={model} onChange={(event) => setModel(event.target.value)} list="run-models" placeholder={kind === "agent" ? "the role's own model" : (settings.data?.models.planning.model ?? "")} spellCheck={false} className={`mt-1 ${monoField}`} />
 						<datalist id="run-models">{settings.data?.knownModels.map((known) => <option key={known} value={known} />)}</datalist>
+						{model.trim() !== "" && !new Set(settings.data?.knownModels ?? []).has(model.trim()) && (
+							<span className="mt-1 block text-[13px] font-normal text-caution-text">Not in pi's known models — the run will fail unless the name is exact.</span>
+						)}
 					</label>
 					{kind === "prompt" && (
 						<label className="block font-semibold">

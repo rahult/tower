@@ -40,8 +40,9 @@ export function Palette({ cards, projectNames, actions, onClose }: { cards: Card
 			label: view.charAt(0).toUpperCase() + view.slice(1),
 			run: () => actions.goToView(view),
 		}));
+		// Backlog cards appear once, under "Start a backlog card" — not twice in the same list.
 		const open: Item[] = cards
-			.filter((card) => card.stage !== "done")
+			.filter((card) => card.stage !== "done" && !(card.stage === "backlog" && card.status === "idle"))
 			.map((card) => ({
 				group: "Cards",
 				label: card.title,
@@ -98,6 +99,11 @@ export function Palette({ cards, projectNames, actions, onClose }: { cards: Card
 			<div role="dialog" aria-modal="true" aria-label="Command palette" className="pop mx-auto w-full max-w-[38rem] overflow-hidden rounded-xl border border-rule bg-sheet shadow-2xl">
 				<input
 					ref={input}
+					id="palette-input"
+					role="combobox"
+					aria-expanded="true"
+					aria-controls="palette-list"
+					aria-activedescendant={matches[picked] ? `palette-opt-${picked}` : undefined}
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
 					onKeyDown={onKeyDown}
@@ -109,11 +115,11 @@ export function Palette({ cards, projectNames, actions, onClose }: { cards: Card
 				{matches.length === 0 ? (
 					<p className="px-4 py-6 text-center text-[14px] text-slate">Nothing matches “{query}”.</p>
 				) : (
-					<ul ref={list} className="max-h-[24rem] overflow-y-auto p-1.5" role="listbox">
+					<ul ref={list} id="palette-list" className="max-h-[24rem] overflow-y-auto p-1.5" role="listbox" aria-labelledby="palette-input">
 						{matches.map((item, index) => {
 							const header = item.group !== lastGroup ? ((lastGroup = item.group), item.group) : null;
 							return (
-								<li key={`${item.group}-${item.label}`} role="option" aria-selected={index === picked}>
+								<li key={`${item.group}-${item.label}`} id={`palette-opt-${index}`} role="option" aria-selected={index === picked}>
 									{header && <p className="px-2.5 pt-2.5 pb-1 text-[12px] font-semibold tracking-wide text-slate uppercase">{header}</p>}
 									<button
 										type="button"

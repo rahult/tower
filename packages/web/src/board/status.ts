@@ -9,7 +9,7 @@ export type Tone = "rest" | "work" | "caution" | "ok" | "danger";
 export const BAR_CLASS: Record<Tone, string> = {
 	rest: "bg-rule",
 	work: "bg-primary",
-	caution: "bg-caution-ink/35",
+	caution: "bg-caution/60",
 	ok: "bg-ok",
 	danger: "bg-danger",
 };
@@ -17,7 +17,7 @@ export const BAR_CLASS: Record<Tone, string> = {
 export const CHIP_CLASS: Record<Tone, string> = {
 	rest: "bg-wash text-slate",
 	work: "bg-primary-soft text-primary",
-	caution: "bg-caution-ink/12 text-caution-ink",
+	caution: "bg-caution-soft text-caution-text",
 	ok: "bg-ok-soft text-ok",
 	danger: "bg-danger-soft text-danger",
 };
@@ -45,6 +45,17 @@ const STAGE_LABEL: Record<Card["stage"], string> = {
 	done: "Done",
 };
 export { STAGE_LABEL };
+
+/** One sentence per column, shown on hover: the bare stage name assumes too much of a first-timer. */
+export const STAGE_DESCRIPTIONS: Record<Card["stage"], string> = {
+	backlog: "Work you have queued up, not yet started.",
+	planning: "An agent is exploring the repository and writing a plan.",
+	building: "An agent is writing the code from the plan, in the card's own worktree.",
+	testing: "The verify command (or an agent) judges the build; failures go back to the builder.",
+	feedback: "Reviews have run and their findings are waiting for your approval before a pull request.",
+	pull_request: "The pull request is open; Tower watches CI and repairs failures up to a cap.",
+	done: "Merged, or finished with the branch ready to merge.",
+};
 
 export function describeCard(card: Card): { stage: string; status: string; tone: Tone } {
 	const status = STATUS[card.status];
