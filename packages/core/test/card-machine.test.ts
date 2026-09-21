@@ -4,6 +4,8 @@ import { type CardEvent, type CardState, InvalidTransition, type SettleContext, 
 const card = (stage: CardState["stage"], status: CardState["status"]): CardState => ({ stage, status, needsAttentionReason: null });
 const RETRY = { action: "retry", feedback: "2 tests failed" } as const;
 const GIVE_UP = { action: "needs_attention", reason: "Still failing after 3 build attempts." } as const;
+const context = (partial: Partial<SettleContext> = {}): SettleContext => ({ requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, onFailure: RETRY, ...partial });
+const verified = (passed: boolean, partial: Partial<SettleContext> = {}): CardEvent => ({ type: "verify_finished", passed, context: context(partial) });
 const settled = (
 	result: "pass" | "fail" | "blocked" | "missing",
 	summary = "",
@@ -12,7 +14,7 @@ const settled = (
 	type: "run_settled",
 	result,
 	summary,
-	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, onFailure: RETRY, ...context },
+	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, onFailure: RETRY, ...context },
 });
 
 describe("transition", () => {
@@ -25,11 +27,26 @@ describe("transition", () => {
 		["rejection re-plans with the feedback", card("planning", "awaiting_gate"), { type: "gate_decided", decision: "reject", feedback: "Too broad" }, { stage: "planning", status: "queued" }, [{ type: "start_run", stage: "planning", feedback: "Too broad" }]],
 		["a finished build is verified by the daemon when the project has a verify command", card("building", "running"), settled("pass", "", { hasVerifyCommand: true }), { stage: "testing", status: "verifying" }, [{ type: "run_verify" }]],
 		["a finished build goes to a tester agent when there is no verify command", card("building", "running"), settled("pass"), { stage: "testing", status: "queued" }, [{ type: "start_run", stage: "testing" }]],
-		["passing verification rests in testing", card("testing", "verifying"), { type: "verify_finished", passed: true, onFailure: RETRY }, { stage: "testing", status: "idle" }, []],
-		["failing verification loops back to building with the output", card("testing", "verifying"), { type: "verify_finished", passed: false, onFailure: RETRY }, { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "2 tests failed" }]],
-		["failing verification stops when the policy gives up", card("testing", "verifying"), { type: "verify_finished", passed: false, onFailure: GIVE_UP }, { stage: "testing", status: "needs_attention", needsAttentionReason: GIVE_UP.reason }, []],
+		["passing verification rests in testing", card("testing", "verifying"), verified(true), { stage: "feedback", status: "awaiting_gate" }, [{ type: "open_gate", kind: "feedback" }]],
+		["passing tests start the project's review flows first", card("testing", "verifying"), verified(true, { hasReviewFlows: true }), { stage: "feedback", status: "queued" }, [{ type: "run_flows" }]],
+		["passing tests go straight to a pull request when nothing gates them", card("testing", "verifying"), verified(true, { requiredGates: [] }), { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
+		["review flows that start are running", card("feedback", "queued"), { type: "flows_started" }, { stage: "feedback", status: "running" }, []],
+		["finished reviews wait for the human", card("feedback", "running"), { type: "flows_finished" }, { stage: "feedback", status: "awaiting_gate" }, [{ type: "open_gate", kind: "feedback" }]],
+		["approving the work opens a pull request", card("feedback", "awaiting_gate"), { type: "gate_decided", decision: "approve", feedback: "" }, { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
+		["sending the work back rebuilds with the feedback", card("feedback", "awaiting_gate"), { type: "gate_decided", decision: "reject", feedback: "Fix finding 2" }, { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "Fix finding 2" }]],
+		["an opened pull request is watched", card("pull_request", "queued"), { type: "pr_opened" }, { stage: "pull_request", status: "idle" }, []],
+		["a merged pull request finishes the card and cleans up", card("pull_request", "idle"), { type: "pr_merged" }, { stage: "done", status: "idle" }, [{ type: "cleanup_worktree" }]],
+		["without a remote the branch is left for the person", card("pull_request", "queued"), { type: "pr_skipped", note: "Branch tower/x is ready to merge." }, { stage: "done", status: "idle", needsAttentionReason: "Branch tower/x is ready to merge." }, [{ type: "cleanup_worktree" }]],
+		["a closed pull request asks for attention", card("pull_request", "idle"), { type: "pr_closed" }, { stage: "pull_request", status: "needs_attention" }, []],
+		["failing CI sends the logs to a builder without leaving the pull request stage", card("pull_request", "idle"), { type: "ci_failed", feedback: "lint failed" }, { stage: "pull_request", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "lint failed", fixingCi: true }]],
+		["a CI fix is pushed and watched again", card("pull_request", "running"), settled("pass"), { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
+		["a CI fix that fails asks for attention", card("pull_request", "running"), settled("fail", "cannot reproduce"), { stage: "pull_request", status: "needs_attention" }, []],
+		["retrying a stuck pull request opens it again", card("pull_request", "needs_attention"), { type: "retry" }, { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
+		["retrying reviews runs the flows again", card("feedback", "needs_attention"), { type: "retry" }, { stage: "feedback", status: "queued" }, [{ type: "run_flows" }]],
+		["failing verification loops back to building with the output", card("testing", "verifying"), verified(false), { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "2 tests failed" }]],
+		["failing verification stops when the policy gives up", card("testing", "verifying"), verified(false, { onFailure: GIVE_UP }), { stage: "testing", status: "needs_attention", needsAttentionReason: GIVE_UP.reason }, []],
 		["a tester that reports failure loops back the same way", card("testing", "running"), settled("fail", "red"), { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "2 tests failed" }]],
-		["a tester that passes rests", card("testing", "running"), settled("pass"), { stage: "testing", status: "idle" }, []],
+		["a tester that passes moves on to feedback", card("testing", "running"), settled("pass"), { stage: "feedback", status: "awaiting_gate" }, [{ type: "open_gate", kind: "feedback" }]],
 		["a stage that asks questions waits for answers", card("planning", "running"), settled("blocked", "Two decisions change the plan.", { hasQuestions: true }), { stage: "planning", status: "awaiting_input", needsAttentionReason: "Two decisions change the plan." }, []],
 		["answers continue the same session", card("planning", "awaiting_input"), { type: "answers_given", message: "1. CLI" }, { stage: "planning", status: "queued", needsAttentionReason: null }, [{ type: "resume_run", stage: "planning", message: "1. CLI" }]],
 		["a card waiting for answers can also start its stage over", card("planning", "awaiting_input"), { type: "retry" }, { status: "queued" }, [{ type: "start_run", stage: "planning" }]],
@@ -71,7 +88,9 @@ describe("transition", () => {
 		["a restart does not touch a card that is waiting for a human", card("planning", "awaiting_gate"), { type: "daemon_restarted" }],
 		["answer a card that asked nothing", card("planning", "needs_attention"), { type: "answers_given", message: "x" }],
 		["resume a card that was not interrupted", card("building", "idle"), { type: "resume", wasVerifying: false }],
-		["finish a verification that is not running", card("testing", "idle"), { type: "verify_finished", passed: true, onFailure: RETRY }],
+		["CI failing on a card that is already being fixed", card("pull_request", "running"), { type: "ci_failed", feedback: "x" }],
+		["merge a card that has no pull request", card("building", "idle"), { type: "pr_merged" }],
+		["finish a verification that is not running", card("testing", "idle"), verified(true)],
 	])("rejects: %s", (_name, from, event) => {
 		expect(() => transition(from, event)).toThrow(InvalidTransition);
 	});

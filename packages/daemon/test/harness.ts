@@ -32,7 +32,8 @@ export async function bootHarness(script: FakeScript, env: Record<string, string
 	git("-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "init");
 
 	// Read afresh on every boot, as a real restart does, so tests of persisted settings mean something.
-	const config = () => loadConfig({ TOWER_HOME: home, TOWER_PORT: "0", ...env });
+	// Review flows and pull-request polling are opt-in per test, so the lifecycle tests stay about the lifecycle.
+	const config = () => loadConfig({ TOWER_HOME: home, TOWER_PORT: "0", TOWER_REVIEW_FLOWS: "", TOWER_PR_POLL_MS: "0", ...env });
 	const readers: SseReader[] = [];
 	const harness = { driver: new FakeSessionDriver(script), daemon: undefined as unknown as Daemon };
 	harness.daemon = await startDaemon(config(), harness.driver);
@@ -228,11 +229,24 @@ export function testerTurn(): FakeTurn {
 	};
 }
 
+/** A scripted review step: writes its report and a verdict. */
+export function reviewTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Review written.", thinking: "", toolCalls: [] } }],
+		effect: ({ spec, prompt }) => {
+			const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+			if (report) writeFileSync(report, `# Review by ${spec.sessionId}\n\nOne finding.\n`);
+			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
+		},
+	};
+}
+
 /** Scripts each session by its stage, so re-plans, rebuilds and tests each behave like the right agent. */
 export function byStage(overrides: { build?: () => FakeTurn } = {}): FakeScript {
 	return (spec) => {
 		if (spec.sessionId.includes("-plan-")) return [planningTurn()];
-		if (spec.sessionId.includes("-build-")) return [overrides.build?.() ?? buildingTurn()];
-		return [testerTurn()];
+		if (spec.sessionId.includes("-build-") || spec.sessionId.includes("-cifix-")) return [overrides.build?.() ?? buildingTurn()];
+		if (spec.sessionId.includes("-test-")) return [testerTurn()];
+		return [reviewTurn()];
 	};
 }

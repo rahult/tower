@@ -1,0 +1,6 @@
+{
+  "name": "solid-review",
+  "title": "SOLID review",
+  "description": "Design review of the change against the SOLID principles, reporting only violations that will cost something.",
+  "steps": [{ "name": "review", "prompt": "solid-review.md", "model": "planning", "access": "read-only" }]
+}

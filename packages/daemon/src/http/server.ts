@@ -8,9 +8,10 @@ import type { Db } from "../db/open.ts";
 import { getCard, insertCard, listCards } from "../db/repo-cards.ts";
 import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
 import { listGatesForCard } from "../db/repo-gates.ts";
-import { listActiveRuns, listRunsForCard } from "../db/repo-runs.ts";
+import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
+import { loadFlows } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
@@ -100,6 +101,7 @@ export function createApp(deps: AppDeps): Hono {
 			extensions: [],
 			concurrencyLimit: 1,
 			stageConfig: {},
+			reviewFlows: null,
 			createdAt: Date.now(),
 		};
 		insertProject(db, project);
@@ -116,6 +118,14 @@ export function createApp(deps: AppDeps): Hono {
 		// An empty string clears a command.
 		for (const key of ["setupCommand", "verifyCommand"] as const) {
 			if (typeof body[key] === "string") settings[key] = (body[key] as string).trim() || null;
+		}
+		if (body.reviewFlows !== undefined) {
+			// null goes back to Tower's default set; [] turns reviews off.
+			if (body.reviewFlows !== null && !(Array.isArray(body.reviewFlows) && body.reviewFlows.every((name) => typeof name === "string"))) throw new HttpError(400, '"reviewFlows" must be a list of flow names, or null for the default');
+			const known = new Set(loadFlows(config).map((flow) => flow.name));
+			const unknown = ((body.reviewFlows as string[] | null) ?? []).filter((name) => !known.has(name));
+			if (unknown.length > 0) throw new HttpError(400, `There is no flow called ${unknown.map((name) => `"${name}"`).join(", ")}. Known flows: ${[...known].join(", ")}`);
+			settings.reviewFlows = body.reviewFlows as string[] | null;
 		}
 		if (body.concurrencyLimit !== undefined) {
 			const limit = Number(body.concurrencyLimit);
@@ -171,6 +181,52 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(orchestrator.retry(card.id, feedback), 202);
 	});
 
+	app.get("/api/flows", (c) => c.json({ flows: loadFlows(config), defaults: config.defaultReviewFlows }));
+
+	app.get("/api/usage", (c) => c.json({ byDay: usageBy(db, "day"), byProject: usageBy(db, "project"), byModel: usageBy(db, "model"), byCard: usageBy(db, "card") }));
+
+	// Run a flow, a pi skill, one of the person's agent roles, or a plain prompt against a resting card.
+	app.post("/api/cards/:id/adhoc", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const text = (key: string) => (typeof body[key] === "string" && (body[key] as string).trim() ? (body[key] as string).trim() : undefined);
+		const what = [text("flow"), text("skill"), text("agent"), text("prompt")].filter(Boolean);
+		if (what.length !== 1) throw new HttpError(400, 'Send exactly one of "flow", "skill", "agent" or "prompt"');
+		if (!card.worktreePath) throw new HttpError(409, "This card has no worktree yet. Start it first.");
+		const access = text("access");
+		if (access && !["read-only", "read-and-run", "write"].includes(access)) throw new HttpError(400, '"access" must be read-only, read-and-run or write');
+		try {
+			await orchestrator.adhoc(card.id, {
+				flow: text("flow"),
+				skill: text("skill"),
+				agent: text("agent"),
+				prompt: text("prompt"),
+				task: text("task"),
+				model: text("model"),
+				thinking: text("thinking") as never,
+				access: access as never,
+			});
+		} catch (error) {
+			if (error instanceof ConflictError) throw error;
+			throw new HttpError(400, error instanceof Error ? error.message : String(error));
+		}
+		return c.json({ run: listRunsForCard(db, card.id).at(-1) }, 202);
+	});
+
+	app.post("/api/cards/:id/check-pr", async (c) => {
+		cardOr404(c.req.param("id"));
+		await orchestrator.pollPullRequests();
+		return c.json(cardOr404(c.req.param("id")));
+	});
+
+	app.post("/api/runs/:id/ui/:requestId", async (c) => {
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const answer = body.cancelled === true ? { cancelled: true as const } : typeof body.confirmed === "boolean" ? { confirmed: body.confirmed } : typeof body.value === "string" ? { value: body.value } : null;
+		if (!answer) throw new HttpError(400, 'Send "value", "confirmed" or "cancelled"');
+		if (!runs.answerUi(c.req.param("id"), c.req.param("requestId"), answer)) throw new HttpError(409, "That question is no longer waiting for an answer");
+		return c.json({ ok: true });
+	});
+
 	app.post("/api/cards/:id/answers", async (c) => {
 		const card = cardOr404(c.req.param("id"));
 		const body = (await c.req.json()) as { answers?: unknown };
@@ -217,12 +273,14 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json({ ok: true });
 	});
 
-	app.get("/api/cards/:id/artifacts/:name", (c) => {
+	app.get("/api/cards/:id/artifacts/:name{.+}", (c) => {
 		const card = cardOr404(c.req.param("id"));
-		const name = c.req.param("name");
+		const name = decodeURIComponent(c.req.param("name"));
 		const file = join(paths.cardDir(config, card.id), name);
-		// basename check: artifact names never contain path separators, so this blocks traversal.
-		if (basename(name) !== name || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, `Artifact not found: ${name}`);
+		// Only a bare file name, or one inside reviews/: anything else (.., sessions/, absolute paths) is refused.
+		const parts = name.split("/");
+		const allowed = parts.every((part) => part !== "" && part !== ".." && basename(part) === part) && (parts.length === 1 || (parts.length === 2 && parts[0] === "reviews"));
+		if (!allowed || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, `Artifact not found: ${name}`);
 		return c.text(readFileSync(file, "utf8"));
 	});
 
@@ -237,12 +295,16 @@ export function createApp(deps: AppDeps): Hono {
 }
 
 function listArtifacts(config: Config, cardId: string): Array<{ name: string; bytes: number; modifiedAt: number }> {
-	const dir = paths.cardDir(config, cardId);
-	if (!existsSync(dir)) return [];
-	return readdirSync(dir, { withFileTypes: true })
-		.filter((entry) => entry.isFile())
-		.map((entry) => {
-			const stat = statSync(join(dir, entry.name));
-			return { name: entry.name, bytes: stat.size, modifiedAt: stat.mtimeMs };
-		});
+	const root = paths.cardDir(config, cardId);
+	const list = (dir: string, prefix: string) =>
+		existsSync(dir)
+			? readdirSync(dir, { withFileTypes: true })
+					.filter((entry) => entry.isFile())
+					.map((entry) => {
+						const stat = statSync(join(dir, entry.name));
+						return { name: `${prefix}${entry.name}`, bytes: stat.size, modifiedAt: stat.mtimeMs };
+					})
+			: [];
+	// pr-body.md is scaffolding for gh, not something to read.
+	return [...list(root, ""), ...list(join(root, "reviews"), "reviews/")].filter((file) => file.name !== "pr-body.md");
 }

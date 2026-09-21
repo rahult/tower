@@ -88,3 +88,23 @@ export function lastRunForCard(db: Db, cardId: string): StageRun | null {
 export function interruptActiveRuns(db: Db): number {
 	return Number(db.prepare("UPDATE stage_runs SET status = 'interrupted', ended_at = ? WHERE status IN ('starting', 'running')").run(Date.now()).changes);
 }
+
+export interface UsageRow {
+	key: string;
+	runs: number;
+	tokens: number;
+	costUsd: number;
+}
+
+/** Token and cost totals grouped by card, project, model or day (local time). */
+export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): UsageRow[] {
+	const key = { card: "r.card_id", project: "c.project_id", model: "r.model", day: "date(r.started_at / 1000, 'unixepoch', 'localtime')" }[group];
+	return db
+		.prepare(
+			`SELECT ${key} AS key, count(*) AS runs,
+				coalesce(sum(json_extract(r.tokens_json, '$.total')), 0) AS tokens, coalesce(sum(r.cost_usd), 0) AS costUsd
+			 FROM stage_runs r JOIN cards c ON c.id = r.card_id
+			 WHERE r.kind != 'verify' GROUP BY ${key} ORDER BY tokens DESC`,
+		)
+		.all() as unknown as UsageRow[];
+}

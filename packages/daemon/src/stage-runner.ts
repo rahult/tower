@@ -7,6 +7,7 @@ import {
 	type ResultStatus,
 	type RunSpec,
 	type StageRun,
+	type ThinkingLevel,
 	parseStageResult,
 	pickModel,
 	renderPrompt,
@@ -35,6 +36,20 @@ export type RunOutcome =
 	| { kind: "settled"; stage: AgentStage; result: ResultStatus; summary: string; hasQuestions: boolean }
 	| { kind: "failed"; error: string }
 	| { kind: "aborted" };
+
+/** A session that is not a card stage: a review-flow step or an ad hoc run. */
+export interface CustomRun {
+	sessionId: string;
+	kind: "flow_step" | "adhoc";
+	attempt: number;
+	model: string;
+	thinking: ThinkingLevel;
+	tools: string[];
+	prompt: string;
+	appendSystemPromptFiles?: string[];
+	/** Whether the session must end by writing stage-result.json. */
+	requireResult: boolean;
+}
 
 export interface StageRunnerDeps {
 	config: Config;
@@ -67,7 +82,7 @@ export class StageRunner {
 	}
 
 	/** Starts the stage and returns once the session is up. The stage itself continues in the background. */
-	async start(cardId: string, stage: AgentStage, options: { feedback?: string } = {}): Promise<StageRun> {
+	async start(cardId: string, stage: AgentStage, options: { feedback?: string; fixingCi?: boolean } = {}): Promise<StageRun> {
 		const { config, db, runs } = this.deps;
 		const card = getCard(db, cardId);
 		if (!card) throw new Error(`Card not found: ${cardId}`);
@@ -90,6 +105,8 @@ export class StageRunner {
 
 		const attempt = countRunsForStage(db, card.id, stage) + 1;
 		const spec = this.buildSpec(card, project, stage, attempt, worktree.path);
+		// A build that repairs a failing pull request is told apart from ordinary builds by its session id.
+		if (options.fixingCi) spec.sessionId = `c${card.id}-cifix-${attempt}`;
 		const run: StageRun = {
 			id: spec.sessionId,
 			cardId: card.id,
@@ -124,10 +141,75 @@ export class StageRunner {
 		this.patchRun(run.id, { status: "running" });
 		this.deps.onStarted(card.id);
 
-		const prompt = this.renderStagePrompt(card, stage, worktree.path, worktree.branchName, options.feedback);
+		const feedback = options.fixingCi && options.feedback ? `This work is already in a pull request, and its CI checks are failing. Fix the cause, commit, and do not weaken the checks.\n\n${options.feedback}` : options.feedback;
+		const prompt = this.renderStagePrompt(card, stage, worktree.path, worktree.branchName, feedback);
 		const work = this.drive(live, stage, prompt, cardDir).finally(() => this.inFlight.delete(run.id));
 		this.inFlight.set(run.id, work);
 		return getRun(db, run.id) as StageRun;
+	}
+
+	/**
+	 * Runs a session that is not one of the card's stages: a review-flow step or something the person asked for.
+	 * It holds the card's lease like any session and streams like one, but its outcome goes to the caller, not to
+	 * the card's lifecycle. Resolves when the session has finished.
+	 */
+	async startCustom(cardId: string, request: CustomRun): Promise<RunOutcome> {
+		const { config, db, runs } = this.deps;
+		const card = getCard(db, cardId);
+		const project = card && getProject(db, card.projectId);
+		if (!card || !project) throw new Error(`Card not found: ${cardId}`);
+		if (!card.worktreePath) throw new Error("This card has no worktree yet. Start it first.");
+		const cardDir = paths.cardDir(config, card.id);
+		mkdirSync(join(cardDir, "reviews"), { recursive: true });
+		if (request.requireResult) rmSync(join(cardDir, STAGE_RESULT_FILE), { force: true });
+
+		const spec: RunSpec = {
+			sessionId: request.sessionId,
+			cwd: card.worktreePath,
+			sessionDir: paths.sessionDir(config, card.id),
+			model: request.model,
+			thinking: request.thinking,
+			tools: request.tools,
+			extensions: project.extensions,
+			trustProject: project.trustProjectPi,
+			appendSystemPromptFiles: request.appendSystemPromptFiles ?? [],
+		};
+		insertRun(db, {
+			id: spec.sessionId,
+			cardId: card.id,
+			kind: request.kind,
+			stage: card.stage,
+			attempt: request.attempt,
+			model: spec.model,
+			thinking: spec.thinking,
+			args: buildPiArgs(spec),
+			status: "starting",
+			resultStatus: null,
+			resultSummary: null,
+			questions: null,
+			tokens: null,
+			costUsd: null,
+			lastEntryId: null,
+			startedAt: Date.now(),
+			endedAt: null,
+			error: null,
+		});
+		let live: LiveRun;
+		try {
+			live = await runs.start(card.id, spec);
+		} catch (error) {
+			this.patchRun(spec.sessionId, { status: "failed", error: error instanceof Error ? error.message : String(error), endedAt: Date.now() });
+			throw error;
+		}
+		this.patchRun(spec.sessionId, { status: "running" });
+		return new Promise<RunOutcome>((resolve) => {
+			const work = this.drive(live, "building", request.prompt, cardDir, { requireResult: request.requireResult, deliver: resolve }).finally(() => {
+				this.inFlight.delete(spec.sessionId);
+				// On shutdown drive() delivers nothing; do not leave the caller hanging.
+				resolve({ kind: "aborted" });
+			});
+			this.inFlight.set(spec.sessionId, work);
+		});
 	}
 
 	/**
@@ -214,7 +296,13 @@ export class StageRunner {
 	}
 
 	/** Prompt → settle → validate result (one nudge if missing) → record outcome. Never throws. */
-	private async drive(liveRun: LiveRun, stage: AgentStage, prompt: string, cardDir: string): Promise<void> {
+	private async drive(
+		liveRun: LiveRun,
+		stage: AgentStage,
+		prompt: string,
+		cardDir: string,
+		custom?: { requireResult: boolean; deliver: (outcome: RunOutcome) => void },
+	): Promise<void> {
 		const { runs } = this.deps;
 		const live = liveRun as LiveRun & { handle: NonNullable<LiveRun["handle"]> };
 		let outcome: RunOutcome;
@@ -246,7 +334,7 @@ export class StageRunner {
 
 		try {
 			await turn(prompt);
-			let parsed = readResult();
+			let parsed = custom && !custom.requireResult ? ({ ok: true, result: { status: "pass", summary: "" } } as ReturnType<typeof parseStageResult>) : readResult();
 			if (!aborted && !parsed.ok) {
 				await turn(NUDGE);
 				parsed = readResult();
@@ -276,7 +364,9 @@ export class StageRunner {
 			await runs.finish(live.runId);
 		}
 		// After finish(): the card's worktree lease is released before the next stage may start.
-		if (!this.stopping) this.deps.onOutcome(live.cardId, outcome);
+		if (this.stopping) return;
+		if (custom) custom.deliver(outcome);
+		else this.deps.onOutcome(live.cardId, outcome);
 	}
 
 	private patchCard(cardId: string, patch: Parameters<typeof updateCard>[2]): void {

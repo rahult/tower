@@ -54,6 +54,8 @@ const COLUMNS = {
 	worktreePath: "worktree_path",
 	baseCommit: "base_commit",
 	needsAttentionReason: "needs_attention_reason",
+	prUrl: "pr_url",
+	prState: "pr_state",
 } as const;
 
 export type CardPatch = Partial<Pick<Card, keyof typeof COLUMNS>>;
@@ -95,4 +97,9 @@ export function listQueued(db: Db): QueuedCard[] {
 /** Cards whose work is actually executing (not merely waiting for a slot). */
 export function listExecuting(db: Db): Card[] {
 	return (db.prepare("SELECT * FROM cards WHERE status IN ('running', 'verifying') AND queued_effect_json IS NULL").all() as Row[]).map(toCard);
+}
+
+/** Cards whose pull request is open and being watched. */
+export function listWatchedPullRequests(db: Db): Card[] {
+	return (db.prepare("SELECT * FROM cards WHERE stage = 'pull_request' AND status = 'idle' AND pr_url IS NOT NULL").all() as Row[]).map(toCard);
 }

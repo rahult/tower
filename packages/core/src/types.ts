@@ -33,6 +33,8 @@ export interface Project {
 	extensions: string[];
 	concurrencyLimit: number;
 	stageConfig: StageConfigOverrides;
+	/** Review flows run after tests pass. null = Tower's default set; [] = none. */
+	reviewFlows: string[] | null;
 	createdAt: number;
 }
 

@@ -42,7 +42,7 @@ describe("testing stage and the fail loop", () => {
 	it("passes straight through when the verify command succeeds", async () => {
 		h = await bootHarness(fixesOnBuild(1));
 		const { detail } = await approvePlan(h, { verifyCommand: VERIFY });
-		expect(detail.card).toMatchObject({ stage: "testing", status: "idle" });
+		expect(detail.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
 		expect(detail.runs.map((r: { kind: string; stage: string; resultStatus: string }) => [r.kind, r.stage, r.resultStatus])).toEqual([
 			["stage", "planning", "pass"],
 			["stage", "building", "pass"],
@@ -53,7 +53,7 @@ describe("testing stage and the fail loop", () => {
 	it("sends failing output back to a fresh builder, then passes", async () => {
 		h = await bootHarness(fixesOnBuild(2));
 		const { card, detail } = await approvePlan(h, { verifyCommand: VERIFY });
-		expect(detail.card).toMatchObject({ stage: "testing", status: "idle" });
+		expect(detail.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
 		expect(detail.runs.map((r: { id: string }) => r.id.replace(`c${card.id}-`, ""))).toEqual(["plan-1", "build-1", "verify-1", "build-2", "verify-2"]);
 
 		const secondBuild = h.driver.handles[2];
@@ -78,14 +78,14 @@ describe("testing stage and the fail loop", () => {
 		const sessions = h.driver.handles.length;
 		expect((await h.api("POST", `/api/cards/${card.id}/retry`)).body).toMatchObject({ stage: "testing", status: "verifying" });
 		await h.daemon.whenIdle();
-		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "testing", status: "idle" });
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
 		expect(h.driver.handles).toHaveLength(sessions);
 	});
 
 	it("uses a tester agent when the project has no verify command", async () => {
 		h = await bootHarness(byStage());
 		const { card, detail } = await approvePlan(h, {});
-		expect(detail.card).toMatchObject({ stage: "testing", status: "idle" });
+		expect(detail.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
 		const tester = h.driver.handles[2];
 		expect(tester?.sessionId).toBe(`c${card.id}-test-1`);
 		expect(tester?.prompts[0]).toContain("Do **not** fix anything");

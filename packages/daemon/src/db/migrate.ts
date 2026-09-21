@@ -95,6 +95,10 @@ const MIGRATIONS: string[] = [
 	-- What a stage asked a person, when it stopped to ask.
 	ALTER TABLE stage_runs ADD COLUMN questions_json TEXT;
 	`,
+	`
+	-- Review flows a project runs after its tests pass. NULL means Tower's default set.
+	ALTER TABLE projects ADD COLUMN review_flows_json TEXT;
+	`,
 ];
 
 export function migrate(db: DatabaseSync): void {

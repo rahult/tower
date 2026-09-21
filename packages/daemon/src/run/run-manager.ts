@@ -2,7 +2,7 @@ import type { RunSpec } from "@tower/core";
 import type { Db } from "../db/open.ts";
 import { insertRunEvent, lastRunSeq, listRunEvents } from "../db/repo-events.ts";
 import type { Bus } from "../events/bus.ts";
-import type { DriverEvent, RunHandle, SessionDriver } from "../pi/session-driver.ts";
+import type { DriverEvent, RunHandle, SessionDriver, UiAnswer } from "../pi/session-driver.ts";
 import { TranscriptBuffer, type TranscriptItem } from "./transcript-buffer.ts";
 
 export interface LiveRun {
@@ -24,11 +24,15 @@ export interface LiveRun {
 export class RunManager {
 	private readonly byRun = new Map<string, LiveRun>();
 	private readonly byCard = new Map<string, string>();
+	/** Blocking questions from pi extensions that nobody has answered yet, with the timer that will cancel each. */
+	private readonly pendingUi = new Map<string, NodeJS.Timeout>();
+	private readonly uiTimeoutMs: number;
 	private readonly db: Db;
 	private readonly bus: Bus;
 	private readonly driver: SessionDriver;
 
-	constructor(db: Db, bus: Bus, driver: SessionDriver) {
+	constructor(db: Db, bus: Bus, driver: SessionDriver, uiTimeoutMs = 5 * 60_000) {
+		this.uiTimeoutMs = uiTimeoutMs;
 		this.db = db;
 		this.bus = bus;
 		this.driver = driver;
@@ -81,6 +85,30 @@ export class RunManager {
 		}
 		const { type, ...payload } = event;
 		live.buffer.push(type, payload);
+		// An extension dialog blocks the agent until it is answered. Nobody may be watching, so it cannot wait forever.
+		if (event.type === "ui_request" && event.blocking) {
+			const key = `${live.runId}:${event.id}`;
+			this.pendingUi.set(
+				key,
+				setTimeout(() => this.resolveUi(live, event.id, { cancelled: true }, "expired"), this.uiTimeoutMs),
+			);
+		}
+	}
+
+	/** Answers a blocking extension question. Returns false when it is no longer waiting. */
+	answerUi(runId: string, requestId: string, answer: UiAnswer): boolean {
+		const live = this.byRun.get(runId);
+		if (!live || !this.pendingUi.has(`${runId}:${requestId}`)) return false;
+		this.resolveUi(live, requestId, answer, "answered");
+		return true;
+	}
+
+	private resolveUi(live: LiveRun, requestId: string, answer: UiAnswer, outcome: "answered" | "expired"): void {
+		const key = `${live.runId}:${requestId}`;
+		clearTimeout(this.pendingUi.get(key));
+		if (!this.pendingUi.delete(key)) return;
+		live.handle?.answerUi(requestId, answer);
+		live.buffer.push("ui_resolved", { id: requestId, outcome });
 	}
 
 	/** Records something the daemon did (sent a prompt, a lifecycle note) in the run's transcript. */
@@ -110,6 +138,11 @@ export class RunManager {
 	async finish(runId: string): Promise<void> {
 		const live = this.byRun.get(runId);
 		if (!live) return;
+		for (const [key, timer] of this.pendingUi) {
+			if (!key.startsWith(`${runId}:`)) continue;
+			clearTimeout(timer);
+			this.pendingUi.delete(key);
+		}
 		// Detach first: stopping the session kills the process, and our own cleanup is not a transcript event.
 		live.detach();
 		live.buffer.close();

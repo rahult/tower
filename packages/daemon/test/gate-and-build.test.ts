@@ -43,7 +43,7 @@ describe("plan gate and building handoff", () => {
 		expect(builder?.prompts[0]).not.toContain("Produce an implementation plan");
 
 		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
-		expect(detail.card).toMatchObject({ stage: "testing", status: "idle" });
+		expect(detail.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
 		expect(detail.gates[0]).toMatchObject({ status: "approved" });
 		expect(detail.runs.map((r: { stage: string; resultStatus: string }) => [r.stage, r.resultStatus])).toEqual([
 			["planning", "pass"],
@@ -103,6 +103,6 @@ describe("plan gate and building handoff", () => {
 		await h.daemon.whenIdle();
 		expect(h.driver.handles[2]?.sessionId).toBe(`c${card.id}-build-2`);
 		expect(h.driver.handles[2]?.prompts[0]).toContain("Run pnpm install first.");
-		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "testing", status: "idle", needsAttentionReason: null });
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "feedback", status: "awaiting_gate", needsAttentionReason: null });
 	});
 });

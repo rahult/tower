@@ -15,6 +15,7 @@ function toProject(row: Row): Project {
 		extensions: JSON.parse(row.extensions_json as string),
 		concurrencyLimit: row.concurrency_limit as number,
 		stageConfig: JSON.parse(row.stage_config_json as string),
+		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
 		createdAt: row.created_at as number,
 	};
 }
@@ -48,15 +49,17 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "concurrencyLimit">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "concurrencyLimit" | "reviewFlows">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", concurrencyLimit: "concurrency_limit" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const keys = Object.keys(settings) as Array<keyof typeof SETTING_COLUMNS>;
+	const { reviewFlows, ...plain } = settings;
+	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
+	const keys = Object.keys(plain) as Array<keyof typeof SETTING_COLUMNS>;
 	if (keys.length > 0) {
 		const sets = keys.map((key) => `${SETTING_COLUMNS[key]} = ?`).join(", ");
-		db.prepare(`UPDATE projects SET ${sets} WHERE id = ?`).run(...keys.map((key) => settings[key] ?? null), id);
+		db.prepare(`UPDATE projects SET ${sets} WHERE id = ?`).run(...keys.map((key) => plain[key] ?? null), id);
 	}
 	const project = getProject(db, id);
 	if (!project) throw new Error(`Project not found: ${id}`);

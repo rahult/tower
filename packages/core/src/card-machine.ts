@@ -13,7 +13,15 @@ export type CardEvent =
 	| { type: "enqueue" }
 	| { type: "run_started" }
 	| { type: "run_settled"; result: ResultStatus; summary: string; context: SettleContext }
-	| { type: "verify_finished"; passed: boolean; onFailure: FailureDecision }
+	| { type: "verify_finished"; passed: boolean; context: SettleContext }
+	| { type: "flows_started" }
+	| { type: "flows_finished" }
+	| { type: "pr_opened" }
+	/** There is nowhere to open a pull request (no remote); the branch is left for the person to merge. */
+	| { type: "pr_skipped"; note: string }
+	| { type: "pr_merged" }
+	| { type: "pr_closed" }
+	| { type: "ci_failed"; feedback: string }
 	| { type: "run_failed"; error: string }
 	| { type: "run_aborted" }
 	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string }
@@ -32,12 +40,19 @@ export interface SettleContext {
 	hasVerifyCommand: boolean;
 	/** The stage stopped with specific questions for a person. */
 	hasQuestions: boolean;
+	/** The project has review flows to run once tests pass. */
+	hasReviewFlows: boolean;
 	/** What the retry policy says to do if this settle is a testing failure. */
 	onFailure: FailureDecision;
 }
 
 export type Effect =
-	| { type: "start_run"; stage: AgentStage; feedback?: string }
+	/** `fixingCi`: a build run that repairs a failing pull request; the card stays in its pull request stage. */
+	| { type: "start_run"; stage: AgentStage; feedback?: string; fixingCi?: boolean }
+	| { type: "run_flows" }
+	/** Push the card's branch and open its pull request (or just push, when the pull request already exists). */
+	| { type: "open_pr" }
+	| { type: "cleanup_worktree" }
 	/** Reopen the stage's session (same session id). Without a message the agent is told to carry on after an interruption. */
 	| { type: "resume_run"; stage: AgentStage; message?: string }
 	| { type: "run_verify" }
@@ -60,6 +75,15 @@ const isAgentStage = (stage: Stage): stage is AgentStage => AGENT_STAGES.has(sta
 const rest = (stage: Stage, status: CardStatus, needsAttentionReason: string | null = null): CardState => ({ stage, status, needsAttentionReason });
 const afterTestFailure = (decision: FailureDecision): Transition =>
 	decision.action === "retry" ? queue("building", decision.feedback) : { next: rest("testing", "needs_attention", decision.reason), effects: [] };
+
+/** Tests are green: review, then the human, then the pull request, skipping whatever is not configured. */
+const afterTestsPass = (context: SettleContext): Transition => {
+	if (context.hasReviewFlows) return { next: rest("feedback", "queued"), effects: [{ type: "run_flows" }] };
+	return afterReviews(context.requiredGates);
+};
+const afterReviews = (gates: GateKind[]): Transition =>
+	gates.includes("feedback") ? { next: rest("feedback", "awaiting_gate"), effects: [{ type: "open_gate", kind: "feedback" }] } : openPr();
+const openPr = (): Transition => ({ next: rest("pull_request", "queued"), effects: [{ type: "open_pr" }] });
 
 const queue = (stage: AgentStage, feedback?: string): Transition => ({
 	next: rest(stage, "queued"),
@@ -99,14 +123,44 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			if (stage === "building") {
 				return event.context.hasVerifyCommand ? { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] } : queue("testing");
 			}
-			// M5 sends tested work on to feedback. Until then it rests here.
-			if (stage === "testing") return { next: rest("testing", "idle"), effects: [] };
+			if (stage === "testing") return afterTestsPass(event.context);
+			// A build that repaired the pull request: push it again and go back to watching.
+			if (stage === "pull_request") return openPr();
 			break;
 		}
 
 		case "verify_finished":
 			if (stage !== "testing" || status !== "verifying") break;
-			return event.passed ? { next: rest("testing", "idle"), effects: [] } : afterTestFailure(event.onFailure);
+			return event.passed ? afterTestsPass(event.context) : afterTestFailure(event.context.onFailure);
+
+		case "flows_started":
+			if (stage === "feedback" && status === "queued") return { next: rest("feedback", "running"), effects: [] };
+			break;
+
+		case "flows_finished":
+			// The feedback gate is the one a person should not skip lightly, so it is always asked for here.
+			if (stage === "feedback" && status === "running") return afterReviews(["feedback"]);
+			break;
+
+		case "pr_opened":
+			if (stage === "pull_request" && (status === "queued" || status === "running")) return { next: rest("pull_request", "idle"), effects: [] };
+			break;
+
+		case "pr_skipped":
+			if (stage === "pull_request") return { next: rest("done", "idle", event.note), effects: [{ type: "cleanup_worktree" }] };
+			break;
+
+		case "pr_merged":
+			if (stage === "pull_request") return { next: rest("done", "idle"), effects: [{ type: "cleanup_worktree" }] };
+			break;
+
+		case "pr_closed":
+			if (stage === "pull_request") return { next: rest("pull_request", "needs_attention", "The pull request was closed without being merged."), effects: [] };
+			break;
+
+		case "ci_failed":
+			if (stage !== "pull_request" || status !== "idle") break;
+			return { next: rest("pull_request", "queued"), effects: [{ type: "start_run", stage: "building", feedback: event.feedback, fixingCi: true }] };
 
 		case "run_failed":
 			if (status === "running" || status === "queued" || status === "verifying") return { next: rest(stage, "needs_attention", event.error), effects: [] };
@@ -117,9 +171,9 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			break;
 
 		case "gate_decided":
-			if (stage === "planning" && status === "awaiting_gate") {
-				return event.decision === "approve" ? queue("building") : queue("planning", event.feedback);
-			}
+			if (status !== "awaiting_gate") break;
+			if (stage === "planning") return event.decision === "approve" ? queue("building") : queue("planning", event.feedback);
+			if (stage === "feedback") return event.decision === "approve" ? openPr() : queue("building", event.feedback);
 			break;
 
 		case "daemon_restarted":
@@ -137,6 +191,8 @@ export function transition(card: CardState, event: CardEvent): Transition {
 
 		case "retry":
 			// Re-run the stage the card is stuck or resting in, optionally with guidance.
+			if (stage === "feedback" && (status === "needs_attention" || status === "idle")) return { next: rest("feedback", "queued"), effects: [{ type: "run_flows" }] };
+			if (stage === "pull_request" && (status === "needs_attention" || status === "idle")) return openPr();
 			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted" && status !== "awaiting_input")) break;
 			if (stage === "testing" && event.hasVerifyCommand) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
 			return queue(stage, event.feedback);
