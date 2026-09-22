@@ -15,6 +15,7 @@ import { loadFlows } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
+import { BenchError, type BenchRunner } from "../bench.ts";
 import type { RunManager } from "../run/run-manager.ts";
 import { describeModels, knownModels, parseModels, SettingsError, settingsFile, writeModels } from "../settings.ts";
 import type { StageRunner } from "../stage-runner.ts";
@@ -27,6 +28,7 @@ export interface AppDeps {
 	runs: RunManager;
 	stages: StageRunner;
 	orchestrator: Orchestrator;
+	bench: BenchRunner;
 }
 
 class HttpError extends Error {
@@ -46,11 +48,12 @@ function requireString(body: Record<string, unknown>, key: string): string {
 }
 
 export function createApp(deps: AppDeps): Hono {
-	const { config, db, bus, runs, stages, orchestrator } = deps;
+	const { config, db, bus, runs, stages, orchestrator, bench } = deps;
 	const app = new Hono();
 
 	app.onError((error, c) => {
 		if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
+		if (error instanceof BenchError) return c.json({ error: error.message }, error.status);
 		if (error instanceof SettingsError) return c.json({ error: error.message }, 400);
 		if (error instanceof InvalidTransition || error instanceof ConflictError) return c.json({ error: error.message }, 409);
 		console.error(error);
@@ -97,6 +100,9 @@ export function createApp(deps: AppDeps): Hono {
 			defaultBranch,
 			setupCommand: null,
 			verifyCommand: null,
+			testCommand: null,
+			previewCommand: null,
+			previewUrl: null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,
@@ -117,7 +123,7 @@ export function createApp(deps: AppDeps): Hono {
 		const settings: ProjectSettings = {};
 		if (typeof body.name === "string" && body.name.trim()) settings.name = body.name.trim();
 		// An empty string clears a command.
-		for (const key of ["setupCommand", "verifyCommand"] as const) {
+		for (const key of ["setupCommand", "verifyCommand", "testCommand", "previewCommand", "previewUrl"] as const) {
 			if (typeof body[key] === "string") settings[key] = (body[key] as string).trim() || null;
 		}
 		if (body.reviewFlows !== undefined) {
@@ -175,8 +181,13 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/cards/:id", (c) => {
 		const card = cardOr404(c.req.param("id"));
-		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id) });
+		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id), bench: { preview: bench.previewFor(card.id) } });
 	});
+
+	// Hands-on access to the card's worktree. Neither run can pass or fail the card.
+	app.post("/api/cards/:id/test", (c) => c.json({ run: bench.test(cardOr404(c.req.param("id")).id) }, 202));
+	app.post("/api/cards/:id/preview", (c) => c.json(bench.startPreview(cardOr404(c.req.param("id")).id), 202));
+	app.delete("/api/cards/:id/preview", (c) => c.json(bench.stopPreview(cardOr404(c.req.param("id")).id)));
 
 	app.post("/api/cards/:id/enqueue", (c) => c.json(orchestrator.dispatch(cardOr404(c.req.param("id")).id, { type: "enqueue" }), 202));
 

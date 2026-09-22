@@ -18,7 +18,8 @@ export type CardStatus =
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-export type RunKind = "stage" | "verify" | "flow_step" | "adhoc";
+/** "test" is a person's on-demand run of the project's test command; "verify" is Tower's own gate. */
+export type RunKind = "stage" | "verify" | "test" | "flow_step" | "adhoc";
 export type RunStatus = "starting" | "running" | "settled" | "interrupted" | "failed" | "aborted";
 export type ResultStatus = "pass" | "fail" | "blocked" | "missing";
 
@@ -29,6 +30,12 @@ export interface Project {
 	defaultBranch: string;
 	setupCommand: string | null;
 	verifyCommand: string | null;
+	/** A hands-on test command, run on demand from a card. Never gates the lifecycle. */
+	testCommand: string | null;
+	/** A long-running dev server, started and stopped from a card. */
+	previewCommand: string | null;
+	/** Where the preview becomes usable, opened from the card while the preview runs. */
+	previewUrl: string | null;
 	trustProjectPi: boolean;
 	extensions: string[];
 	concurrencyLimit: number;
