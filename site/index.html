@@ -86,6 +86,11 @@
 				<figcaption>Open a card and the decision is the first tab. A cheaper model will build from this plan alone, so it has to stand on its own.</figcaption>
 			</figure>
 
+			<figure class="shot wide">
+				<img src="assets/invariants.png" width="1600" height="1000" alt="A card's drawer with an invariant simulation run selected in the session rail. The verdict is pass, and the expanded instructions show the modeling method the agent follows: domains, actors, state and transitions, numbered invariants, simulated scenarios. The Focus view beside it still shows the plan waiting for approval." loading="lazy" />
+				<figcaption>The same modeling, on demand. A card's Run tab runs Invariant simulation against the finished change — domains, actors, scenarios — and reports what would break before your tests do.</figcaption>
+			</figure>
+
 			<section id="how" class="wrap prose">
 				<h2>How a card moves</h2>
 				<p>Tell Tower what you want done. From there the card drives itself through seven stages and stops twice, both times for you.</p>
@@ -93,8 +98,9 @@
 					<li>
 						<h3>A strong model plans</h3>
 						<p>
-							The planner explores your repository and writes <code>plan.md</code>. It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a wrong
-							plan is the costliest mistake a cheap builder can inherit.
+							The planner explores your repository and writes <code>plan.md</code>. Before it writes a step it models the work — the domains it touches, the actors, the properties
+							that must hold — and leaves those invariants in the plan as test targets. It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a
+							wrong plan is the costliest mistake a cheap builder can inherit.
 						</p>
 					</li>
 					<li>
@@ -160,6 +166,10 @@
 					<div>
 						<dt>Questions, not guesses</dt>
 						<dd>An agent that hits a decision that is yours stops and asks, with options you answer by clicking. Its session continues with your answers, so nothing it learned is thrown away.</dd>
+					</div>
+					<div>
+						<dt>Modeled before it is built</dt>
+						<dd>Planning derives the domains, the actors and the invariants — what must hold when the work is done. Testing answers each invariant with a verdict, and a full simulation runs on demand from any resting card's Run tab. Off per project, if you prefer.</dd>
 					</div>
 					<div>
 						<dt>One keyboard</dt>
@@ -260,9 +270,9 @@ export function pickNext(candidates, state) {
 			<section class="wrap prose">
 				<h2>Where it stands</h2>
 				<p>
-					Tower is early, and complete from backlog to merged pull request: planning, the plan gate, building, testing with the retry loop, review flows, the feedback gate, pull
-					requests with CI repair, scheduling, restart recovery, questions, model settings and on-demand runs. Tests run the whole daemon end to end, and planning, building, testing and
-					questions have been run against real pi sessions.
+					Tower is early, and complete from backlog to merged pull request: planning, the plan gate, building, testing with the retry loop, invariant simulation, review flows, the
+					feedback gate, pull requests with CI repair, scheduling, restart recovery, questions, model settings and on-demand runs. Tests run the whole daemon end to end, and
+					planning, building, testing and questions have been run against real pi sessions.
 				</p>
 				<p>
 					Not yet proven against the real thing: the pull request stage has only met a stand-in for GitHub. Expect rough edges there, and
