@@ -142,7 +142,7 @@ export class StageRunner {
 		this.deps.onStarted(card.id);
 
 		const feedback = options.fixingCi && options.feedback ? `This work is already in a pull request, and its CI checks are failing. Fix the cause, commit, and do not weaken the checks.\n\n${options.feedback}` : options.feedback;
-		const prompt = this.renderStagePrompt(card, stage, worktree.path, worktree.branchName, feedback);
+		const prompt = this.renderStagePrompt(card, project, stage, worktree.path, worktree.branchName, worktree.baseCommit, feedback);
 		const work = this.drive(live, stage, prompt, cardDir).finally(() => this.inFlight.delete(run.id));
 		this.inFlight.set(run.id, work);
 		return getRun(db, run.id) as StageRun;
@@ -275,10 +275,13 @@ export class StageRunner {
 		};
 	}
 
-	private renderStagePrompt(card: Card, stage: AgentStage, worktreePath: string, branchName: string, feedback?: string): string {
+	private renderStagePrompt(card: Card, project: Project, stage: AgentStage, worktreePath: string, branchName: string, baseCommit: string, feedback?: string): string {
 		const { config } = this.deps;
 		const cardDir = paths.cardDir(config, card.id);
 		const read = (...parts: string[]) => readFileSync(join(config.promptsDir, ...parts), "utf8");
+		const partials: Record<string, string> = { "stage-result-contract": read("partials", "stage-result-contract.md") };
+		// The templates reference the block, so the key must always exist; simulation off leaves it empty.
+		partials["invariant-protocol"] = (project.invariantSimulation ?? config.invariantSimulation) ? this.invariantBlock(stage, join(cardDir, "reviews", "invariant-simulation.md"), baseCommit, read) : "";
 		return renderPrompt(
 			read(STAGE_SPECS[stage].promptFile),
 			{
@@ -291,8 +294,27 @@ export class StageRunner {
 				resultPath: join(cardDir, STAGE_RESULT_FILE),
 				feedbackSection: feedback ? `# Feedback on your previous attempt\n\n${feedback}` : "",
 			},
-			{ "stage-result-contract": read("partials", "stage-result-contract.md") },
+			partials,
 		);
+	}
+
+	/**
+	 * The modeling block a stage's template includes, composed here so one method file serves every stage.
+	 * Planning derives the model before code exists; building honors it; testing verifies against it — reading
+	 * the simulation's report when one has been run, deriving the checklist itself when not.
+	 */
+	private invariantBlock(stage: AgentStage, simulationReport: string, baseCommit: string, read: (...parts: string[]) => string): string {
+		const method = read("partials", "invariant-protocol.md").trim();
+		if (stage === "planning") {
+			return `# Model and invariants\n\nApply the method below to the work the task describes. The change does not exist yet: you are modeling what the plan will build. Record the model, the invariants and the risk areas in the plan as a \`## Model and invariants\` section, and let the invariants drive your edge cases and verification steps. A conflict the modeling surfaces that would change the plan is a \`blocked\` question, not a guess.\n\n${method}`;
+		}
+		if (stage === "building") {
+			return `# Model and invariants\n\nA simulation of this work may exist at \`${simulationReport}\`. When it does, its invariants and blocking findings are acceptance criteria: honor them and fix them — testing will check the change against them.`;
+		}
+		if (existsSync(simulationReport)) {
+			return `# Invariant checklist\n\nA simulation has modeled this change; its report is at \`${simulationReport}\`. Read it first. Verify every invariant in its **Test targets** section, and confirm each finding it marked blocking has actually been addressed. In the test report, give a verdict per invariant — **held**, **violated** (with the evidence) or **not observable** — before your overall verdict.`;
+		}
+		return `# Invariant checklist\n\nNo simulation has been run for this card, so derive the checklist yourself and test against it: apply the method below to the change (\`git diff ${baseCommit}\` and \`git log ${baseCommit}..HEAD\`) and to the plan. In the test report, give a verdict per invariant — **held**, **violated** (with the evidence) or **not observable** — before your overall verdict.\n\n${method}`;
 	}
 
 	/** Prompt → settle → validate result (one nudge if missing) → record outcome. Never throws. */

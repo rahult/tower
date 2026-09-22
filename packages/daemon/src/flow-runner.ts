@@ -121,7 +121,11 @@ export class FlowRunner {
 				resultPath: join(cardDir, STAGE_RESULT_FILE),
 			},
 			// renderPrompt expands partials in one pass, so the contract's own partial is filled in here.
-			{ "review-contract": read("flows", "_review-contract.md").replace("{{> stage-result-contract}}", resultContract.trim()), "stage-result-contract": resultContract },
+			{
+				"review-contract": read("flows", "_review-contract.md").replace("{{> stage-result-contract}}", resultContract.trim()),
+				"stage-result-contract": resultContract,
+				"invariant-protocol": read("partials", "invariant-protocol.md"),
+			},
 		);
 	}
 }

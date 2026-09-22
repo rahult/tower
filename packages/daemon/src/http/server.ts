@@ -67,7 +67,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db) }));
 
-	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels() });
+	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation });
 
 	app.get("/api/settings", (c) => c.json(settingsView()));
 
@@ -102,6 +102,7 @@ export function createApp(deps: AppDeps): Hono {
 			concurrencyLimit: 1,
 			stageConfig: {},
 			reviewFlows: null,
+			invariantSimulation: null,
 			createdAt: Date.now(),
 		};
 		insertProject(db, project);
@@ -126,6 +127,11 @@ export function createApp(deps: AppDeps): Hono {
 			const unknown = ((body.reviewFlows as string[] | null) ?? []).filter((name) => !known.has(name));
 			if (unknown.length > 0) throw new HttpError(400, `There is no flow called ${unknown.map((name) => `"${name}"`).join(", ")}. Known flows: ${[...known].join(", ")}`);
 			settings.reviewFlows = body.reviewFlows as string[] | null;
+		}
+		if (body.invariantSimulation !== undefined) {
+			// null goes back to Tower's default.
+			if (body.invariantSimulation !== null && typeof body.invariantSimulation !== "boolean") throw new HttpError(400, '"invariantSimulation" must be a boolean, or null for the default');
+			settings.invariantSimulation = body.invariantSimulation as boolean | null;
 		}
 		if (body.concurrencyLimit !== undefined) {
 			const limit = Number(body.concurrencyLimit);

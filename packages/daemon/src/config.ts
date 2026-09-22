@@ -13,6 +13,8 @@ export interface Config {
 	flowsDir: string;
 	/** Flows a project runs after its tests pass, unless the project says otherwise. */
 	defaultReviewFlows: string[];
+	/** Whether planning and testing use the invariant-simulation protocol, unless a project says otherwise. */
+	invariantSimulation: boolean;
 	/** How often open pull requests are checked, and how many times a failing one is repaired before asking. */
 	prPollMs: number;
 	maxCiFixAttempts: number;
@@ -41,6 +43,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		promptsDir: env.TOWER_PROMPTS_DIR ?? join(repoRoot, "prompts"),
 		flowsDir: env.TOWER_FLOWS_DIR ?? join(repoRoot, "flows"),
 		defaultReviewFlows: (env.TOWER_REVIEW_FLOWS ?? "adversarial-review,solid-review").split(",").map((name) => name.trim()).filter(Boolean),
+		invariantSimulation: !["0", "false"].includes((env.TOWER_INVARIANT_SIMULATION ?? "").toLowerCase()),
 		prPollMs: Number(env.TOWER_PR_POLL_MS ?? 120_000),
 		maxCiFixAttempts: Number(env.TOWER_MAX_CI_FIX_ATTEMPTS ?? 2),
 		uiRequestTimeoutMs: Number(env.TOWER_UI_REQUEST_TIMEOUT_MS ?? 5 * 60_000),

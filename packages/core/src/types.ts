@@ -35,6 +35,8 @@ export interface Project {
 	stageConfig: StageConfigOverrides;
 	/** Review flows run after tests pass. null = Tower's default set; [] = none. */
 	reviewFlows: string[] | null;
+	/** Invariant simulation in planning and testing. null = Tower's default. */
+	invariantSimulation: boolean | null;
 	createdAt: number;
 }
 

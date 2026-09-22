@@ -16,6 +16,7 @@ function toProject(row: Row): Project {
 		concurrencyLimit: row.concurrency_limit as number,
 		stageConfig: JSON.parse(row.stage_config_json as string),
 		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
+		invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
 		createdAt: row.created_at as number,
 	};
 }
@@ -23,8 +24,8 @@ function toProject(row: Row): Project {
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
 		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, trust_project_pi,
-			extensions_json, concurrency_limit, stage_config_json, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -36,6 +37,7 @@ export function insertProject(db: Db, project: Project): void {
 		JSON.stringify(project.extensions),
 		project.concurrencyLimit,
 		JSON.stringify(project.stageConfig),
+		project.invariantSimulation == null ? null : project.invariantSimulation ? 1 : 0,
 		project.createdAt,
 	);
 }
@@ -49,13 +51,14 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "concurrencyLimit" | "reviewFlows">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", concurrencyLimit: "concurrency_limit" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, ...plain } = settings;
+	const { reviewFlows, invariantSimulation, ...plain } = settings;
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
+	if (invariantSimulation !== undefined) db.prepare("UPDATE projects SET invariant_simulation = ? WHERE id = ?").run(invariantSimulation == null ? null : invariantSimulation ? 1 : 0, id);
 	const keys = Object.keys(plain) as Array<keyof typeof SETTING_COLUMNS>;
 	if (keys.length > 0) {
 		const sets = keys.map((key) => `${SETTING_COLUMNS[key]} = ?`).join(", ");

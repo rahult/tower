@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 import { api } from "../api/client.ts";
 import { button, field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; concurrencyLimit: number; reviewFlows: string[] | null };
+type Settings = { setupCommand: string; verifyCommand: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null };
 
 /** Verify and setup commands, review flows and the concurrency cap. Shared by the board lane and the Projects view. */
 export function ProjectSettings({ project, onDone }: { project: Project; onDone: () => void }) {
@@ -14,7 +14,9 @@ export function ProjectSettings({ project, onDone }: { project: Project; onDone:
 	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
 	const [reviewFlows, setReviewFlows] = useState<string[] | null>(project.reviewFlows);
 	const chosen = reviewFlows ?? flows.data?.defaults ?? [];
-	const save = useMutation({ mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, concurrencyLimit, reviewFlows }), onSuccess: onDone });
+	const daemonSettings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+	const [invariantSimulation, setInvariantSimulation] = useState<boolean | null>(project.invariantSimulation);
+	const save = useMutation({ mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, concurrencyLimit, reviewFlows, invariantSimulation }), onSuccess: onDone });
 	return (
 		<form
 			onSubmit={(event: FormEvent) => {
@@ -53,6 +55,21 @@ export function ProjectSettings({ project, onDone }: { project: Project; onDone:
 					))}
 				</div>
 			</fieldset>
+			<label className="block font-semibold">
+				Invariant simulation
+				<span className="block text-[13px] font-normal text-slate">
+					Planning models the work as domains, actors and invariants before code exists; testing verifies each invariant and reports a per-invariant verdict. The invariant-simulation flow stays available from a card's drawer either way.
+				</span>
+				<select
+					value={invariantSimulation === null ? "default" : invariantSimulation ? "on" : "off"}
+					onChange={(event) => setInvariantSimulation(event.target.value === "default" ? null : event.target.value === "on")}
+					className={`mt-1 ${field}`}
+				>
+					<option value="default">Tower default{daemonSettings.data ? ` (${daemonSettings.data.invariantSimulation ? "on" : "off"})` : ""}</option>
+					<option value="on">On for this project</option>
+					<option value="off">Off for this project</option>
+				</select>
+			</label>
 			<label className="block font-semibold">
 				Cards at once
 				<span className="block text-[13px] font-normal text-slate">How many of this project's cards may run at the same time. Each runs in its own worktree.</span>

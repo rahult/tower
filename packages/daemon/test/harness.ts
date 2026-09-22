@@ -229,6 +229,23 @@ export function testerTurn(): FakeTurn {
 	};
 }
 
+/** A scripted invariant-simulation step: writes its model report and a verdict. */
+export function simulationTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Model and scenarios written.", thinking: "", toolCalls: [] } }],
+		effect: ({ spec, prompt }) => {
+			const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+			const invariants = ["- **INV-1** — a retried request never produces a duplicate side effect.", "- **INV-2** — backoff delays never exceed the caller's timeout budget."].join("\n");
+			const finding =
+				verdict === "fail"
+					? "## Retries ignore idempotency\n\n**Severity: blocking.** `src/http/client.ts:42` — the model replays `POST /payouts` on timeout: the payout happens twice. Refinement: retry only idempotent methods.\n"
+					: "Nothing blocking. Two should-fix notes on actor ordering.\n";
+			if (report) writeFileSync(report, `# Invariant simulation\n\n## Invariants\n\n${invariants}\n\n## Findings\n\n${finding}\n## Test targets\n\n${invariants}`);
+			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
+		},
+	};
+}
+
 const CLEAR_REVIEW = "The change is small and follows the conventions around it. Nothing here will cost the next person.\n";
 
 const BLOCKING_REVIEW = [

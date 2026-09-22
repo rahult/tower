@@ -31,7 +31,7 @@ describe("renderPrompt", () => {
 				planPath: "/card/plan.md",
 				resultPath: "/card/stage-result.json",
 			},
-			{ "stage-result-contract": readFileSync(join(prompts, "partials", "stage-result-contract.md"), "utf8") },
+			{ "stage-result-contract": readFileSync(join(prompts, "partials", "stage-result-contract.md"), "utf8"), "invariant-protocol": "" },
 		);
 		expect(out).not.toMatch(/\{\{/);
 		expect(out).toContain("/card/plan.md");

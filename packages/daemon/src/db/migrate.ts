@@ -99,6 +99,10 @@ const MIGRATIONS: string[] = [
 	-- Review flows a project runs after its tests pass. NULL means Tower's default set.
 	ALTER TABLE projects ADD COLUMN review_flows_json TEXT;
 	`,
+	`
+	-- Invariant simulation in planning and testing. NULL means Tower's default.
+	ALTER TABLE projects ADD COLUMN invariant_simulation INTEGER;
+	`,
 ];
 
 export function migrate(db: DatabaseSync): void {

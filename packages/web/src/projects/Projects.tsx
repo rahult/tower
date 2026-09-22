@@ -89,6 +89,10 @@ function ProjectPanel({ project, cards, spend, onOpen, onAddWork, onConfigure }:
 					<dt className="w-16 shrink-0 text-slate">Reviews</dt>
 					<dd className="min-w-0 truncate text-ink">{project.reviewFlows?.length === 0 ? "none" : (project.reviewFlows?.join(", ").replaceAll("-", " ") ?? "Tower's default set")}</dd>
 				</div>
+				<div className="flex items-baseline gap-2">
+					<dt className="w-16 shrink-0 text-slate">Invariants</dt>
+					<dd className="min-w-0 truncate text-ink">{project.invariantSimulation == null ? "Tower's default" : project.invariantSimulation ? "on" : "off"}</dd>
+				</div>
 				{spend !== undefined && (
 					<div className="flex items-baseline gap-2">
 						<dt className="w-16 shrink-0 text-slate">Spent</dt>

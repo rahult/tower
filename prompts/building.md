@@ -13,6 +13,8 @@ Implement the plan at the absolute path `{{planPath}}`. Read it first; it was wr
 3. Commit your work on this branch with clear commit messages. Do not push, and do not switch branches.
 4. If the plan is wrong or impossible, do not improvise a different feature: report `blocked` with what you found.
 
+{{> invariant-protocol}}
+
 {{feedbackSection}}
 
 {{> stage-result-contract}}

@@ -15,6 +15,8 @@ This project has no configured verify command, so you decide whether the work is
 
 Report `pass` only if the checks pass and the change does what was asked. Report `fail` with a summary the builder can act on. Report `blocked` if you cannot test at all.
 
+{{> invariant-protocol}}
+
 {{feedbackSection}}
 
 {{> stage-result-contract}}
