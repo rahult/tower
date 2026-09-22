@@ -6,7 +6,6 @@ import { describeCard, isLive, needsYou, STAGE_LABEL } from "../board/status.ts"
 import { ConfirmButton, ErrorNote, TrayHeading, useElapsed, usePastDelay } from "../app/bits.tsx";
 import { NewProjectForm } from "../app/quickadd.tsx";
 import { button, field } from "../ui.ts";
-import { QuestionsPanel } from "../card/QuestionsPanel.tsx";
 
 interface FocusProps {
 	projects: Project[];
@@ -241,10 +240,21 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 				/>
 			) : null;
 	} else if (asked) {
-		// The questions render right here, so the only button needed is a quiet way into the full card.
+		// One answering surface: the drawer's Decision tab. This row only previews the questions, so a pick here
+		// can never silently disagree with the form the reader actually sends.
 		context = card.needsAttentionReason ?? `The agent stopped to ask ${asked.length === 1 ? "a question" : `${asked.length} questions`}.`;
-		actions = <RowButton onClick={openRow}>Open</RowButton>;
-		expand = <QuestionsPanel cardId={card.id} summary={null} questions={asked} className="mt-2 max-h-[26rem] overflow-y-auto rounded-md border border-caution/50 bg-sheet" />;
+		actions = (
+			<RowButton kind="primary" onClick={openRow}>
+				Answer
+			</RowButton>
+		);
+		expand = (
+			<ol className="flex list-decimal flex-col gap-1 pl-5 text-[14px] text-ink/80">
+				{asked.map((q) => (
+					<li key={q.question}>{q.question}</li>
+				))}
+			</ol>
+		);
 	} else if (card.status === "abandoned") {
 		context = card.needsAttentionReason ?? "This card was abandoned and went no further. Running it again starts a fresh session on the same branch.";
 		actions = (

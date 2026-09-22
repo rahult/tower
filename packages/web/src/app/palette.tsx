@@ -66,10 +66,18 @@ export function Palette({ cards, projectNames, actions, onClose }: { cards: Card
 		return items.filter((item) => `${item.label} ${item.hint ?? ""}`.toLowerCase().includes(q));
 	}, [items, query]);
 
-	useEffect(() => setPicked(0), [query]);
-	useEffect(() => input.current?.focus(), []);
+	// Block bodies on purpose: an arrow-body effect returns whatever its last expression evaluates to, and
+	// React calls that return value as a cleanup on unmount — a non-function there whites out the page.
+	useEffect(() => {
+		setPicked(0);
+	}, [query]);
+	useEffect(() => {
+		input.current?.focus();
+	}, []);
 	// Keep the choice in view when the arrows move it.
-	useEffect(() => list.current?.children[picked]?.scrollIntoView({ block: "nearest" }), [picked]);
+	useEffect(() => {
+		list.current?.children[picked]?.scrollIntoView({ block: "nearest" });
+	}, [picked]);
 
 	const runPicked = (index: number) => {
 		const item = matches[index];
@@ -89,6 +97,9 @@ export function Palette({ cards, projectNames, actions, onClose }: { cards: Card
 			event.preventDefault();
 			runPicked(picked);
 		} else if (event.key === "Escape") {
+			// The drawer listens for Escape on the window to close itself. Once this palette has unmounted, its
+			// "is a dialog open?" guard passes — so without stopping the event here, one Escape closes both.
+			event.nativeEvent.stopPropagation();
 			onClose();
 		}
 	};
