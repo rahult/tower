@@ -1,5 +1,5 @@
 import type { Card } from "@tower/core";
-import { describeCard, type Tone } from "../board/status.ts";
+import { describeCard } from "../board/status.ts";
 
 const KEY = "tower-notify";
 
@@ -31,7 +31,10 @@ export async function enableNotifications(): Promise<boolean> {
 			return false;
 		}
 	}
-	return setNotifyEnabled(true);
+	const on = setNotifyEnabled(true);
+	// One ping right away, so turning the bell on visibly does something.
+	if (on) ping("Tower: notifications on", "You'll get one of these here whenever a card needs you while this tab is hidden.");
+	return on;
 }
 
 let openCard: ((cardId: string) => void) | null = null;
@@ -39,29 +42,52 @@ export function setNotifyOpener(fn: (cardId: string) => void): void {
 	openCard = fn;
 }
 
+/** Cards already pinged during this stretch with the tab hidden, so steady amber does not nag. */
+const pinged = new Set<string>();
+
 /**
- * Fired from App as the board changes: a card that has just turned amber gets a system notification,
- * but only while the tab is hidden — on a visible board the board itself is the notification.
- * `seen` is the caller's persistent map of the previous tone per card.
+ * Fired from App as the board changes and again whenever the tab hides: while the tab is hidden and
+ * notifications are on, every card that needs you gets one ping until it is handled. On a visible
+ * board the board itself is the notification.
  */
-export function announceAttention(cards: Card[], seen: Map<string, Tone>, on: boolean): void {
+export function announceAttention(cards: Card[], on: boolean): void {
+	if (!on || document.visibilityState !== "hidden") {
+		pinged.clear();
+		return;
+	}
+	for (const card of duePings(cards, pinged)) {
+		ping(`Tower: ${card.title}`, card.needsAttentionReason || describeCard(card).status, card.id);
+	}
+}
+
+/**
+ * Which of these cards should ping right now, updating `pinged` in place: every card that needs you
+ * which has not pinged during this hidden stretch. A card that no longer needs you re-arms, so it
+ * pings again if it comes back needing you.
+ */
+export function duePings(cards: Card[], pinged: Set<string>): Card[] {
+	const due: Card[] = [];
 	for (const card of cards) {
-		const tone = describeCard(card).tone;
-		const before = seen.get(card.id);
-		seen.set(card.id, tone);
-		if (!on || !before || before === tone || tone !== "caution" || document.visibilityState !== "hidden") continue;
-		try {
-			const notice = new Notification(`Tower: ${card.title}`, {
-				body: card.needsAttentionReason || describeCard(card).status,
-				tag: `tower-${card.id}`,
-			});
-			notice.onclick = () => {
-				window.focus();
-				openCard?.(card.id);
-				notice.close();
-			};
-		} catch {
-			// Some browsers construct Notification lazily; a missed ping is not an error worth breaking on.
+		if (describeCard(card).tone !== "caution") {
+			pinged.delete(card.id);
+			continue;
 		}
+		if (pinged.has(card.id)) continue;
+		pinged.add(card.id);
+		due.push(card);
+	}
+	return due;
+}
+
+function ping(title: string, body: string, cardId?: string): void {
+	try {
+		const notice = new Notification(title, { body, tag: cardId ? `tower-${cardId}` : "tower" });
+		notice.onclick = () => {
+			window.focus();
+			if (cardId) openCard?.(cardId);
+			notice.close();
+		};
+	} catch {
+		// Some browsers construct Notification lazily; a missed ping is not an error worth breaking on.
 	}
 }

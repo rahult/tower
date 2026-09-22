@@ -1,13 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api/client.ts";
 import { type Connection, useConnection, useEventStream } from "./api/stream.ts";
-import { type Tone, isLive, needsYou } from "./board/status.ts";
+import { isLive, needsYou } from "./board/status.ts";
 import { Modal } from "./app/bits.tsx";
 import { Palette, useShortcuts } from "./app/palette.tsx";
 import { announceAttention, enableNotifications, notifyEnabled, setNotifyEnabled, setNotifyOpener } from "./app/notifications.ts";
 import { QuickAdd } from "./app/quickadd.tsx";
 import { useRoute, type View } from "./app/route.ts";
+import { setTabUrgency } from "./app/tab.ts";
 import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
@@ -46,15 +47,20 @@ export function App() {
 	const titles = useMemo(() => new Map(cards.map((card) => [card.id, card.title])), [cards]);
 
 	// A pinned tab should say what the board wants, without being opened.
-	useEffect(() => {
-		document.title = waiting > 0 ? `Tower — ${waiting} need${waiting === 1 ? "s" : ""} you` : "Tower";
-	}, [waiting]);
+	useEffect(() => setTabUrgency(waiting), [waiting]);
 
-	// System notifications for cards that turn amber while the tab is hidden.
+	// System notifications: while the tab is hidden, every card that needs you pings once.
 	const queryClient = useQueryClient();
-	const seen = useRef(new Map<string, Tone>());
 	useEffect(() => {
-		announceAttention(cards, seen.current, notify);
+		announceAttention(cards, notify);
+	}, [cards, notify]);
+	useEffect(() => {
+		if (!notify) return;
+		const announce = () => {
+			if (document.hidden) announceAttention(cards, true);
+		};
+		document.addEventListener("visibilitychange", announce);
+		return () => document.removeEventListener("visibilitychange", announce);
 	}, [cards, notify]);
 	useEffect(() => {
 		setNotifyOpener(openCard);
