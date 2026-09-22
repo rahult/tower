@@ -111,6 +111,9 @@ const MIGRATIONS: string[] = [
 	`,
 ];
 
+/** The schema version a fully migrated database carries (PRAGMA user_version). */
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
 export function migrate(db: DatabaseSync): void {
 	const current = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
 	// A real upgrade (not a fresh database) is worth announcing: it is the moment an update touches live data.

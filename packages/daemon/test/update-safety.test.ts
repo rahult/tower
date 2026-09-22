@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, onTestFinished } from "vitest";
 import { bootHarness, byStage, type Harness } from "./harness.ts";
+import { SCHEMA_VERSION } from "../src/db/migrate.ts";
 import { openDb } from "../src/db/open.ts";
 import { getProject, updateProject } from "../src/db/repo-projects.ts";
 
@@ -39,7 +40,8 @@ describe("updating while jobs are in play", () => {
 
 		const db = openDb(join(dir, "tower.sqlite"));
 		onTestFinished(() => db.close());
-		expect((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(6);
+		// The fixture is one version back; migrating takes it to whatever "current" is, whenever this test runs.
+		expect((db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(SCHEMA_VERSION);
 		const project = getProject(db, "oldpro1");
 		expect(project).toMatchObject({ name: "older", verifyCommand: "pnpm test", reviewFlows: null, invariantSimulation: null });
 		// The new setting works on the migrated row, in both directions.
