@@ -1,6 +1,7 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
-import { api } from "../api/client.ts";
+import type { Project } from "@tower/core";
+import { type Preview, api } from "../api/client.ts";
 import { button, field, monoField } from "../ui.ts";
 
 const KINDS = [
@@ -11,8 +12,20 @@ const KINDS = [
 ] as const;
 type Kind = (typeof KINDS)[number]["kind"];
 
-/** Run something against this card on demand. The card keeps its place; the run shows up under Session. */
-export function RunPanel({ cardId, busy, onStarted }: { cardId: string; busy: boolean; onStarted: () => void }) {
+/**
+ * Run something against this card on demand. The card keeps its place; runs show up under Session.
+ * On top of the agent runs sit the hands-on controls: the project's tests, and a preview to click through.
+ */
+export function RunPanel({ cardId, project, bench, busy, onStarted }: { cardId: string; project: Project | undefined; bench: Preview | undefined; busy: boolean; onStarted: () => void }) {
+	const queryClient = useQueryClient();
+	const refreshCard = () => void queryClient.invalidateQueries({ queryKey: ["card", cardId] });
+	const tests = useMutation({ mutationFn: () => api.runTests(cardId), onSuccess: onStarted });
+	const preview = useMutation({ mutationFn: () => (bench?.running ? api.stopPreview(cardId) : api.startPreview(cardId)), onSuccess: refreshCard });
+	// A test run takes the card's one run lease, so it waits for a session; a preview never takes one.
+	const testDisabled = busy || tests.isPending;
+	const previewBusy = preview.isPending;
+	const testReady = !!project?.testCommand;
+	const previewReady = !!project?.previewCommand;
 	const [kind, setKind] = useState<Kind>("flow");
 	const [name, setName] = useState("");
 	const [text, setText] = useState("");
@@ -39,6 +52,63 @@ export function RunPanel({ cardId, busy, onStarted }: { cardId: string; busy: bo
 			}}
 			className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto bg-sheet p-4"
 		>
+			<section aria-label="Hands on" className="flex flex-col gap-4 rounded-lg border border-rule bg-wash/50 p-4">
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+					<div className="min-w-0 flex-1">
+						<h3 className="font-semibold">Hands on</h3>
+						<p className="text-[13px] text-slate">
+							{testReady ? (
+								<>
+									Run <span className="font-mono">{project?.testCommand}</span> in this card's worktree. The output streams under Session; it never passes or fails the card.
+								</>
+							) : (
+								<>No test command is set for {project?.name ?? "this project"} — add one in its project settings.</>
+							)}
+						</p>
+					</div>
+					<button type="button" disabled={!testReady || testDisabled} onClick={() => tests.mutate()} className={button.primary}>
+						{tests.isPending ? "Starting…" : "Run tests"}
+					</button>
+					{tests.error && <span className="text-[13px] text-danger">{tests.error.message}</span>}
+				</div>
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-rule pt-4">
+					<div className="min-w-0 flex-1">
+						<h3 className="font-semibold">Preview</h3>
+						<p className="text-[13px] text-slate">
+							{!previewReady ? (
+								<>No preview command is set for {project?.name ?? "this project"} — add one in its project settings.</>
+							) : bench?.running ? (
+								<>
+									<span className="mr-1.5 inline-block size-2 rounded-full bg-ok align-middle" aria-hidden />
+									Running <span className="font-mono">{bench.command}</span> against this card's branch
+									{bench.url ? (
+										<>
+											{" "}
+											at <a href={bench.url} target="_blank" rel="noreferrer noopener" className="font-semibold text-primary underline underline-offset-4">{bench.url}</a>
+										</>
+									) : null}
+									.
+								</>
+							) : (
+								<>
+									Starts <span className="font-mono">{project?.previewCommand}</span> in this card's worktree{project?.previewUrl ? `, serving ${project.previewUrl}` : ""}.
+								</>
+							)}
+						</p>
+					</div>
+					{bench?.running ? (
+						<button type="button" disabled={previewBusy} onClick={() => preview.mutate()} className={button.quiet}>
+							{previewBusy ? "Stopping…" : "Stop preview"}
+						</button>
+					) : (
+						<button type="button" disabled={!previewReady || previewBusy} onClick={() => preview.mutate()} className={button.primary}>
+							{previewBusy ? "Starting…" : "Start preview"}
+						</button>
+					)}
+					{preview.error && <span className="text-[13px] text-danger">{preview.error.message}</span>}
+				</div>
+			</section>
+
 			<fieldset className="flex flex-wrap gap-1.5">
 				<legend className="mb-2 font-semibold">What to run</legend>
 				{KINDS.map((option) => (

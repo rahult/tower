@@ -75,7 +75,7 @@ const driver = new FakeSessionDriver((spec) => {
 });
 const titles = new Map<string, string>();
 
-const daemon = await startDaemon(loadConfig({ TOWER_HOME: join(root, "home"), TOWER_PORT: "4720", TOWER_MAX_CONCURRENT: "3" }), driver);
+const daemon = await startDaemon(loadConfig({ TOWER_HOME: join(root, "home"), TOWER_PORT: process.env.TOWER_PORT ?? "4720", TOWER_MAX_CONCURRENT: "3" }), driver);
 const api = async (method: string, path: string, body?: unknown): Promise<any> =>
 	(await fetch(`${daemon.url}${path}`, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined })).json();
 
@@ -96,7 +96,14 @@ const seed: Record<string, Array<[title: string, brief: string, advance: "backlo
 
 for (const [name, cards] of Object.entries(seed)) {
 	const project = await api("POST", "/api/projects", { repoPath: repo(name) });
-	if (name !== "freeup") await api("PATCH", `/api/projects/${project.id}`, { verifyCommand: name === "axiom" ? "true" : "", concurrencyLimit: 2 });
+	if (name !== "freeup")
+		await api("PATCH", `/api/projects/${project.id}`, {
+			verifyCommand: name === "axiom" ? "true" : "",
+			concurrencyLimit: 2,
+			// Hands-on commands, so the Run tab has something to show on the demo board.
+			...(name === "axiom" ? { testCommand: 'echo "12 passed, 0 failed"; echo "covering 34 invariants"' } : {}),
+			...(name === "remembero" ? { previewCommand: "python3 -m http.server 8899", previewUrl: "http://localhost:8899" } : {}),
+		});
 	for (const [title, brief, advance] of cards) {
 		const card = await api("POST", "/api/cards", { projectId: project.id, title, brief });
 		titles.set(card.id, title);

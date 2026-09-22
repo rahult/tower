@@ -104,7 +104,8 @@ export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): Us
 			`SELECT ${key} AS key, count(*) AS runs,
 				coalesce(sum(json_extract(r.tokens_json, '$.total')), 0) AS tokens, coalesce(sum(r.cost_usd), 0) AS costUsd
 			 FROM stage_runs r JOIN cards c ON c.id = r.card_id
-			 WHERE r.kind != 'verify' GROUP BY ${key} ORDER BY tokens DESC`,
+			 -- Usage counts model sessions only: daemon-run work (verify, a person's test runs) spends no tokens.
+			 WHERE r.kind IN ('stage', 'flow_step', 'adhoc') GROUP BY ${key} ORDER BY tokens DESC`,
 		)
 		.all() as unknown as UsageRow[];
 }

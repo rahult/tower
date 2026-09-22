@@ -2,6 +2,7 @@ import { type ServerType, serve } from "@hono/node-server";
 import type { AddressInfo } from "node:net";
 import type { Config } from "./config.ts";
 import { paths } from "./config.ts";
+import { BenchRunner } from "./bench.ts";
 import { openDb } from "./db/open.ts";
 import { Bus } from "./events/bus.ts";
 import { createApp } from "./http/server.ts";
@@ -37,7 +38,8 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	});
 	const flows = new FlowRunner({ config, db, stages });
 	orchestrator = new Orchestrator({ config, db, bus, runs, stages, flows });
-	const app = createApp({ config, db, bus, runs, stages, orchestrator });
+	const bench = new BenchRunner({ config, db, bus, runs });
+	const app = createApp({ config, db, bus, runs, stages, orchestrator, bench });
 	// Whatever the previous process left in flight is interrupted; queued work carries on.
 	orchestrator.recover();
 	orchestrator.watchPullRequests();
@@ -53,6 +55,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 		pollPullRequests: () => orchestrator.pollPullRequests(),
 		async close() {
 			orchestrator.beginShutdown();
+			bench.beginShutdown();
 			await runs.stopAll();
 			await orchestrator.whenIdle();
 			await new Promise<void>((resolve) => {

@@ -103,6 +103,12 @@ const MIGRATIONS: string[] = [
 	-- Invariant simulation in planning and testing. NULL means Tower's default.
 	ALTER TABLE projects ADD COLUMN invariant_simulation INTEGER;
 	`,
+	`
+	-- Hands-on commands, run from a card on a person's say-so: tests and a dev-server preview.
+	ALTER TABLE projects ADD COLUMN test_command TEXT;
+	ALTER TABLE projects ADD COLUMN preview_command TEXT;
+	ALTER TABLE projects ADD COLUMN preview_url TEXT;
+	`,
 ];
 
 export function migrate(db: DatabaseSync): void {

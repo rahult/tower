@@ -192,7 +192,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 				) : activeTab === "changes" ? (
 					<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
 				) : activeTab === "run" ? (
-					<RunPanel cardId={card.id} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
+					<RunPanel cardId={card.id} project={project} bench={detail.data.bench.preview} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
 				) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
 					<GatePanel cardId={card.id} gate={pendingGate} />
 				) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (
@@ -204,7 +204,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 						<RunsRail runs={runs} picked={run.id} onPick={setPickedRunId} />
 						<RunSummary run={run} />
 						<Transcript blocks={blocks} live={live} runId={run.id} />
-						{live && run.kind !== "verify" && <SteerBox cardId={card.id} />}
+						{live && run.kind !== "verify" && run.kind !== "test" && <SteerBox cardId={card.id} />}
 					</>
 				) : (
 					<p className="p-4 text-[14px] text-slate">No session has run for this card yet. Start it from the Focus view to plan it.</p>
@@ -258,6 +258,7 @@ function RunsRail({ runs, picked, onPick }: { runs: StageRun[]; picked: string; 
 
 function runLabel(run: StageRun): string {
 	if (run.kind === "verify") return "your checks";
+	if (run.kind === "test") return `your tests${run.attempt > 1 ? ` ${run.attempt}×` : ""}`;
 	if (run.kind === "flow_step") return run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, "").replaceAll("-", " ");
 	if (run.kind === "stage") return `${run.stage}${run.attempt > 1 ? ` ${run.attempt}×` : ""}`;
 	return run.id.replace(/^c[^-]+-/, "").replaceAll("-", " ");
@@ -272,9 +273,9 @@ function RunSummary({ run }: { run: StageRun }) {
 	return (
 		<div className="shrink-0 border-b border-rule bg-sheet px-4 py-2 text-[13px] text-slate">
 			<p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-				{run.kind === "verify" ? (
+				{run.kind === "verify" || run.kind === "test" ? (
 					<span>
-						Verify command <span className="font-mono text-ink">{run.model}</span>
+						{run.kind === "verify" ? "Verify command" : "Test command"} <span className="font-mono text-ink">{run.model}</span>
 					</span>
 				) : (
 					<span>

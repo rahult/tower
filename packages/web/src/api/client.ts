@@ -19,11 +19,20 @@ export interface Gate {
 	feedback: string | null;
 }
 
+/** The dev-server preview of a card, if one is running. In-memory state; it does not survive a daemon restart. */
+export interface Preview {
+	running: boolean;
+	command: string | null;
+	url: string | null;
+	startedAt: number | null;
+}
+
 export interface CardDetail {
 	card: Card;
 	runs: StageRun[];
 	gates: Gate[];
 	artifacts: Artifact[];
+	bench: { preview: Preview };
 }
 
 export interface StageModel {
@@ -89,7 +98,7 @@ export const api = {
 	saveSettings: (models: Record<string, { model: string; thinking: string } | null>) => request<Settings>("PUT", "/api/settings", { models }),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
-	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
+	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),
@@ -99,4 +108,7 @@ export const api = {
 		request<Card>("POST", `/api/cards/${cardId}/gates/${gateId}`, { decision, feedback }),
 	steer: (cardId: string, text: string) => request<{ ok: true }>("POST", `/api/cards/${cardId}/steer`, { text }),
 	abort: (cardId: string) => request<{ ok: true }>("POST", `/api/cards/${cardId}/abort`),
+	runTests: (cardId: string) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/test`),
+	startPreview: (cardId: string) => request<Preview>("POST", `/api/cards/${cardId}/preview`),
+	stopPreview: (cardId: string) => request<Preview>("DELETE", `/api/cards/${cardId}/preview`),
 };
