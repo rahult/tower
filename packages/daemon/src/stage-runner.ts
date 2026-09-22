@@ -107,6 +107,10 @@ export class StageRunner {
 		const spec = this.buildSpec(card, project, stage, attempt, worktree.path);
 		// A build that repairs a failing pull request is told apart from ordinary builds by its session id.
 		if (options.fixingCi) spec.sessionId = `c${card.id}-cifix-${attempt}`;
+		const feedback = options.fixingCi && options.feedback ? `This work is already in a pull request, and its CI checks are failing. Fix the cause, commit, and do not weaken the checks.\n\n${options.feedback}` : options.feedback;
+		// Render before anything is spawned: a prompt that cannot render (new prompt files meeting an older
+		// daemon, say mid-update) must fail the run cleanly, not leave a spawned session undriven.
+		const prompt = this.renderStagePrompt(card, project, stage, worktree.path, worktree.branchName, worktree.baseCommit, feedback);
 		const run: StageRun = {
 			id: spec.sessionId,
 			cardId: card.id,
@@ -141,8 +145,6 @@ export class StageRunner {
 		this.patchRun(run.id, { status: "running" });
 		this.deps.onStarted(card.id);
 
-		const feedback = options.fixingCi && options.feedback ? `This work is already in a pull request, and its CI checks are failing. Fix the cause, commit, and do not weaken the checks.\n\n${options.feedback}` : options.feedback;
-		const prompt = this.renderStagePrompt(card, project, stage, worktree.path, worktree.branchName, worktree.baseCommit, feedback);
 		const work = this.drive(live, stage, prompt, cardDir).finally(() => this.inFlight.delete(run.id));
 		this.inFlight.set(run.id, work);
 		return getRun(db, run.id) as StageRun;
@@ -276,26 +278,33 @@ export class StageRunner {
 	}
 
 	private renderStagePrompt(card: Card, project: Project, stage: AgentStage, worktreePath: string, branchName: string, baseCommit: string, feedback?: string): string {
-		const { config } = this.deps;
-		const cardDir = paths.cardDir(config, card.id);
-		const read = (...parts: string[]) => readFileSync(join(config.promptsDir, ...parts), "utf8");
-		const partials: Record<string, string> = { "stage-result-contract": read("partials", "stage-result-contract.md") };
-		// The templates reference the block, so the key must always exist; simulation off leaves it empty.
-		partials["invariant-protocol"] = (project.invariantSimulation ?? config.invariantSimulation) ? this.invariantBlock(stage, join(cardDir, "reviews", "invariant-simulation.md"), baseCommit, read) : "";
-		return renderPrompt(
-			read(STAGE_SPECS[stage].promptFile),
-			{
-				title: card.title,
-				brief: card.brief || "(no further description)",
-				worktreePath,
-				branchName,
-				planPath: join(cardDir, "plan.md"),
-				reportPath: join(cardDir, "test-report.md"),
-				resultPath: join(cardDir, STAGE_RESULT_FILE),
-				feedbackSection: feedback ? `# Feedback on your previous attempt\n\n${feedback}` : "",
-			},
-			partials,
-		);
+		try {
+			const { config } = this.deps;
+			const cardDir = paths.cardDir(config, card.id);
+			const read = (...parts: string[]) => readFileSync(join(config.promptsDir, ...parts), "utf8");
+			const partials: Record<string, string> = { "stage-result-contract": read("partials", "stage-result-contract.md") };
+			// The templates reference the block, so the key must always exist; simulation off leaves it empty.
+			partials["invariant-protocol"] = (project.invariantSimulation ?? config.invariantSimulation) ? this.invariantBlock(stage, join(cardDir, "reviews", "invariant-simulation.md"), baseCommit, read) : "";
+			return renderPrompt(
+				read(STAGE_SPECS[stage].promptFile),
+				{
+					title: card.title,
+					brief: card.brief || "(no further description)",
+					worktreePath,
+					branchName,
+					planPath: join(cardDir, "plan.md"),
+					reportPath: join(cardDir, "test-report.md"),
+					resultPath: join(cardDir, STAGE_RESULT_FILE),
+					feedbackSection: feedback ? `# Feedback on your previous attempt\n\n${feedback}` : "",
+				},
+				partials,
+			);
+		} catch (error) {
+			// Reaching a person in this wording matters: the usual cause is updating Tower's files while the
+			// daemon still runs the previous version, which reads prompt templates from disk per run.
+			const reason = error instanceof Error ? error.message : String(error);
+			throw new Error(`The ${stage} prompt could not be rendered: ${reason}. If Tower was just updated, restart the daemon and retry the card.`);
+		}
 	}
 
 	/**

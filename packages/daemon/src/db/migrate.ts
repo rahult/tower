@@ -107,6 +107,8 @@ const MIGRATIONS: string[] = [
 
 export function migrate(db: DatabaseSync): void {
 	const current = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+	// A real upgrade (not a fresh database) is worth announcing: it is the moment an update touches live data.
+	if (current > 0 && current < MIGRATIONS.length) console.log(`database: applying ${MIGRATIONS.length - current} migration${MIGRATIONS.length - current === 1 ? "" : "s"} (version ${current} → ${MIGRATIONS.length})`);
 	for (let version = current; version < MIGRATIONS.length; version++) {
 		db.exec("BEGIN");
 		try {

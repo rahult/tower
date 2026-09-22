@@ -84,6 +84,15 @@ export class FlowRunner {
 			appendSystemPromptFiles.push(roleFile);
 		}
 
+		let prompt: string;
+		try {
+			prompt = this.prompt(card, step, options.flow ? join(cardDir, "reviews", `${label}.md`) : null);
+		} catch (error) {
+			// The usual cause is updating Tower's files while the daemon still runs the previous version.
+			const reason = error instanceof Error ? error.message : String(error);
+			throw new Error(`The "${label}" prompt could not be rendered: ${reason}. If Tower was just updated, restart the daemon and run it again.`);
+		}
+
 		return {
 			sessionId: `c${cardId}-${label}-${attempt}`,
 			kind: options.flow ? "flow_step" : "adhoc",
@@ -91,7 +100,7 @@ export class FlowRunner {
 			model,
 			thinking,
 			tools: agent?.tools?.length ? agent.tools : toolsFor(step.access ?? (options.flow ? "read-only" : "write")),
-			prompt: this.prompt(card, step, options.flow ? join(cardDir, "reviews", `${label}.md`) : null),
+			prompt,
 			appendSystemPromptFiles,
 			requireResult: options.requireResult,
 		};

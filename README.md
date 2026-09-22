@@ -33,6 +33,20 @@ pi clones the repository to `~/.pi/agent/git/github.com/rahult/tower` and instal
 
 > pi packages run with full access to your machine, and Tower runs coding agents that execute shell commands in your repositories. Read the source first.
 
+### Updating
+
+Pull the new version, then restart the daemon — the restart is the update, and it is safe with cards mid-flight:
+
+```sh
+pi install git:github.com/rahult/tower   # refreshes the installed clone
+```
+
+then `/tower stop` and `/tower` from any pi session.
+
+- Sessions caught mid-run come back as **interrupted**: **Resume** continues them in the same pi session with their history intact, and queued cards simply start. Open pull requests keep being watched.
+- Database changes are small additive migrations, applied at startup and announced in the daemon log; projects, cards and runs are kept.
+- If the daemon keeps running across the file update (the restart was skipped), a card that enters its next stage before the restart may fail once with a prompt error, because prompt templates are read from disk per run. Nothing is lost: the card asks for attention with that reason; restart the daemon and press **Retry**.
+
 ### Start using it
 
 Start pi **from a shell that has your provider API keys** (`ZAI_API_KEY`, `DEEPSEEK_API_KEY`, and so on). The daemon inherits that environment, and the sessions it spawns inherit it from the daemon. Providers you logged into with pi's `/login` work as usual.
