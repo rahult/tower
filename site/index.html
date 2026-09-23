@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="theme-color" content="#0a0d12" />
+		<meta name="theme-color" content="#f4f5f7" />
 		<title>Tower — the control tower for coding agents</title>
 		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: planning, building, testing, review, merge. The agents fly; you work the tower. Every decision that is yours lands on one amber row — one click each." />
 		<meta property="og:title" content="Tower — the control tower for coding agents" />
@@ -11,9 +11,15 @@
 		<meta property="og:image" content="https://tower.rahultrikha.com/assets/tower.png" />
 		<meta property="og:url" content="https://tower.rahultrikha.com/" />
 		<meta name="twitter:card" content="summary_large_image" />
-		<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-		<link rel="preload" href="assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="stylesheet" href="styles.css" />
+	<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+	<link rel="preload" href="assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin />
+	<link rel="stylesheet" href="styles.css" />
+	<script>
+		// Apply the saved theme before first paint; light is the default.
+		try {
+			if (localStorage.getItem("tower-site-theme") === "night") document.documentElement.dataset.theme = "night";
+		} catch {}
+	</script>
 	</head>
 	<body>
 		<a class="skip" href="#main">Skip to content</a>
@@ -40,6 +46,7 @@
 					<a href="#replaces">What it replaces</a>
 					<a href="#how">How it works</a>
 					<a href="#install">Install</a>
+					<button type="button" id="theme-toggle" class="night-toggle" aria-label="Switch to the night theme">Night</button>
 					<a class="gh" href="https://github.com/rahult/tower">GitHub</a>
 				</nav>
 			</div>
@@ -50,7 +57,7 @@
 				<p class="eyebrow">The control tower for coding agents</p>
 				<h1 class="display">
 					<span class="line">The life cycle runs.</span>
-					<span class="line amber">You decide.</span>
+					<span class="line"><span class="amber">You decide.</span></span>
 				</h1>
 				<svg class="scope" viewBox="0 0 600 600" aria-hidden="true">
 					<g fill="none" stroke="currentColor" stroke-width="1">
@@ -59,10 +66,10 @@
 						<circle cx="300" cy="300" r="290" stroke-dasharray="2 7" opacity="0.18" />
 						<path d="M300 14 V586 M14 300 H586" opacity="0.1" />
 					</g>
-					<circle cx="394" cy="178" r="4.5" fill="#f2b23e" />
-					<circle cx="394" cy="178" r="11" fill="none" stroke="#f2b23e" opacity="0.4" />
-					<circle cx="178" cy="426" r="3.5" fill="#5b8def" />
-					<circle cx="452" cy="398" r="3" fill="#43b97f" opacity="0.8" />
+					<circle class="blip-amber" cx="394" cy="178" r="4.5" />
+					<circle class="blip-ring" cx="394" cy="178" r="11" />
+					<circle class="blip-blue" cx="178" cy="426" r="3.5" />
+					<circle class="blip-green" cx="452" cy="398" r="3" />
 				</svg>
 				<p class="lede">
 					Tower runs <a href="https://pi.dev">pi</a> coding-agent sessions across all your projects from one board — the whole life cycle, backlog to merged. A strong model

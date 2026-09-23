@@ -1,12 +1,8 @@
 /* ============================================================
-   TOWER — brand site. Night shift at the control tower.
-   One idea carries everything: the control tower for software.
-   - Night sky surface with a faint chart grid; amber is the only
-     glow, and it means one thing: needs you.
-   - Archivo's width axis gives the display voice (flight-deck
-     placards); IBM Plex Mono carries every system label.
-   - State colours are the product's own: amber needs you,
-     blue is working, green has landed.
+   TOWER — brand site. The control tower for coding agents.
+   One idea carries everything: the agents do the flying, amber
+   means you. Light (day tower) is the default theme; the night
+   shift is opt-in via the NIGHT toggle (html[data-theme="night"]).
    ============================================================ */
 
 @font-face {
@@ -29,26 +25,50 @@
 	font-display: swap;
 }
 
+/* ============================================================
+   1. Tokens — light is the default; night only overrides them.
+   ============================================================ */
 :root {
-	/* night palette */
-	--night: #0a0d12;
-	--panel: #10141b;
-	--panel-2: #151b24;
-	--rule: #222a35;
-	--rule-strong: #333e4d;
-	--ink: #e8edf2;
-	--muted: #9aa6b4;
-	--faint: #6b7887;
+	/* surfaces */
+	--sky: #f4f5f7;
+	--panel: #ffffff;
+	--panel-2: #f1f3f6;
+	--rule: #dfe3e8;
+	--rule-strong: #c9cfd7;
+
+	/* ink */
+	--ink: #111418;
+	--muted: #5b6470;
+	--faint: #8b93a0;
 
 	/* state colours — same semantics as the board */
-	--amber: #f2b23e;
-	--amber-deep: #ffc95e;
-	--amber-ink: #171004;
-	--amber-dim: #8a6a2a;
-	--blue: #5b8def;
-	--blue-deep: #86a8ff;
-	--green: #43b97f;
-	--red: #e5645c;
+	--amber: #e5a100;
+	--amber-deep: #c79000;
+	--amber-ink: #231a00;
+	--amber-text: #6f4c00; /* amber-meaning text on paper */
+	--amber-soft: #fff3d1;
+	--blue: #2f6fed;
+	--blue-text: #1d4fb8; /* links and working-state text */
+	--green: #1c7f4b;
+	--green-ink: #ffffff;
+
+	/* actions: the board's primary is blue; amber stays semantic */
+	--action-bg: #2f6fed;
+	--action-bg-hover: #1d4fb8;
+	--action-ink: #ffffff;
+	--action-glow: 0 1px 2px rgb(17 20 24 / 0.25);
+
+	/* atmosphere */
+	--grid-line: rgb(17 20 24 / 0.035);
+	--wash-amber: rgb(229 161 0 / 0.05);
+	--wash-blue: rgb(47 111 237 / 0.035);
+	--bar-bg: rgb(255 255 255 / 0.85);
+	--glow-amber: rgb(229 161 0 / 0.3);
+	--glow-dot: rgb(229 161 0 / 0.55);
+	--caution-inner: rgb(229 161 0 / 0.06);
+	--scope: #9aa6b4;
+	--shadow-panel: 0 1px 2px rgb(17 20 24 / 0.05), 0 16px 40px rgb(17 20 24 / 0.08);
+	--shadow-shot: 0 1px 2px rgb(17 20 24 / 0.06), 0 2px 10px rgb(17 20 24 / 0.06), 0 24px 64px rgb(17 20 24 / 0.12);
 
 	--sans: "Archivo", system-ui, sans-serif;
 	--mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -57,8 +77,52 @@
 	--r-control: 8px;
 	--r-panel: 14px;
 	--track: 0.18em;
+
+	color-scheme: light;
 }
 
+[data-theme="night"] {
+	--sky: #0a0d12;
+	--panel: #10141b;
+	--panel-2: #151b24;
+	--rule: #222a35;
+	--rule-strong: #333e4d;
+	--ink: #e8edf2;
+	--muted: #9aa6b4;
+	--faint: #6b7887;
+
+	--amber: #f2b23e;
+	--amber-deep: #ffc95e;
+	--amber-ink: #171004;
+	--amber-text: #f2b23e;
+	--amber-soft: rgb(242 178 62 / 0.12);
+	--blue: #5b8def;
+	--blue-text: #86a8ff;
+	--green: #43b97f;
+	--green-ink: #06170e;
+
+	--action-bg: #f2b23e;
+	--action-bg-hover: #ffc95e;
+	--action-ink: #171004;
+	--action-glow: 0 0 24px rgb(242 178 62 / 0.25);
+
+	--grid-line: rgb(232 237 242 / 0.022);
+	--wash-amber: rgb(242 178 62 / 0.07);
+	--wash-blue: rgb(91 141 239 / 0.05);
+	--bar-bg: rgb(10 13 18 / 0.82);
+	--glow-amber: rgb(242 178 62 / 0.35);
+	--glow-dot: rgb(242 178 62 / 0.8);
+	--caution-inner: rgb(242 178 62 / 0.05);
+	--scope: #6b7887;
+	--shadow-panel: 0 0 0 1px rgb(0 0 0 / 0.4), 0 16px 48px rgb(0 0 0 / 0.45);
+	--shadow-shot: 0 0 0 1px rgb(0 0 0 / 0.45), 0 2px 10px rgb(0 0 0 / 0.4), 0 32px 90px rgb(0 0 0 / 0.55);
+
+	color-scheme: dark;
+}
+
+/* ============================================================
+   2. Base
+   ============================================================ */
 *,
 *::before,
 *::after {
@@ -73,9 +137,9 @@ html {
 body {
 	margin: 0;
 	background:
-		radial-gradient(1100px 520px at 78% -8%, rgb(242 178 62 / 0.07), transparent 62%),
-		radial-gradient(900px 480px at 8% 6%, rgb(91 141 239 / 0.05), transparent 60%),
-		var(--night);
+		radial-gradient(1100px 520px at 78% -8%, var(--wash-amber), transparent 62%),
+		radial-gradient(900px 480px at 8% 6%, var(--wash-blue), transparent 60%),
+		var(--sky);
 	color: var(--ink);
 	font-family: var(--sans);
 	font-size: 1.0625rem;
@@ -88,10 +152,9 @@ body::before {
 	inset: 0;
 	pointer-events: none;
 	background-image:
-		linear-gradient(rgb(232 237 242 / 0.022) 1px, transparent 1px),
-		linear-gradient(90deg, rgb(232 237 242 / 0.022) 1px, transparent 1px);
+		linear-gradient(var(--grid-line) 1px, transparent 1px),
+		linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
 	background-size: 76px 76px;
-	mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
 	z-index: 0;
 }
 main,
@@ -117,9 +180,9 @@ main,
 }
 
 a {
-	color: var(--blue-deep);
+	color: var(--blue-text);
 	text-decoration: underline;
-	text-decoration-color: rgb(134 168 255 / 0.35);
+	text-decoration-color: color-mix(in srgb, var(--blue-text) 35%, transparent);
 	text-underline-offset: 0.2em;
 }
 a:hover {
@@ -174,7 +237,7 @@ pre {
 	position: sticky;
 	top: 0;
 	z-index: 20;
-	background: rgb(10 13 18 / 0.82);
+	background: var(--bar-bg);
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
 	border-bottom: 1px solid var(--rule);
@@ -245,8 +308,24 @@ pre {
 }
 .topnav a.gh:hover {
 	border-color: var(--amber);
-	background: rgb(242 178 62 / 0.08);
+	background: var(--amber-soft);
 	text-decoration: none;
+}
+.night-toggle {
+	border: 1px solid var(--rule-strong);
+	background: none;
+	color: var(--muted);
+	font-family: var(--mono);
+	font-size: 0.8125rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	padding: 0.35rem 0.9rem;
+	border-radius: 999px;
+	cursor: pointer;
+}
+.night-toggle:hover {
+	border-color: var(--amber);
+	color: var(--ink);
 }
 
 /* ============================================================
@@ -266,7 +345,7 @@ pre {
 	font-weight: 500;
 	letter-spacing: var(--track);
 	text-transform: uppercase;
-	color: var(--faint);
+	color: var(--muted);
 }
 .eyebrow::before {
 	content: "";
@@ -274,7 +353,7 @@ pre {
 	height: 0.55rem;
 	border-radius: 50%;
 	background: var(--amber);
-	box-shadow: 0 0 12px rgb(242 178 62 / 0.8);
+	box-shadow: 0 0 12px var(--glow-dot);
 	flex: none;
 }
 .eyebrow::after {
@@ -295,9 +374,17 @@ pre {
 .display .line {
 	display: block;
 }
+/* Day: ink with an amber highlighter sweep. Night: amber with the glow. */
 .display .amber {
+	color: var(--ink);
+	background: linear-gradient(transparent 60%, var(--amber-soft) 60%);
+	padding-inline: 0.08em;
+	margin-inline: -0.08em;
+}
+[data-theme="night"] .display .amber {
 	color: var(--amber);
-	text-shadow: 0 0 56px rgb(242 178 62 / 0.35);
+	background: none;
+	text-shadow: 0 0 56px var(--glow-amber);
 }
 .scope {
 	position: absolute;
@@ -305,9 +392,24 @@ pre {
 	right: -5rem;
 	width: min(44vw, 620px);
 	height: auto;
-	color: var(--faint);
+	color: var(--scope);
 	opacity: 0.55;
 	pointer-events: none;
+}
+.blip-amber {
+	fill: var(--amber);
+}
+.blip-ring {
+	fill: none;
+	stroke: var(--amber);
+	opacity: 0.4;
+}
+.blip-blue {
+	fill: var(--blue);
+}
+.blip-green {
+	fill: var(--green);
+	opacity: 0.8;
 }
 @media (max-width: 64rem) {
 	.scope {
@@ -330,7 +432,7 @@ pre {
 	border-radius: var(--r-control);
 	background: var(--panel);
 	overflow: hidden;
-	box-shadow: 0 0 0 1px rgb(0 0 0 / 0.4), 0 16px 48px rgb(0 0 0 / 0.45);
+	box-shadow: var(--shadow-panel);
 }
 .install code {
 	flex: 1;
@@ -348,8 +450,8 @@ pre {
 	flex: none;
 	border: 0;
 	border-left: 1px solid var(--rule);
-	background: var(--amber);
-	color: var(--amber-ink);
+	background: var(--action-bg);
+	color: var(--action-ink);
 	padding-inline: 1.1rem;
 	font: inherit;
 	font-size: 0.8125rem;
@@ -359,11 +461,11 @@ pre {
 	cursor: pointer;
 }
 .copy:hover {
-	background: var(--amber-deep);
+	background: var(--action-bg-hover);
 }
 .copy.done {
 	background: var(--green);
-	color: #06170e;
+	color: var(--green-ink);
 }
 .install + p {
 	margin-top: 1rem;
@@ -465,7 +567,7 @@ p {
 }
 .quiet:hover {
 	border-color: var(--amber);
-	color: var(--amber);
+	color: var(--amber-text);
 }
 
 .stream-demo {
@@ -477,7 +579,7 @@ p {
 	background: var(--panel);
 	border: 1px solid var(--rule);
 	border-radius: var(--r-panel);
-	box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35), 0 30px 80px rgb(0 0 0 / 0.45);
+	box-shadow: var(--shadow-panel);
 	overflow: hidden;
 }
 .console-head {
@@ -506,7 +608,6 @@ p {
 	height: 0.5rem;
 	border-radius: 50%;
 	background: var(--green);
-	box-shadow: 0 0 10px rgb(67 185 127 / 0.9);
 	animation: beacon 2.8s ease-in-out infinite;
 }
 .stream-demo section + section {
@@ -581,7 +682,7 @@ p {
 }
 .row.is-caution {
 	border-left-color: var(--amber);
-	box-shadow: inset 0 0 32px rgb(242 178 62 / 0.05);
+	box-shadow: inset 0 0 32px var(--caution-inner);
 }
 .row.is-working {
 	border-left-color: var(--blue);
@@ -600,11 +701,11 @@ p {
 	font-size: 0.8125rem;
 }
 .row .ctx .kind {
-	color: var(--amber);
+	color: var(--amber-text);
 	font-weight: 600;
 }
 .row.is-working .ctx .kind {
-	color: var(--blue-deep);
+	color: var(--blue-text);
 }
 .row .title {
 	margin: 0;
@@ -642,8 +743,8 @@ p {
 }
 .btn {
 	border: 1px solid transparent;
-	background: var(--amber);
-	color: var(--amber-ink);
+	background: var(--action-bg);
+	color: var(--action-ink);
 	font: inherit;
 	font-size: 0.8125rem;
 	font-weight: 700;
@@ -652,8 +753,8 @@ p {
 	cursor: pointer;
 }
 .btn:hover {
-	background: var(--amber-deep);
-	box-shadow: 0 0 24px rgb(242 178 62 / 0.25);
+	background: var(--action-bg-hover);
+	box-shadow: var(--action-glow);
 }
 .btn.ghost {
 	background: none;
@@ -663,7 +764,7 @@ p {
 .btn.ghost:hover {
 	border-color: var(--amber);
 	box-shadow: none;
-	color: var(--amber);
+	color: var(--amber-text);
 }
 
 .meter {
@@ -680,7 +781,6 @@ p {
 	inset: 0;
 	width: 40%;
 	background: var(--blue);
-	box-shadow: 0 0 12px rgb(91 141 239 / 0.8);
 	animation: sweep 1.6s linear infinite;
 }
 .elapsed {
@@ -779,7 +879,7 @@ p {
 	font-size: 0.875rem;
 	letter-spacing: 0.02em;
 	text-decoration: line-through;
-	text-decoration-color: var(--amber-dim);
+	text-decoration-color: var(--rule-strong);
 	text-decoration-thickness: 2px;
 	padding-top: 0.15rem;
 }
@@ -848,12 +948,11 @@ p {
 }
 .route li:nth-child(2)::before {
 	border-color: var(--amber);
-	color: var(--amber);
-	box-shadow: 0 0 18px rgb(242 178 62 / 0.18);
+	color: var(--amber-text);
 }
 .route li:nth-child(3)::before {
 	border-color: var(--blue);
-	color: var(--blue-deep);
+	color: var(--blue-text);
 }
 .route li:nth-child(4)::before {
 	border-color: var(--green);
@@ -868,7 +967,7 @@ p {
 }
 
 /* ============================================================
-   Figures — the product on the wall of monitors
+   Figures — the product framed on the wall
    ============================================================ */
 .shot {
 	margin-block: clamp(1.25rem, 4vw, 3rem);
@@ -879,10 +978,7 @@ p {
 	height: auto;
 	border: 1px solid var(--rule-strong);
 	border-radius: var(--r-panel);
-	box-shadow:
-		0 0 0 1px rgb(0 0 0 / 0.45),
-		0 2px 10px rgb(0 0 0 / 0.4),
-		0 32px 90px rgb(0 0 0 / 0.55);
+	box-shadow: var(--shadow-shot);
 }
 .shot figcaption {
 	margin-top: 0.8rem;
@@ -898,7 +994,7 @@ p {
 	font-weight: 500;
 	letter-spacing: var(--track);
 	text-transform: uppercase;
-	color: var(--amber);
+	color: var(--amber-text);
 	margin: 0 0 0.6rem;
 }
 
@@ -923,7 +1019,7 @@ p {
 	padding-right: 1.5rem;
 	font-weight: 400;
 	white-space: nowrap;
-	color: var(--amber);
+	color: var(--amber-text);
 	font-family: var(--mono);
 	font-size: 0.875rem;
 }
@@ -948,14 +1044,14 @@ p {
 
 .caution {
 	border-left: 3px solid var(--amber);
-	background: rgb(242 178 62 / 0.07);
+	background: var(--amber-soft);
 	color: var(--muted);
 	padding: 0.8rem 1rem;
 	border-radius: 0 var(--r-control) var(--r-control) 0;
 	max-width: 46rem;
 }
 .caution a {
-	color: var(--blue-deep);
+	color: var(--blue-text);
 }
 
 pre {

@@ -1,6 +1,28 @@
 // A small simulation of the stream. It follows the real card lifecycle: plan, wait for approval, build,
 // verify, review, wait for approval again, done. The demo answers its own questions; nothing leaves the page.
 (() => {
+	// Night toggle: light is the default; the choice persists across visits.
+	const themeButton = document.getElementById("theme-toggle");
+	const syncThemeButton = () => {
+		const night = document.documentElement.dataset.theme === "night";
+		themeButton.textContent = night ? "Day" : "Night";
+		themeButton.setAttribute("aria-label", night ? "Switch to the day theme" : "Switch to the night theme");
+	};
+	if (themeButton) {
+		themeButton.addEventListener("click", () => {
+			const night = document.documentElement.dataset.theme === "night";
+			if (night) delete document.documentElement.dataset.theme;
+			else document.documentElement.dataset.theme = "night";
+			try {
+				localStorage.setItem("tower-site-theme", night ? "day" : "night");
+			} catch {
+				// Storage refused; the choice lasts for this visit.
+			}
+			syncThemeButton();
+		});
+		syncThemeButton();
+	}
+
 	// Copy buttons: hand over the install command, confirm for a beat, then stand down.
 	for (const button of document.querySelectorAll("button.copy[data-copy]")) {
 		button.addEventListener("click", async () => {
