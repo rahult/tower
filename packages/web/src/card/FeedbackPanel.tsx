@@ -10,10 +10,12 @@ interface FeedbackPanelProps {
 	gate: Gate;
 	runs: StageRun[];
 	artifacts: Artifact[];
+	/** No origin remote, so approving merges the branch locally instead of opening a pull request. */
+	mergesLocally?: boolean;
 }
 
-/** The last human decision before a pull request: what the checks said, what the reviewers found, then approve or send back. */
-export function FeedbackPanel({ cardId, gate, runs, artifacts }: FeedbackPanelProps) {
+/** The last human decision before the finish line: what the checks said, what the reviewers found, then approve or send back. */
+export function FeedbackPanel({ cardId, gate, runs, artifacts, mergesLocally }: FeedbackPanelProps) {
 	const [feedback, setFeedback] = useState("");
 	const reports = artifacts.filter((artifact) => artifact.name.startsWith("reviews/"));
 	const contents = useQueries({ queries: reports.map((report) => ({ queryKey: ["artifact", cardId, report.name, report.modifiedAt], queryFn: () => api.artifact(cardId, report.name) })) });

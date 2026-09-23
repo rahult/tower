@@ -19,17 +19,18 @@ function toProject(row: Row): Project {
 		concurrencyLimit: row.concurrency_limit as number,
 		stageConfig: JSON.parse(row.stage_config_json as string),
 		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
-		invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
-		subagents: row.subagents == null ? null : row.subagents === 1,
-		createdAt: row.created_at as number,
-	};
+	invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
+	subagents: row.subagents == null ? null : row.subagents === 1,
+	hasOrigin: row.has_origin == null ? null : row.has_origin === 1,
+	createdAt: row.created_at as number,
+};
 }
 
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
 		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, trust_project_pi,
-			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, has_origin, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -46,12 +47,18 @@ export function insertProject(db: Db, project: Project): void {
 		JSON.stringify(project.stageConfig),
 		project.invariantSimulation == null ? null : project.invariantSimulation ? 1 : 0,
 		project.subagents == null ? null : project.subagents ? 1 : 0,
+		project.hasOrigin == null ? null : project.hasOrigin ? 1 : 0,
 		project.createdAt,
 	);
 }
 
 export function listProjects(db: Db): Project[] {
 	return (db.prepare("SELECT * FROM projects ORDER BY created_at").all() as Row[]).map(toProject);
+}
+
+/** Observed, not chosen: the probe result from boot (and from when the project was added). */
+export function setProjectOrigin(db: Db, id: string, hasOrigin: boolean): void {
+	db.prepare("UPDATE projects SET has_origin = ? WHERE id = ?").run(hasOrigin ? 1 : 0, id);
 }
 
 export function getProject(db: Db, id: string): Project | null {

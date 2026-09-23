@@ -6,7 +6,7 @@ import { formatTokens } from "../app/bits.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -25,8 +25,9 @@ export function ProjectSettings({ project, onDone, showSpend }: { project: Proje
 	const chosen = reviewFlows ?? flows.data?.defaults ?? [];
 	const daemonSettings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
 	const [invariantSimulation, setInvariantSimulation] = useState<boolean | null>(project.invariantSimulation);
+	const [subagents, setSubagents] = useState<boolean | null>(project.subagents);
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, concurrencyLimit, reviewFlows, invariantSimulation }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, concurrencyLimit, reviewFlows, invariantSimulation, subagents }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			onDone?.();
@@ -125,6 +126,26 @@ export function ProjectSettings({ project, onDone, showSpend }: { project: Proje
 						className={field}
 					>
 						<option value="default">Tower default{daemonSettings.data ? ` (${daemonSettings.data.invariantSimulation ? "on" : "off"})` : ""}</option>
+						<option value="on">On for this project</option>
+						<option value="off">Off for this project</option>
+					</select>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">
+						<label htmlFor={`subagents-${project.id}`}>Parallel sub-agents</label>
+					</div>
+					<div className="d">When the plan splits the work, Tower fans it out: scouts answer questions in parallel, each stream is built by its own agent in its own worktree, and an integrator merges the branches before testing.</div>
+				</div>
+				<div className="v">
+					<select
+						id={`subagents-${project.id}`}
+						value={subagents === null ? "default" : subagents ? "on" : "off"}
+						onChange={(event) => setSubagents(event.target.value === "default" ? null : event.target.value === "on")}
+						className={field}
+					>
+						<option value="default">Tower default{daemonSettings.data ? ` (${daemonSettings.data.subagents ? "on" : "off"})` : ""}</option>
 						<option value="on">On for this project</option>
 						<option value="off">Off for this project</option>
 					</select>

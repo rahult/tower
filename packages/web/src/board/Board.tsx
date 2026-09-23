@@ -191,8 +191,9 @@ function BoardMatrix({
 					<Fragment key={project.id}>
 						<div className="lane" style={edge}>
 							<span className="name">{project.name}</span>
-							<span className="branch truncate" title={`${project.repoPath} on ${project.defaultBranch}`}>
+							<span className="branch truncate" title={`${project.repoPath} on ${project.defaultBranch}${project.hasOrigin === false ? " — no origin remote, so finished cards are merged locally instead of opened as pull requests" : ""}`}>
 								{project.defaultBranch}
+								{project.hasOrigin === false && " · merges locally"}
 							</span>
 							<span className="meta text-[12px]">
 								{running > 0 && <span style={{ color: "var(--primary)", fontWeight: 600 }}>{running} running</span>}

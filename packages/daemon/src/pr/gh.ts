@@ -15,10 +15,9 @@ async function run(command: string, args: string[], cwd: string): Promise<string
 	}
 }
 
-/** The remote a card's branch is pushed to, or null when the repository has none. */
-export async function pushRemote(repoPath: string): Promise<string | null> {
-	const remotes = (await run("git", ["remote"], repoPath)).split("\n").filter(Boolean);
-	return remotes.includes("origin") ? "origin" : (remotes[0] ?? null);
+/** The repository's remotes; empty when git has none. Cards finish as pull requests only when `origin` is among them. */
+export async function listRemotes(repoPath: string): Promise<string[]> {
+	return (await run("git", ["remote"], repoPath)).split("\n").filter(Boolean);
 }
 
 export async function pushBranch(worktreePath: string, remote: string, branch: string): Promise<void> {

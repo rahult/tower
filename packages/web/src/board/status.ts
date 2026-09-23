@@ -46,8 +46,8 @@ export const STAGE_DESCRIPTIONS: Record<Card["stage"], string> = {
 	building: "An agent is writing the code from the plan, in the card's own worktree.",
 	testing: "The verify command (or an agent) judges the build; failures go back to the builder.",
 	feedback: "Reviews have run and their findings are waiting for your approval before a pull request.",
-	pull_request: "The pull request is open; Tower watches CI and repairs failures up to a cap.",
-	done: "Merged, or finished with the branch ready to merge.",
+	pull_request: "The finish line: with an origin remote the pull request is open and watched; without one, Tower merges the branch locally.",
+	done: "Merged — locally, or through a pull request.",
 };
 
 export function describeCard(card: Card): { stage: string; status: string; tone: Tone } {

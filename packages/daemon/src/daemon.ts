@@ -4,12 +4,14 @@ import type { Config } from "./config.ts";
 import { paths } from "./config.ts";
 import { BenchRunner } from "./bench.ts";
 import { CrewRunner } from "./crew-runner.ts";
-import { openDb } from "./db/open.ts";
+import { openDb, type Db } from "./db/open.ts";
+import { listProjects, setProjectOrigin } from "./db/repo-projects.ts";
 import { Bus } from "./events/bus.ts";
 import { createApp } from "./http/server.ts";
 import type { SessionDriver } from "./pi/session-driver.ts";
 import { FlowRunner } from "./flow-runner.ts";
 import { Orchestrator } from "./orchestrator.ts";
+import { listRemotes } from "./pr/gh.ts";
 import { RunManager } from "./run/run-manager.ts";
 import { StageRunner } from "./stage-runner.ts";
 
@@ -22,9 +24,24 @@ export interface Daemon {
 	close(): Promise<void>;
 }
 
+/** Re-reads which repositories have an `origin` remote, so the board shows each project's real finish line. */
+async function refreshProjectOrigins(db: Db): Promise<void> {
+	for (const project of listProjects(db)) {
+		try {
+			const hasOrigin = (await listRemotes(project.repoPath)).includes("origin");
+			if (project.hasOrigin !== hasOrigin) setProjectOrigin(db, project.id, hasOrigin);
+		} catch {
+			// An unreadable repository keeps its last known flag; the finish step probes again anyway.
+		}
+	}
+}
+
 /** Wires the daemon together. The driver is injected so tests run the whole thing against FakeSessionDriver. */
 export async function startDaemon(config: Config, driver: SessionDriver): Promise<Daemon> {
 	const db = openDb(paths.db(config));
+	// With origin a card finishes as a pull request; without one Tower merges locally. Repositories gain and lose
+	// remotes, so every boot re-probes instead of trusting the flag from when the project was added.
+	await refreshProjectOrigins(db);
 	const bus = new Bus();
 	const runs = new RunManager(db, bus, driver, config.uiRequestTimeoutMs);
 	// The runners report to the orchestrator, which in turn starts runs: bind late to close the loop.

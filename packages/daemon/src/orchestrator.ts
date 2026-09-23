@@ -26,7 +26,8 @@ import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCa
 import type { Bus } from "./events/bus.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
-import { createPullRequest, pushBranch, pushRemote, viewPullRequest } from "./pr/gh.ts";
+import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
+import { createPullRequest, listRemotes, pushBranch, viewPullRequest } from "./pr/gh.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
 import { runVerify } from "./verifier.ts";
@@ -276,7 +277,7 @@ export class Orchestrator {
 				: effect.type === "run_flows"
 					? this.review(card.id)
 					: effect.type === "open_pr"
-						? this.openPullRequest(card.id)
+						? this.finishBranch(card.id)
 						: (effect.type === "resume_run"
 								? stages.resume(card.id, effect.stage, effect.message)
 								: stages.start(card.id, effect.stage, { ...(effect.feedback ? { feedback: effect.feedback } : {}), ...(effect.fixingCi ? { fixingCi: true } : {}) })
@@ -319,20 +320,31 @@ export class Orchestrator {
 		for (let i = 0; i < 200 && !this.deps.runs.liveRunForCard(cardId) && this.pending.has(work); i++) await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 
-	/** Pushes the card's branch and opens its pull request, or just pushes when one already exists. */
-	private async openPullRequest(cardId: string): Promise<void> {
+	/**
+	 * The card's finish line. With an `origin` remote: push the branch and open its pull request (or just push when one
+	 * exists). Without one there is nowhere to open a pull request, so Tower merges the branch into the default branch
+	 * itself — a real merge commit, the way the person would have.
+	 */
+	private async finishBranch(cardId: string): Promise<void> {
 		const { config, db } = this.deps;
 		const card = getCard(db, cardId) as Card;
 		const project = getProject(db, card.projectId);
 		if (!project || !card.worktreePath || !card.branchName) throw new Error("This card has no branch to open a pull request from");
 
-		const remote = await pushRemote(project.repoPath);
-		if (!remote) {
-			// Nowhere to push: the work is finished as far as Tower can take it.
-			this.dispatch(cardId, { type: "pr_skipped", note: `This repository has no remote, so there is no pull request. Branch ${card.branchName} is ready for you to merge.` });
+		const remotes = await listRemotes(project.repoPath);
+		if (!remotes.includes("origin")) {
+			const merge = await mergeBranchLocally({
+				repoPath: project.repoPath,
+				branch: card.branchName,
+				defaultBranch: project.defaultBranch,
+				message: `Merge branch '${card.branchName}' (card ${cardId}: ${card.title})`,
+			});
+			console.log(`card ${cardId}: merged ${card.branchName} into ${project.defaultBranch} (${merge.via === "checkout" ? "in the checkout" : "by moving the ref"})`);
+			this.dispatch(cardId, { type: "merged_locally", note: `Merged into ${project.defaultBranch} locally — no pull request, nowhere to open one. The work is on ${project.defaultBranch}.` });
 			return;
 		}
-		await pushBranch(card.worktreePath, remote, card.branchName);
+
+		await pushBranch(card.worktreePath, "origin", card.branchName);
 		const existing = await viewPullRequest(card.worktreePath, card.branchName);
 		const bodyFile = join(paths.cardDir(config, cardId), "pr-body.md");
 		const url = existing?.state === "OPEN" ? existing.url : await createPullRequest({ cwd: card.worktreePath, title: card.title, body: this.pullRequestBody(card), base: project.defaultBranch, head: card.branchName, bodyFile });
@@ -391,7 +403,7 @@ export class Orchestrator {
 		this.prTimer.unref();
 	}
 
-	/** The card is finished: its worktrees go, and its branch too once it is merged (git refuses otherwise). */
+	/** The card is finished: its worktrees go, and so does its branch when it merged locally (a pull request keeps it). */
 	private async cleanup(cardId: string): Promise<void> {
 		const card = getCard(this.deps.db, cardId);
 		const project = card && getProject(this.deps.db, card.projectId);
@@ -401,6 +413,8 @@ export class Orchestrator {
 			const streamWorktrees = streamWorktreePaths(dirname(card.worktreePath), card.id);
 			await removeWorktree(project.repoPath, card.worktreePath);
 			await Promise.all(streamWorktrees.map((path) => removeWorktree(project.repoPath, path)));
+			// A locally merged card's work lives on the default branch; the label adds nothing once the worktree is gone.
+			if (card.stage === "done" && !card.prUrl && card.branchName) await deleteMergedBranch(project.repoPath, card.branchName, project.defaultBranch);
 		} catch (error) {
 			console.error(`could not remove the worktree of card ${cardId}:`, error instanceof Error ? error.message : error);
 		}

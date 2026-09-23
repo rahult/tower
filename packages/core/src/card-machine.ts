@@ -21,6 +21,8 @@ export type CardEvent =
 	| { type: "pr_opened" }
 	/** There is nowhere to open a pull request (no remote); the branch is left for the person to merge. */
 	| { type: "pr_skipped"; note: string }
+	/** No origin remote, so Tower merged the branch into the default branch itself. */
+	| { type: "merged_locally"; note: string }
 	| { type: "pr_merged" }
 	| { type: "pr_closed" }
 	| { type: "ci_failed"; feedback: string }
@@ -52,7 +54,7 @@ export type Effect =
 	/** `fixingCi`: a build run that repairs a failing pull request; the card stays in its pull request stage. */
 	| { type: "start_run"; stage: AgentStage; feedback?: string; fixingCi?: boolean }
 	| { type: "run_flows" }
-	/** Push the card's branch and open its pull request (or just push, when the pull request already exists). */
+	/** The finish line: push the branch and open its pull request — or, with no origin remote, merge it locally. */
 	| { type: "open_pr" }
 	| { type: "cleanup_worktree" }
 	/** Reopen the stage's session (same session id). Without a message the agent is told to carry on after an interruption. */
@@ -153,6 +155,10 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			break;
 
 		case "pr_skipped":
+			if (stage === "pull_request") return { next: rest("done", "idle", event.note), effects: [{ type: "cleanup_worktree" }] };
+			break;
+
+		case "merged_locally":
 			if (stage === "pull_request") return { next: rest("done", "idle", event.note), effects: [{ type: "cleanup_worktree" }] };
 			break;
 

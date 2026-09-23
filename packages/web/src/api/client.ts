@@ -46,6 +46,8 @@ export interface Settings {
 	file: string;
 	knownModels: string[];
 	invariantSimulation: boolean;
+	subagents: boolean;
+	maxCrew: number;
 }
 
 export interface FlowInfo {
@@ -98,7 +100,7 @@ export const api = {
 	saveSettings: (models: Record<string, { model: string; thinking: string } | null>) => request<Settings>("PUT", "/api/settings", { models }),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
-	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
+	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),

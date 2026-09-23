@@ -47,6 +47,8 @@ export interface Project {
 	invariantSimulation: boolean | null;
 	/** Parallel sub-agents: scouts and stream crews fanned out from the plan. null = Tower's default. */
 	subagents: boolean | null;
+	/** Probed from the repository: with an `origin` remote cards finish as pull requests, without one Tower merges locally. null = not probed yet. */
+	hasOrigin: boolean | null;
 	createdAt: number;
 }
 

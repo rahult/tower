@@ -14,6 +14,7 @@ import { handleStream } from "../events/sse.ts";
 import { loadFlows } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
+import { listRemotes } from "../pr/gh.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
 import type { RunManager } from "../run/run-manager.ts";
@@ -110,6 +111,7 @@ export function createApp(deps: AppDeps): Hono {
 			reviewFlows: null,
 			invariantSimulation: null,
 			subagents: null,
+			hasOrigin: (await listRemotes(repoPath)).includes("origin"),
 			createdAt: Date.now(),
 		};
 		insertProject(db, project);

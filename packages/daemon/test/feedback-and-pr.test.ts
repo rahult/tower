@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { bootHarness, byStage, type Harness } from "./harness.ts";
@@ -133,23 +133,67 @@ describe("review flows and the feedback gate", () => {
 });
 
 describe("pull requests", () => {
-	it("without a remote, approval finishes the card and leaves the branch to merge", async () => {
+	it("without origin, approval merges the branch into the default branch locally", async () => {
 		h = await bootHarness(byStage());
-		const { card, detail, gate } = await toFeedbackGate(h);
+		const { project, card, detail, gate } = await toFeedbackGate(h);
+		expect(project.hasOrigin).toBe(false);
+		// The checkout moves on while the card works: the merge has to be a real one, not a fast-forward.
+		execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "docs"], { cwd: h.repo });
 		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
 		await h.daemon.whenIdle();
 		const done = (await h.api("GET", `/api/cards/${card.id}`)).body.card;
-		expect(done).toMatchObject({ stage: "done", status: "idle" });
-		expect(done.needsAttentionReason).toContain(`Branch ${done.branchName} is ready for you to merge`);
+		expect(done).toMatchObject({ stage: "done", status: "idle", prUrl: null });
+		expect(done.needsAttentionReason).toContain("Merged into main locally");
 		expect(existsSync(detail.card.worktreePath)).toBe(false);
-		// The work itself is still there, on its branch.
-		expect(execFileSync("git", ["log", "--oneline", done.branchName], { cwd: h.repo, encoding: "utf8" })).toContain("Add feature");
+		// The work landed on main as a real merge commit, and the card branch left with its worktree.
+		const log = execFileSync("git", ["log", "--oneline", "main"], { cwd: h.repo, encoding: "utf8" });
+		expect(log).toContain("Add feature");
+		expect(log).toContain("docs");
+		expect(log).toMatch(/Merge branch '.*' \(card/);
+		expect(execFileSync("git", ["branch", "--list", done.branchName], { cwd: h.repo, encoding: "utf8" })).toBe("");
+	});
+
+	it("a dirty checkout stops the merge until it is clean, then Retry finishes the card", async () => {
+		h = await bootHarness(byStage());
+		const { card, gate } = await toFeedbackGate(h);
+		writeFileSync(join(h.repo, "scratch.txt"), "mine");
+		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+		const stuck = (await h.api("GET", `/api/cards/${card.id}`)).body.card;
+		expect(stuck).toMatchObject({ stage: "pull_request", status: "needs_attention" });
+		expect(stuck.needsAttentionReason).toContain("uncommitted changes");
+		expect(stuck.needsAttentionReason).toContain("Retry");
+
+		unlinkSync(join(h.repo, "scratch.txt"));
+		await h.api("POST", `/api/cards/${card.id}/retry`);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "done", status: "idle" });
+		expect(execFileSync("git", ["log", "--oneline", "main"], { cwd: h.repo, encoding: "utf8" })).toContain("Add feature");
+	});
+
+	it("when the default branch is checked out nowhere, the merge still lands without touching the checkout", async () => {
+		h = await bootHarness(byStage());
+		const { card, gate } = await toFeedbackGate(h);
+		// Diverge main, then leave it checked out nowhere: the merge has to happen through plumbing.
+		execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "docs"], { cwd: h.repo });
+		execFileSync("git", ["checkout", "-q", "-b", "side"], { cwd: h.repo });
+		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "done", status: "idle" });
+		// main moved; the person's checkout did not.
+		expect(execFileSync("git", ["symbolic-ref", "--short", "HEAD"], { cwd: h.repo, encoding: "utf8" }).trim()).toBe("side");
+		expect(execFileSync("git", ["status", "--porcelain"], { cwd: h.repo, encoding: "utf8" })).toBe("");
+		const log = execFileSync("git", ["log", "--oneline", "main"], { cwd: h.repo, encoding: "utf8" });
+		expect(log).toContain("Add feature");
+		expect(log).toContain("docs");
+		expect(log).toMatch(/Merge branch '.*' \(card/);
 	});
 
 	it("pushes the branch, opens the pull request non-interactively, and finishes when it is merged", async () => {
 		h = await bootHarness(byStage());
 		const github = fakeGitHub(h);
-		const { card, detail, gate } = await toFeedbackGate(h);
+		const { project, card, detail, gate } = await toFeedbackGate(h);
+		expect(project.hasOrigin).toBe(true);
 		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
 		await h.daemon.whenIdle();
 

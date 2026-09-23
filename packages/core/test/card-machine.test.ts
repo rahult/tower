@@ -38,6 +38,7 @@ describe("transition", () => {
 		["an opened pull request is watched", card("pull_request", "queued"), { type: "pr_opened" }, { stage: "pull_request", status: "idle" }, []],
 		["a merged pull request finishes the card and cleans up", card("pull_request", "idle"), { type: "pr_merged" }, { stage: "done", status: "idle" }, [{ type: "cleanup_worktree" }]],
 		["without a remote the branch is left for the person", card("pull_request", "queued"), { type: "pr_skipped", note: "Branch tower/x is ready to merge." }, { stage: "done", status: "idle", needsAttentionReason: "Branch tower/x is ready to merge." }, [{ type: "cleanup_worktree" }]],
+		["a local merge finishes the card and cleans up", card("pull_request", "queued"), { type: "merged_locally", note: "Merged into main locally." }, { stage: "done", status: "idle", needsAttentionReason: "Merged into main locally." }, [{ type: "cleanup_worktree" }]],
 		["a closed pull request asks for attention", card("pull_request", "idle"), { type: "pr_closed" }, { stage: "pull_request", status: "needs_attention" }, []],
 		["failing CI sends the logs to a builder without leaving the pull request stage", card("pull_request", "idle"), { type: "ci_failed", feedback: "lint failed" }, { stage: "pull_request", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "lint failed", fixingCi: true }]],
 		["a CI fix is pushed and watched again", card("pull_request", "running"), settled("pass"), { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],

@@ -165,7 +165,7 @@ export function Focus({ projects, cards, activeRuns, selectedCardId, onOpen, onA
 						</div>
 						<div className="rows">
 							{attention.map((card, i) => (
-								<AttentionRow key={card.id} card={card} projectName={names.get(card.projectId)} selected={card.id === selectedCardId} index={i} onOpen={onOpen} />
+								<AttentionRow key={card.id} card={card} projectName={names.get(card.projectId)} mergesLocally={projects.find((project) => project.id === card.projectId)?.hasOrigin === false} selected={card.id === selectedCardId} index={i} onOpen={onOpen} />
 							))}
 						</div>
 					</section>
@@ -285,9 +285,11 @@ function ProjectButton({ label, sub, needs, working, active, onClick }: { label:
 interface RowProps {
 	card: Card;
 	projectName: string | undefined;
+	/** No origin remote, so approving the feedback gate merges locally instead of opening a pull request. */
+	mergesLocally?: boolean;
 	selected: boolean;
 	index: number;
-	onOpen: (id: string) => void;
+	onOpen: (cardId: string) => void;
 }
 
 function useCardActions(card: Card) {
@@ -309,7 +311,7 @@ function useCardActions(card: Card) {
 }
 
 /** The amber rows: one decision each, with the action in place so the inspector is optional. */
-function AttentionRow({ card, projectName, selected, index, onOpen }: RowProps) {
+function AttentionRow({ card, projectName, mergesLocally, selected, index, onOpen }: RowProps) {
 	const detail = useQueryCard(card.id);
 	const { refresh, decide, resume, retry } = useCardActions(card);
 	const [sendingBack, setSendingBack] = useState(false);
@@ -358,13 +360,15 @@ function AttentionRow({ card, projectName, selected, index, onOpen }: RowProps) 
 			blocking > 0
 				? `${blocking} review${blocking === 1 ? "" : "s"} found something blocking${checks?.resultSummary ? `. ${checks.resultSummary}` : "."}`
 				: checks
-					? `${checks.resultSummary ?? "Checks are in."} Reviews are in. Approving opens the pull request.`
-					: "The work is done and reviewed. Approving opens the pull request.";
-		if (reports.length === 0) context = "The work is done. Approving opens the pull request.";
+					? `${checks.resultSummary ?? "Checks are in."} Reviews are in. ${mergesLocally ? "Approving merges the work into the default branch." : "Approving opens the pull request."}`
+					: mergesLocally
+						? "The work is done and reviewed. Approving merges it into the default branch."
+						: "The work is done and reviewed. Approving opens the pull request.";
+		if (reports.length === 0) context = mergesLocally ? "The work is done. Approving merges it into the default branch." : "The work is done. Approving opens the pull request.";
 		actions = (
 			<>
-				<button type="button" onClick={() => decide.mutate({ gateId: gate.id, decision: "approve", done: "Approved. Tower opens the pull request." })} disabled={decide.isPending} className="btn primary sm">
-					Approve &amp; open PR
+				<button type="button" onClick={() => decide.mutate({ gateId: gate.id, decision: "approve", done: mergesLocally ? "Approved. Tower merges the branch." : "Approved. Tower opens the pull request." })} disabled={decide.isPending} className="btn primary sm">
+					{mergesLocally ? "Approve & merge" : "Approve & open PR"}
 				</button>
 				<button type="button" onClick={openRow} className="btn sm">
 					Read findings

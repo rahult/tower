@@ -113,6 +113,10 @@ const MIGRATIONS: string[] = [
 	-- Parallel sub-agents: scouts and stream crews fanned out from the plan. NULL means Tower's default.
 	ALTER TABLE projects ADD COLUMN subagents INTEGER;
 	`,
+	`
+	-- Probed from the repository: with an origin remote cards finish as pull requests, without one Tower merges locally.
+	ALTER TABLE projects ADD COLUMN has_origin INTEGER;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */
