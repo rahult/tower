@@ -386,7 +386,9 @@ export class StageRunner {
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			if (!this.stopping) this.patchRun(live.runId, { status: "failed", error: message, endedAt: Date.now() });
+			// A run that died mid-turn still spent tokens; record what the session reports before it is torn down.
+			const usage = await live.handle.stats().catch(() => null);
+			if (!this.stopping) this.patchRun(live.runId, { status: "failed", error: message, endedAt: Date.now(), tokens: usage?.tokens ?? undefined, costUsd: usage?.costUsd ?? undefined });
 			outcome = { kind: "failed", error: message };
 		} finally {
 			stopWatching();

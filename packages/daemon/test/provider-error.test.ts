@@ -47,6 +47,8 @@ describe("provider errors", () => {
 		expect(detail.card.needsAttentionReason).toContain("out of extra usage");
 		expect(detail.card.needsAttentionReason).not.toContain("stage-result.json");
 		expect(detail.runs[0]).toMatchObject({ status: "failed" });
+		// The session still burned tokens before failing; its spend must land in usage.
+		expect(detail.runs[0]).toMatchObject({ tokens: { total: 120 }, costUsd: 0.001 });
 		expect(h.driver.handles[0]?.prompts).toHaveLength(1);
 	});
 });

@@ -17,7 +17,7 @@ export function Usage({ onOpenCard, cardTitles, projectNames }: { onOpenCard: (i
 	const days = [...data.byDay].sort((a, b) => (a.key < b.key ? 1 : -1)).slice(0, 21);
 	const models = [...data.byModel].sort((a, b) => b.tokens - a.tokens);
 	const projects = [...data.byProject].sort((a, b) => b.tokens - a.tokens);
-	const top = [...data.byCard].sort((a, b) => b.tokens - a.tokens).slice(0, 10);
+	const top = [...data.byCard].sort((a, b) => b.costUsd - a.costUsd || b.tokens - a.tokens).slice(0, 10);
 
 	return (
 		<div className="mx-auto flex w-full max-w-[70rem] flex-col gap-6">
