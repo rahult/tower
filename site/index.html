@@ -3,10 +3,11 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Tower: the life cycle runs, you decide</title>
-		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: planning, building, testing, review, merge. A strong model plans, a cheap one builds, your tests judge — and every decision that is yours lands on one row, one click each." />
-		<meta property="og:title" content="Tower: the life cycle runs, you decide" />
-		<meta property="og:description" content="The whole software life cycle on one board — planning, building, testing, review, merge — run by coding agents, decided by you. One click per decision." />
+		<meta name="theme-color" content="#0a0d12" />
+		<title>Tower — the control tower for coding agents</title>
+		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: planning, building, testing, review, merge. The agents fly; you work the tower. Every decision that is yours lands on one amber row — one click each." />
+		<meta property="og:title" content="Tower — the control tower for coding agents" />
+		<meta property="og:description" content="The whole software life cycle, run by coding agents from one board. A strong model plans, a cheap one builds, your tests judge — and every decision that is yours lands on one amber row, one click each." />
 		<meta property="og:image" content="https://tower.rahultrikha.com/assets/tower.png" />
 		<meta property="og:url" content="https://tower.rahultrikha.com/" />
 		<meta name="twitter:card" content="summary_large_image" />
@@ -17,38 +18,80 @@
 	<body>
 		<a class="skip" href="#main">Skip to content</a>
 
-		<header class="masthead wrap">
-			<a class="wordmark" href="/">Tower</a>
-			<nav aria-label="Site">
-				<a href="#demo">The board</a>
-				<a href="#replaces">What it replaces</a>
-				<a href="#how">How it works</a>
-				<a href="#install">Install</a>
-				<a href="https://github.com/rahult/tower">GitHub</a>
-			</nav>
+		<header class="topbar">
+			<div class="wrap bar">
+				<a class="wordmark" href="/" aria-label="Tower — home">
+					<svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+						<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+							<path d="M36.5 11.5 A15.5 15.5 0 0 1 45.5 24" opacity="0.55" />
+							<path d="M35.5 16.5 A9.5 9.5 0 0 1 41.5 25.5" opacity="0.85" />
+							<path d="M24 11.5 V6.2" />
+						</g>
+						<g fill="currentColor">
+							<path d="M14 22.5 L16.6 11.5 H31.4 L34 22.5 Z" />
+							<path d="M20.5 22.5 h7 V41.5 H34 V44 H14 v-2.5 h6.5 Z" />
+						</g>
+						<circle class="beacon" cx="24" cy="4.2" r="2.7" />
+					</svg>
+					TOWER
+				</a>
+				<nav class="topnav" aria-label="Site">
+					<a href="#demo">Live board</a>
+					<a href="#replaces">What it replaces</a>
+					<a href="#how">How it works</a>
+					<a href="#install">Install</a>
+					<a class="gh" href="https://github.com/rahult/tower">GitHub</a>
+				</nav>
+			</div>
 		</header>
 
 		<main id="main">
 			<section class="hero wrap">
-				<h1>The life cycle runs. You decide.</h1>
+				<p class="eyebrow">The control tower for coding agents</p>
+				<h1 class="display">
+					<span class="line">The life cycle runs.</span>
+					<span class="line amber">You decide.</span>
+				</h1>
+				<svg class="scope" viewBox="0 0 600 600" aria-hidden="true">
+					<g fill="none" stroke="currentColor" stroke-width="1">
+						<circle cx="300" cy="300" r="130" stroke-dasharray="2 7" opacity="0.45" />
+						<circle cx="300" cy="300" r="210" stroke-dasharray="2 7" opacity="0.3" />
+						<circle cx="300" cy="300" r="290" stroke-dasharray="2 7" opacity="0.18" />
+						<path d="M300 14 V586 M14 300 H586" opacity="0.1" />
+					</g>
+					<circle cx="394" cy="178" r="4.5" fill="#f2b23e" />
+					<circle cx="394" cy="178" r="11" fill="none" stroke="#f2b23e" opacity="0.4" />
+					<circle cx="178" cy="426" r="3.5" fill="#5b8def" />
+					<circle cx="452" cy="398" r="3" fill="#43b97f" opacity="0.8" />
+				</svg>
 				<p class="lede">
-					Tower is a control board for <a href="https://pi.dev">pi</a> coding-agent sessions — the whole software life cycle on one board. A strong model plans, a cheap one
-					builds, your test suite judges, reviewers who never saw the work try to break it, and the pull request opens itself. The work moves on its own; Tower brings you
-					exactly the decisions that are yours, each answerable where it appears.
+					Tower runs <a href="https://pi.dev">pi</a> coding-agent sessions across all your projects from one board — the whole life cycle, backlog to merged. A strong model
+					plans, a cheap one builds, your test suite judges, and reviewers who never saw the work try to break it. The agents fly; you work the tower: every decision that is
+					yours lands on one amber row, one click each.
 				</p>
 				<div class="install">
 					<code id="install-command">pi install git:github.com/rahult/tower</code>
 					<button type="button" class="copy" data-copy="install-command">Copy</button>
 				</div>
 				<p class="after-install">Then type <code>/tower</code> in any pi session. The board opens at <code>127.0.0.1:4700</code>.</p>
+				<ul class="statusline" aria-label="Operating posture">
+					<li>No cloud</li>
+					<li>No telemetry</li>
+					<li>Your machine, your keys</li>
+					<li>Open source</li>
+				</ul>
 			</section>
 
 			<section id="demo" class="demo wide" aria-labelledby="demo-title">
 				<div class="demo-bar">
-					<h2 id="demo-title">One strip, one stream, one rule: what needs you is amber, and this simulation answers itself.</h2>
+					<h2 id="demo-title">Live from the tower: what needs you is amber, and this simulation answers itself.</h2>
 					<button type="button" id="pause" class="quiet" aria-pressed="false">Pause</button>
 				</div>
 				<div class="stream-demo" role="region" aria-label="Simulated Tower stream">
+					<div class="console-head" aria-hidden="true">
+						<span>Tower · 127.0.0.1:4700</span>
+						<span class="live"><span class="live-dot"></span>Live</span>
+					</div>
 					<section aria-label="Needs you">
 						<h3 class="tray-title">Needs you <span id="need-count" class="count"></span><span class="tray-hint">these decisions block an agent</span></h3>
 						<ul id="needs" class="rows"></ul>
@@ -71,11 +114,13 @@
 			</section>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.01 — The stream</span>
 				<img src="assets/tower.png" width="1600" height="1000" alt="The Tower board. A projects rail lists three repositories with amber and blue counts. The stream holds four amber rows under Needs you — review approvals with Approve &amp; merge buttons and a card asking three questions with suggested answers — above In flight and Queued. A docked inspector shows the open card's Decision tab: three questions, two suggested answers already chosen, a typed answer, and a Send answers and continue button." loading="lazy" />
 				<figcaption>The board opens on this: a rail of projects, a stream where amber means you, and an inspector docked beside it. The questions came from the agent; the suggested answers are one click each.</figcaption>
 			</figure>
 
 			<section id="replaces" class="wrap prose">
+				<p class="eyebrow">Retired</p>
 				<h2>The toolchain it replaces</h2>
 				<p>
 					The software life cycle used to be a dozen tabs: a tracker for the work, a board for the status, a queue for the tests, a rota for review, a dashboard for CI. Tower
@@ -114,11 +159,13 @@
 			</section>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.02 — The decision</span>
 				<img src="assets/review.png" width="1600" height="1000" alt="A card's Decision tab over the stream. The checks line reads Verify command passed; an adversarial review has one blocking finding, Retries are not capped on a non-idempotent request, with severity and file. Below it, the buttons Approve and merge locally and Send back to the builder." loading="lazy" />
 				<figcaption>Review findings wait with the diff, severity and file. Approve and Tower merges — locally when the repository has no remote, by pull request when it has one.</figcaption>
 			</figure>
 
 			<section id="how" class="wrap prose">
+				<p class="eyebrow">Flight plan</p>
 				<h2>How a card moves</h2>
 				<p>Tell Tower what you want done. From there the card drives itself through seven stages and stops twice, both times for you.</p>
 				<ol class="route">
@@ -168,16 +215,19 @@
 			</section>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.03 — The crew rail</span>
 				<img src="assets/session.png" width="1600" height="1000" alt="A running card in the docked inspector, Session tab. A rail lists the card's sessions: planning, crew, scout auth shape, builder api, builder docs, integrator, your checks, adversarial review, solid review, invariant simulation. The transcript shows the builder's reasoning, a file read and a test command running, with a steer box at the bottom. The stream beside it shows the amber Needs you rows and the running card with its sweep." loading="lazy" />
 				<figcaption>Every session streams to the board — and a card that was built by a crew keeps the whole crew in its rail: scouts, stream builders, integrator. Steer a live run mid-flight, or read the diff under Changes.</figcaption>
 			</figure>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.04 — Modeling, on demand</span>
 				<img src="assets/invariants.png" width="1600" height="1000" alt="An invariant simulation selected in a card's session rail. The verdict line reads pass, Nothing blocking, with the model and token count above." loading="lazy" />
-				<figcaption>Modeling, on demand. Any resting card can run an invariant simulation — domains, actors, scenarios — and report what would break before your tests do.</figcaption>
+				<figcaption>Any resting card can run an invariant simulation — domains, actors, scenarios — and report what would break before your tests do.</figcaption>
 			</figure>
 
-			<section class="wrap prose">
+			<section id="systems" class="wrap prose">
+				<p class="eyebrow">Systems</p>
 				<h2>What it takes care of</h2>
 				<dl class="facts">
 					<div>
@@ -224,21 +274,25 @@
 			</section>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.05 — The command box</span>
 				<img src="assets/palette.png" width="1600" height="1000" alt="The command palette open over the stream. One search box reaches commands, themes, views, project filters and cards, with keyboard hints along the bottom: arrows move, enter runs, j/k cards, a approve, n add." loading="lazy" />
 				<figcaption>The command box reaches everything — add work, jump to a card, filter, theme, density — and the board writes its keys where you can see them.</figcaption>
 			</figure>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.06 — The matrix</span>
 				<img src="assets/board.png" width="1600" height="1000" alt="The Board view: a matrix with a column per stage from Backlog to Pull request and a row per project. Amber mini cards fill where work needs you, running cards carry a blue bar, and each lane reads main · merges locally." loading="lazy" />
 				<figcaption>Prefer the whole picture? The matrix keeps a column per stage and a row per project, with foldable columns and done folded away until you want it.</figcaption>
 			</figure>
 
 			<figure class="shot wide">
+				<span class="fig">Fig.07 — The ledger</span>
 				<img src="assets/usage.png" width="1600" height="1000" alt="The Usage view: stat cards for tokens and sessions today and all time, a by-day bar, and tables breaking spend down by project, model and costliest card." loading="lazy" />
 				<figcaption>Where the money goes, counted to the cent: by day, by project, by model, by card.</figcaption>
 			</figure>
 
 			<section id="install" class="wrap prose">
+				<p class="eyebrow">Pre-flight</p>
 				<h2>Install</h2>
 				<p>You need <a href="https://pi.dev">pi</a>, git, npm and Node 22.18 or newer.</p>
 				<div class="install">
@@ -288,6 +342,7 @@
 			</section>
 
 			<section class="wrap prose">
+				<p class="eyebrow">Yours to change</p>
 				<h2>The opinions are yours to change</h2>
 				<p>
 					Four small functions hold Tower's judgement calls. Each ships with a deliberately plain default and a comment that lays out the trade-off. The concurrency caps are enforced
@@ -320,6 +375,7 @@ export function pickNext(candidates, state) {
 			</section>
 
 			<section class="wrap prose">
+				<p class="eyebrow">Logbook</p>
 				<h2>Where it stands</h2>
 				<p>
 					Tower is early, and complete from backlog to merged: planning, the plan gate, building — single-session or a parallel sub-agent crew — testing with the retry loop,
@@ -335,8 +391,26 @@ export function pickNext(candidates, state) {
 			</section>
 		</main>
 
-		<footer class="wrap foot">
-			<p>Tower is open source on <a href="https://github.com/rahult/tower">GitHub</a>. It runs on your machine and binds only to localhost. Tower makes no network requests of its own; the model calls are pi's.</p>
+		<footer class="foot">
+			<div class="wrap">
+				<p class="brandline">
+					<svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+						<g fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+							<path d="M36.5 11.5 A15.5 15.5 0 0 1 45.5 24" opacity="0.55" />
+							<path d="M35.5 16.5 A9.5 9.5 0 0 1 41.5 25.5" opacity="0.85" />
+							<path d="M24 11.5 V6.2" />
+						</g>
+						<g fill="currentColor">
+							<path d="M14 22.5 L16.6 11.5 H31.4 L34 22.5 Z" />
+							<path d="M20.5 22.5 h7 V41.5 H34 V44 H14 v-2.5 h6.5 Z" />
+						</g>
+						<circle class="beacon" cx="24" cy="4.2" r="2.7" />
+					</svg>
+					<span class="brandname">TOWER</span>
+				</p>
+				<p>Tower is open source on <a href="https://github.com/rahult/tower">GitHub</a>. It runs on your machine and binds only to localhost. Tower makes no network requests of its own; the model calls are pi's.</p>
+				<p class="smallprint">The tower clears the moves. The agents do the flying.</p>
+			</div>
 		</footer>
 
 		<script src="focus.js" defer></script>

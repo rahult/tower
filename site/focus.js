@@ -1,6 +1,43 @@
 // A small simulation of the stream. It follows the real card lifecycle: plan, wait for approval, build,
 // verify, review, wait for approval again, done. The demo answers its own questions; nothing leaves the page.
 (() => {
+	// Copy buttons: hand over the install command, confirm for a beat, then stand down.
+	for (const button of document.querySelectorAll("button.copy[data-copy]")) {
+		button.addEventListener("click", async () => {
+			const source = document.getElementById(button.dataset.copy);
+			if (!source) return;
+			const text = source.textContent.trim();
+			let copied = false;
+			try {
+				await navigator.clipboard.writeText(text);
+				copied = true;
+			} catch {
+				// Clipboard refused; fall through to the execCommand path.
+			}
+			if (!copied) {
+				const area = document.createElement("textarea");
+				area.value = text;
+				area.setAttribute("readonly", "");
+				area.style.position = "fixed";
+				area.style.opacity = "0";
+				document.body.appendChild(area);
+				area.select();
+				try {
+					copied = document.execCommand("copy");
+				} catch {
+					copied = false;
+				}
+				area.remove();
+			}
+			button.textContent = copied ? "Copied" : "Select & copy";
+			button.classList.toggle("done", copied);
+			setTimeout(() => {
+				button.textContent = "Copy";
+				button.classList.remove("done");
+			}, 1600);
+		});
+	}
+
 	const needs = document.getElementById("needs");
 	const flights = document.getElementById("flights");
 	const dones = document.getElementById("dones");
