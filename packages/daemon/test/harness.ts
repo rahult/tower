@@ -23,7 +23,7 @@ export interface Harness {
 }
 
 /** Boots the real daemon on an ephemeral port with a real temp git repo, a real SQLite file and a scripted driver. */
-export async function bootHarness(script: FakeScript, env: Record<string, string> = {}): Promise<Harness> {
+export async function bootHarness(script: FakeScript, env: Record<string, string | undefined> = {}): Promise<Harness> {
 	const root = mkdtempSync(join(tmpdir(), "tower-test-"));
 	const home = join(root, "home");
 	const repo = join(root, "repo");
@@ -36,6 +36,7 @@ export async function bootHarness(script: FakeScript, env: Record<string, string
 
 	// Read afresh on every boot, as a real restart does, so tests of persisted settings mean something.
 	// Review flows and pull-request polling are opt-in per test, so the lifecycle tests stay about the lifecycle.
+	// A test may pass undefined for TOWER_REVIEW_FLOWS to exercise the unset (discovery) path.
 	const config = () => loadConfig({ TOWER_HOME: home, TOWER_PORT: "0", TOWER_REVIEW_FLOWS: "", TOWER_PR_POLL_MS: "0", ...env });
 	const readers: SseReader[] = [];
 	const harness = { driver: new FakeSessionDriver(script), daemon: undefined as unknown as Daemon };

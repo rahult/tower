@@ -1,19 +1,26 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type AgentStage, type Card, renderPrompt, resolveStageConfig, STAGE_RESULT_FILE, type ThinkingLevel } from "@tower/core";
+import { type AgentStage, type Card, renderPrompt, resolveStageConfig, type StageRun, STAGE_RESULT_FILE, type ThinkingLevel } from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
 import { getCard } from "./db/repo-cards.ts";
 import { getProject } from "./db/repo-projects.ts";
-import { listRunsForCard } from "./db/repo-runs.ts";
-import { type Flow, type FlowStep, loadFlows, readAgentFile, toolsFor } from "./flows.ts";
+import { getRun, insertRun, listRunsForCard, updateRun } from "./db/repo-runs.ts";
+import type { Bus } from "./events/bus.ts";
+import { type Flow, type FlowStep, loadFlows, readAgentFile, runsOnBacklogCard, toolsFor } from "./flows.ts";
+import type { RunManager } from "./run/run-manager.ts";
 import type { CustomRun, RunOutcome, StageRunner } from "./stage-runner.ts";
+import { runCommand } from "./verifier.ts";
 
 const STAGES = new Set(["planning", "building", "testing"]);
+/** How long a deterministic step may run when the flow does not say. */
+const DEFAULT_STEP_TIMEOUT_MS = 10 * 60_000;
 
 export interface FlowRunnerDeps {
 	config: Config;
 	db: Db;
+	bus: Bus;
+	runs: RunManager;
 	stages: StageRunner;
 }
 
@@ -28,9 +35,14 @@ export interface AdhocRequest {
 	access?: "read-only" | "read-and-run" | "write";
 }
 
+/** The run id a step's sessions and commands share, so the drawer's rail groups them. */
+const stepLabel = (flow: Flow, step: FlowStep): string => `${flow.name}${flow.steps.length > 1 ? `-${step.name}` : ""}`;
+
 /** Runs review flows and ad hoc requests as sessions in a card's worktree. */
 export class FlowRunner {
 	private readonly deps: FlowRunnerDeps;
+	/** The deterministic step a card has in flight, so an abort can kill its process tree. */
+	private readonly stepAborts = new Map<string, () => void>();
 
 	constructor(deps: FlowRunnerDeps) {
 		this.deps = deps;
@@ -42,14 +54,29 @@ export class FlowRunner {
 		return flow;
 	}
 
-	/** Runs the flows one after another. Stops early, returning the outcome, if a step is aborted or crashes. */
+	/** Kills the card's in-flight command step, if it has one. Sessions are aborted through the stage runner. */
+	abort(cardId: string): void {
+		this.stepAborts.get(cardId)?.();
+	}
+
+	/**
+	 * Runs the flows one after another. A crash or abort stops early. A deterministic step that fails also
+	 * stops the flow — a failed gate says the work is not worth the next step — while an agent's "fail"
+	 * verdict is a finding, not a crash, so later steps still run.
+	 */
 	async runFlows(cardId: string, names: string[]): Promise<RunOutcome> {
 		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
 		for (const name of names) {
 			const flow = this.flow(name);
+			// A card with no worktree (research on a backlog card) may only run flows that touch no code.
+			const card = getCard(this.deps.db, cardId);
+			if (card && !card.worktreePath && !runsOnBacklogCard(flow)) {
+				throw new Error(`"${name}" runs commands or changes code, so it needs the card's worktree — start the card first.`);
+			}
 			for (const step of flow.steps) {
-				last = await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true }));
+				last = step.run !== undefined ? await this.runStep(cardId, flow, step) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true }));
 				if (last.kind !== "settled") return last;
+				if (step.run !== undefined && last.result !== "pass") return last;
 			}
 		}
 		return last;
@@ -60,12 +87,95 @@ export class FlowRunner {
 		return this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow: null, requireResult: false }));
 	}
 
+	/**
+	 * A deterministic step: a command, no model, the exit code is the verdict. Recorded like any other run
+	 * so the rail and the transcript show it; output streams through the same blocks as the verify command.
+	 */
+	private async runStep(cardId: string, flow: Flow, step: FlowStep): Promise<RunOutcome> {
+		const { config, db, runs } = this.deps;
+		const card = getCard(db, cardId) as Card;
+		const project = getProject(db, card.projectId);
+		if (!card.worktreePath || !project) throw new Error(`Card ${cardId} has no worktree for "${step.name}" to run in`);
+		const label = stepLabel(flow, step);
+		const attempt = listRunsForCard(db, cardId).filter((run) => run.id.startsWith(`c${cardId}-${label}-`)).length + 1;
+		const command = this.expand(step.run as string, card, project.repoPath, card.title);
+		const run: StageRun = {
+			id: `c${cardId}-${label}-${attempt}`,
+			cardId,
+			kind: "flow_step",
+			stage: card.stage,
+			attempt,
+			model: command,
+			thinking: "off",
+			args: [step.expect ?? "pass"],
+			status: "running",
+			resultStatus: null,
+			resultSummary: null,
+			questions: null,
+			tokens: null,
+			costUsd: null,
+			lastEntryId: null,
+			startedAt: Date.now(),
+			endedAt: null,
+			error: null,
+		};
+		insertRun(db, run);
+		this.publish(run.id);
+
+		const live = runs.openLog(cardId, run.id);
+		const executed = runCommand({
+			command,
+			cwd: card.worktreePath,
+			timeoutMs: step.timeoutSec !== undefined ? step.timeoutSec * 1000 : DEFAULT_STEP_TIMEOUT_MS,
+			buffer: live.buffer,
+			events: { started: "verify_started", output: "verify_output" },
+			label: `step "${step.name}"`,
+		});
+		this.stepAborts.set(cardId, executed.abort);
+		let result;
+		try {
+			result = await executed.done;
+		} finally {
+			this.stepAborts.delete(cardId);
+		}
+
+		const expect = step.expect ?? "pass";
+		const passed = result.aborted ? false : expect === "note" ? true : result.passed;
+		const summary = result.aborted
+			? "Aborted."
+			: expect === "note"
+				? `Recorded, exit ${result.exitCode ?? "?"} — informational, it never fails the flow.`
+				: result.passed
+					? "Command passed."
+					: `Command exited with code ${result.exitCode ?? "?"}${lastLine(result.output)}`;
+		updateRun(db, run.id, { status: result.aborted ? "aborted" : "settled", resultStatus: result.aborted ? null : passed ? "pass" : "fail", resultSummary: summary, endedAt: Date.now() });
+		runs.note(run.id, "run_finished", { status: summary });
+		await runs.finish(run.id);
+		this.publish(run.id);
+		if (result.aborted) return { kind: "aborted" };
+		return { kind: "settled", stage: "building", result: passed ? "pass" : "fail", summary, hasQuestions: false };
+	}
+
+	/** The variables a deterministic step's command may reference. */
+	private expand(command: string, card: Card, repoPath: string, title: string): string {
+		return command
+			.replaceAll("{{worktreePath}}", card.worktreePath ?? "")
+			.replaceAll("{{repoPath}}", repoPath)
+			.replaceAll("{{branchName}}", card.branchName ?? "")
+			.replaceAll("{{cardDir}}", paths.cardDir(this.deps.config, card.id))
+			.replaceAll("{{title}}", title);
+	}
+
+	private publish(runId: string): void {
+		this.deps.bus.publish({ topic: "board", type: "run_upserted", data: getRun(this.deps.db, runId) });
+	}
+
 	private request(cardId: string, step: FlowStep, options: { flow: Flow | null; requireResult: boolean }): CustomRun {
 		const { config, db } = this.deps;
 		const card = getCard(db, cardId) as Card;
 		const project = getProject(db, card.projectId);
 		const cardDir = paths.cardDir(config, cardId);
-		const label = options.flow ? `${options.flow.name}${options.flow.steps.length > 1 ? `-${step.name}` : ""}` : "adhoc";
+		const label = options.flow ? stepLabel(options.flow, step) : "adhoc";
 		const attempt = listRunsForCard(db, cardId).filter((run) => run.id.startsWith(`c${cardId}-${label}-`)).length + 1;
 		const agent = step.agent ? readAgentFile(step.agent) : null;
 
@@ -103,6 +213,8 @@ export class FlowRunner {
 			prompt,
 			appendSystemPromptFiles,
 			requireResult: options.requireResult,
+			// A card with no worktree (research on a backlog card) works straight in the project checkout.
+			...(card.worktreePath ? {} : { cwd: project?.repoPath }),
 		};
 	}
 
@@ -137,4 +249,14 @@ export class FlowRunner {
 			},
 		);
 	}
+}
+
+/** The last line worth reading: gate feedback should carry the error, not just its exit code. */
+function lastLine(output: string): string {
+	const line = output
+		.trimEnd()
+		.split("\n")
+		.filter((candidate) => candidate.trim() !== "" && !candidate.startsWith("[tower]"))
+		.at(-1);
+	return line ? ` — ${line.trim().slice(0, 200)}` : "";
 }

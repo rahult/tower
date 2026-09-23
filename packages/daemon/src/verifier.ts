@@ -12,11 +12,13 @@ const FLUSH_MS = 200;
 const MAX_KEPT_OUTPUT = 200_000;
 
 /**
- * Runs a project's verify command in the card's worktree. The exit code, not an agent's opinion, decides whether
- * testing passed. Output streams into the run's transcript in batches so the drawer shows it live.
+ * Runs a shell command and lets the exit code decide the verdict. Output streams into the run's
+ * transcript in batches so the drawer shows it live. Used by the testing gate and by deterministic
+ * flow steps — anywhere Tower itself, not a model, is the judge.
  */
-export function runVerify(options: { command: string; cwd: string; timeoutMs: number; buffer: TranscriptBuffer }): { done: Promise<VerifyResult>; abort: () => void } {
-	const { command, cwd, timeoutMs, buffer } = options;
+export function runCommand(options: { command: string; cwd: string; timeoutMs: number; buffer: TranscriptBuffer; events: { started: string; output: string }; label?: string }): { done: Promise<VerifyResult>; abort: () => void } {
+	const { command, cwd, timeoutMs, buffer, events } = options;
+	const label = options.label ?? "command";
 	let aborted = false;
 	let output = "";
 	let pending = "";
@@ -32,7 +34,7 @@ export function runVerify(options: { command: string; cwd: string; timeoutMs: nu
 	};
 	const flush = () => {
 		if (!pending) return;
-		buffer.push("verify_output", { text: pending });
+		buffer.push(events.output, { text: pending });
 		pending = "";
 	};
 	const onData = (chunk: Buffer) => {
@@ -44,11 +46,11 @@ export function runVerify(options: { command: string; cwd: string; timeoutMs: nu
 	child.stderr.on("data", onData);
 	const flusher = setInterval(flush, FLUSH_MS);
 	const timer = setTimeout(() => {
-		output += `\n[tower] verify command timed out after ${Math.round(timeoutMs / 1000)}s`;
+		output += `\n[tower] ${label} timed out after ${Math.round(timeoutMs / 1000)}s`;
 		killTree();
 	}, timeoutMs);
 
-	buffer.push("verify_started", { command });
+	buffer.push(events.started, { command });
 	const done = new Promise<VerifyResult>((resolve, reject) => {
 		child.once("error", reject);
 		child.once("close", (exitCode) => {
@@ -65,4 +67,9 @@ export function runVerify(options: { command: string; cwd: string; timeoutMs: nu
 			killTree();
 		},
 	};
+}
+
+/** The testing gate: the project's verify command in the card's worktree. */
+export function runVerify(options: { command: string; cwd: string; timeoutMs: number; buffer: TranscriptBuffer }): { done: Promise<VerifyResult>; abort: () => void } {
+	return runCommand({ ...options, events: { started: "verify_started", output: "verify_output" }, label: "verify command" });
 }

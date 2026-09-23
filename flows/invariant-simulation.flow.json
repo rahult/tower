@@ -2,5 +2,15 @@
   "name": "invariant-simulation",
   "title": "Invariant simulation",
   "description": "Models the change as domains, actors and state, simulates scenarios against the model, and reports invariant violations with the checklist testing should verify.",
-  "steps": [{ "name": "simulate", "prompt": "invariant-simulation.md", "model": "planning", "access": "read-and-run" }]
+  "when": [
+    "manual"
+  ],
+  "steps": [
+    {
+      "name": "simulate",
+      "prompt": "invariant-simulation.md",
+      "model": "planning",
+      "access": "read-and-run"
+    }
+  ]
 }

@@ -1,0 +1,10 @@
+{
+	"name": "deep-research",
+	"title": "Deep research",
+	"description": "Map an unfamiliar question with evidence fetched over the network (docs, GitHub, package registries), then write a cited brief: options, trade-offs, a recommendation, and what it means for this repository. Read-only — safe on a backlog card, before any work starts.",
+	"when": ["manual"],
+	"steps": [
+		{ "name": "survey", "prompt": "deep-research-survey.md", "model": "planning", "thinking": "high", "access": "read-and-run" },
+		{ "name": "synthesize", "prompt": "deep-research-synthesize.md", "model": "planning", "thinking": "high", "access": "read-and-run" }
+	]
+}

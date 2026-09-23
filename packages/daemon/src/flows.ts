@@ -20,6 +20,12 @@ export interface FlowStep {
 	prompt?: string;
 	skill?: string;
 	agent?: string;
+	/** A shell command instead of a model session: deterministic, no spend, the exit code is the verdict. */
+	run?: string;
+	/** "pass" (default): a non-zero exit fails the flow. "note": the output is recorded, the exit code never fails it. */
+	expect?: "pass" | "note";
+	/** How long the command may run. Default 10 minutes. */
+	timeoutSec?: number;
 	/** Extra text: arguments for a skill, the task for an agent. */
 	task?: string;
 	/** A stage name ("planning" = the expensive tier) or an explicit provider/model. */
@@ -28,10 +34,15 @@ export interface FlowStep {
 	access?: Access;
 }
 
+/** When a flow runs. Manual flows appear in the drawer's Run tab; the others are lifecycle hooks. */
+export type FlowTrigger = "manual" | "after-plan" | "after-build" | "after-tests";
+const TRIGGERS = new Set<FlowTrigger>(["manual", "after-plan", "after-build", "after-tests"]);
+
 export interface Flow {
 	name: string;
 	title: string;
 	description: string;
+	when: FlowTrigger[];
 	steps: FlowStep[];
 }
 
@@ -57,14 +68,29 @@ export function parseFlow(text: string, source: string): Flow {
 	}
 	if (typeof raw.name !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(raw.name)) throw new Error(`${source}: "name" must be lower-case words joined by dashes`);
 	if (!Array.isArray(raw.steps) || raw.steps.length === 0) throw new Error(`${source}: a flow needs at least one step`);
+	const when = raw.when ?? ["manual"];
+	if (!Array.isArray(when) || when.length === 0 || when.some((trigger) => !TRIGGERS.has(trigger as FlowTrigger))) {
+		throw new Error(`${source}: "when" must be a non-empty list of ${[...TRIGGERS].join(", ")}`);
+	}
 	raw.steps.forEach((step, index) => {
-		const kinds = [step.prompt, step.skill, step.agent].filter((value) => typeof value === "string" && value !== "");
-		if (kinds.length !== 1) throw new Error(`${source}: step ${index + 1} must have exactly one of "prompt", "skill" or "agent"`);
+		const kinds = [step.prompt, step.skill, step.agent, step.run].filter((value) => typeof value === "string" && value !== "");
+		if (kinds.length !== 1) throw new Error(`${source}: step ${index + 1} must have exactly one of "prompt", "skill", "agent" or "run"`);
 		if (typeof step.name !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(step.name)) throw new Error(`${source}: step ${index + 1} needs a "name" of lower-case words joined by dashes`);
 		if (step.access !== undefined && !(step.access in TOOLS)) throw new Error(`${source}: step "${step.name}" has unknown access "${step.access}"`);
+		if (step.expect !== undefined && step.expect !== "pass" && step.expect !== "note") throw new Error(`${source}: step "${step.name}" has unknown expect "${step.expect}" (pass or note)`);
+		if (step.timeoutSec !== undefined && (!Number.isFinite(step.timeoutSec) || step.timeoutSec <= 0)) throw new Error(`${source}: step "${step.name}" needs a positive "timeoutSec"`);
 	});
-	return { name: raw.name, title: raw.title ?? raw.name, description: raw.description ?? "", steps: raw.steps };
+	return { name: raw.name, title: raw.title ?? raw.name, description: raw.description ?? "", when: [...new Set(when)], steps: raw.steps };
 }
+
+/** The flows that run at a lifecycle moment, in file order — deterministic because the names sort them. */
+export const flowsTriggered = (flows: Flow[], trigger: FlowTrigger): Flow[] => flows.filter((flow) => flow.when.includes(trigger));
+
+/**
+ * Whether a flow is safe on a card with no worktree (a backlog card): no commands, no writes —
+ * read-only or read-and-run agent sessions working straight in the project checkout.
+ */
+export const runsOnBacklogCard = (flow: Flow): boolean => flow.steps.every((step) => step.run === undefined && step.access !== "write");
 
 export interface AgentFile {
 	model?: string;

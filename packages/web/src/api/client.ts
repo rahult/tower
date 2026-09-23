@@ -55,6 +55,8 @@ export interface FlowInfo {
 	name: string;
 	title: string;
 	description: string;
+	/** When the flow runs: manual, and any lifecycle hooks it has attached itself to. */
+	when: string[];
 }
 
 export interface UsageRow {

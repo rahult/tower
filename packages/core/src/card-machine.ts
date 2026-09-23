@@ -18,6 +18,10 @@ export type CardEvent =
 	| { type: "tests_already_passed"; context: SettleContext }
 	| { type: "flows_started" }
 	| { type: "flows_finished" }
+	/** A lifecycle hook (an after-plan or after-build flow) is running. */
+	| { type: "hook_started" }
+	/** The card's lifecycle hooks finished. `reason` carries the failing step's summary when they did not pass. */
+	| { type: "hook_finished"; passed: boolean; reason: string; context: SettleContext }
 	| { type: "pr_opened" }
 	/** There is nowhere to open a pull request (no remote); the branch is left for the person to merge. */
 	| { type: "pr_skipped"; note: string }
@@ -29,7 +33,7 @@ export type CardEvent =
 	| { type: "run_failed"; error: string }
 	| { type: "run_aborted" }
 	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string }
-	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean }
+	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean; /** Set when the stuck work is a failed after-build gate: rebuild with this as feedback. */ gateFeedback?: string }
 	/** The daemon restarted while this card's work was in flight. */
 	| { type: "daemon_restarted" }
 	/** `wasVerifying`: the interrupted work was the verify command, which has no session to reopen. */
@@ -46,6 +50,10 @@ export interface SettleContext {
 	hasQuestions: boolean;
 	/** The project has review flows to run once tests pass. */
 	hasReviewFlows: boolean;
+	/** Flows triggered after the plan passes, before the plan gate or building. */
+	afterPlanFlows: boolean;
+	/** Flows triggered after the build passes, before testing. */
+	afterBuildFlows: boolean;
 	/** What the retry policy says to do if this settle is a testing failure. */
 	onFailure: FailureDecision;
 }
@@ -53,7 +61,8 @@ export interface SettleContext {
 export type Effect =
 	/** `fixingCi`: a build run that repairs a failing pull request; the card stays in its pull request stage. */
 	| { type: "start_run"; stage: AgentStage; feedback?: string; fixingCi?: boolean }
-	| { type: "run_flows" }
+	/** `phase`: which lifecycle moment the flows belong to. Absent: the post-test reviews. */
+	| { type: "run_flows"; phase?: "after_plan" | "after_build" }
 	/** The finish line: push the branch and open its pull request — or, with no origin remote, merge it locally. */
 	| { type: "open_pr" }
 	| { type: "cleanup_worktree" }
@@ -88,6 +97,11 @@ const afterTestsPass = (context: SettleContext): Transition => {
 const afterReviews = (gates: GateKind[]): Transition =>
 	gates.includes("feedback") ? { next: rest("feedback", "awaiting_gate"), effects: [{ type: "open_gate", kind: "feedback" }] } : openPr();
 const openPr = (): Transition => ({ next: rest("pull_request", "queued"), effects: [{ type: "open_pr" }] });
+/** A plan that passed (and its hooks, when they ran): the human gate if wanted, otherwise building. */
+const afterPlanningPass = (context: SettleContext): Transition =>
+	context.requiredGates.includes("plan_approval")
+		? { next: rest("planning", "awaiting_gate"), effects: [{ type: "open_gate", kind: "plan_approval" }] }
+		: queue("building");
 
 const queue = (stage: AgentStage, feedback?: string): Transition => ({
 	next: rest(stage, "queued"),
@@ -120,11 +134,11 @@ export function transition(card: CardState, event: CardEvent): Transition {
 				return { next: rest(stage, "needs_attention", reason), effects: [] };
 			}
 			if (stage === "planning") {
-				return event.context.requiredGates.includes("plan_approval")
-					? { next: rest("planning", "awaiting_gate"), effects: [{ type: "open_gate", kind: "plan_approval" }] }
-					: queue("building");
+				if (event.context.afterPlanFlows) return { next: rest("planning", "queued"), effects: [{ type: "run_flows", phase: "after_plan" }] };
+				return afterPlanningPass(event.context);
 			}
 			if (stage === "building") {
+				if (event.context.afterBuildFlows) return { next: rest("testing", "queued"), effects: [{ type: "run_flows", phase: "after_build" }] };
 				return event.context.hasVerifyCommand ? { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] } : queue("testing");
 			}
 			if (stage === "testing") return afterTestsPass(event.context);
@@ -149,6 +163,17 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			// The feedback gate is the one a person should not skip lightly, so it is always asked for here.
 			if (stage === "feedback" && status === "running") return afterReviews(["feedback"]);
 			break;
+
+		case "hook_started":
+			if (status === "queued" && (stage === "planning" || stage === "testing")) return { next: rest(stage, "running"), effects: [] };
+			break;
+
+		case "hook_finished": {
+			if (status !== "running" || (stage !== "planning" && stage !== "testing")) break;
+			if (!event.passed) return { next: rest(stage, "needs_attention", event.reason), effects: [] };
+			if (stage === "planning") return afterPlanningPass(event.context);
+			return event.context.hasVerifyCommand ? { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] } : queue("testing");
+		}
 
 		case "pr_opened":
 			if (stage === "pull_request" && (status === "queued" || status === "running")) return { next: rest("pull_request", "idle"), effects: [] };
@@ -206,6 +231,8 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			if (stage === "feedback" && (status === "needs_attention" || status === "idle")) return { next: rest("feedback", "queued"), effects: [{ type: "run_flows" }] };
 			if (stage === "pull_request" && (status === "needs_attention" || status === "idle")) return openPr();
 			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted" && status !== "awaiting_input")) break;
+			// A failed after-build gate is repaired by rebuilding, not by re-testing: the gate output is the feedback.
+			if (stage === "testing" && event.gateFeedback !== undefined) return queue("building", event.gateFeedback);
 			if (stage === "testing" && event.hasVerifyCommand) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
 			return queue(stage, event.feedback);
 			break;

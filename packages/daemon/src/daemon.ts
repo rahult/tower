@@ -61,7 +61,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 		onStarted: (cardId) => orchestrator.handleStarted(cardId),
 		onOutcome: (cardId, outcome) => orchestrator.handleOutcome(cardId, outcome),
 	});
-	const flows = new FlowRunner({ config, db, stages });
+	const flows = new FlowRunner({ config, db, bus, runs, stages });
 	orchestrator = new Orchestrator({ config, db, bus, runs, stages, flows });
 	const bench = new BenchRunner({ config, db, bus, runs });
 	const app = createApp({ config, db, bus, runs, stages, orchestrator, bench, driver });

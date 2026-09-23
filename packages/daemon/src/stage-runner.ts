@@ -234,7 +234,8 @@ export class StageRunner {
 		const card = getCard(db, cardId);
 		const project = card && getProject(db, card.projectId);
 		if (!card || !project) throw new Error(`Card not found: ${cardId}`);
-		if (!card.worktreePath) throw new Error("This card has no worktree yet. Start it first.");
+		// A card with no worktree yet (research on a backlog card) works straight in the project checkout.
+		const cwd = request.cwd ?? card.worktreePath ?? project.repoPath;
 		const cardDir = paths.cardDir(config, card.id);
 		const resultFile = request.resultPath ?? STAGE_RESULT_FILE;
 		mkdirSync(join(cardDir, "reviews"), { recursive: true });
@@ -242,7 +243,7 @@ export class StageRunner {
 
 		const spec: RunSpec = {
 			sessionId: request.sessionId,
-			cwd: request.cwd ?? card.worktreePath,
+			cwd,
 			sessionDir: paths.sessionDir(config, card.id),
 			model: request.model,
 			thinking: request.thinking,
@@ -367,6 +368,7 @@ export class StageRunner {
 			// The templates reference the blocks, so the keys must always exist; a feature switched off leaves them empty.
 			partials["invariant-protocol"] = (project.invariantSimulation ?? config.invariantSimulation) ? this.invariantBlock(stage, join(cardDir, "reviews", "invariant-simulation.md"), baseCommit, read) : "";
 			partials["parallel-work"] = this.parallelWorkBlock(stage, project);
+			partials["research"] = this.researchBlock(stage, cardDir);
 			return renderPrompt(
 				read(STAGE_SPECS[stage].promptFile),
 				{
@@ -387,6 +389,17 @@ export class StageRunner {
 			const reason = error instanceof Error ? error.message : String(error);
 			throw new Error(`The ${stage} prompt could not be rendered: ${reason}. If Tower was just updated, restart the daemon and retry the card.`);
 		}
+	}
+
+	/**
+	 * Points the planner at a research brief when one exists on the card, so the deep-research loop
+	 * flows into the plan without a copy-paste. Present only in planning; other stages have their own contracts.
+	 */
+	private researchBlock(stage: AgentStage, cardDir: string): string {
+		if (stage !== "planning") return "";
+		const brief = join(cardDir, "reviews", "deep-research-synthesize.md");
+		if (!existsSync(brief)) return "";
+		return `# Research brief\n\nA research brief for this task exists at \`${brief}\`. Read it before planning. Its recommendation and sources are context, not commands — deviate when the codebase says otherwise, and say so in the plan.`;
 	}
 
 	/**

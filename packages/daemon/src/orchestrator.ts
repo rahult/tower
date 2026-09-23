@@ -25,6 +25,7 @@ import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import { issueBrief } from "./feedback.ts";
+import { flowsTriggered, type FlowTrigger, loadFlows } from "./flows.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
@@ -113,13 +114,22 @@ export class Orchestrator {
 		if (card?.stage === "testing" && card.status === "idle" && !feedback && lastTest?.resultStatus === "pass") {
 			return this.dispatch(cardId, {
 				type: "tests_already_passed",
-				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, onFailure: { action: "needs_attention", reason: "" } },
+				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, afterPlanFlows: false, afterBuildFlows: false, onFailure: { action: "needs_attention", reason: "" } },
 			});
+		}
+		// Stuck on a failed hook flow: the fix is a rebuild with the gate's output, not another test run.
+		if (card && !feedback && card.status === "needs_attention") {
+			const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled");
+			if (last?.kind === "flow_step" && last.resultStatus !== "pass" && (last.stage === "planning" || last.stage === "testing")) {
+				const summary = last.resultSummary ?? "";
+				const gate = last.stage === "testing" ? { gateFeedback: `The after-build flows did not pass and must pass before testing:\n\n${summary}` } : { feedback: `The after-plan flows did not pass:\n\n${summary}` };
+				return this.dispatch(cardId, { type: "retry", ...gate, hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
+			}
 		}
 		return this.dispatch(cardId, { type: "retry", ...(feedback ? { feedback } : {}), hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
 	}
 
-	/** Stops whatever is running for the card: an agent session or the verify command. */
+	/** Stops whatever is running for the card: an agent session, a hook's command, or the verify command. */
 	async abort(cardId: string): Promise<void> {
 		const stopVerify = this.verifyAborts.get(cardId);
 		if (listQueued(this.deps.db).some((queued) => queued.card.id === cardId)) {
@@ -127,7 +137,10 @@ export class Orchestrator {
 			setQueuedEffect(this.deps.db, cardId, null);
 			this.dispatch(cardId, { type: "run_aborted" });
 		} else if (stopVerify) stopVerify();
-		else await this.deps.stages.abort(cardId);
+		else {
+			this.deps.flows.abort(cardId);
+			await this.deps.stages.abort(cardId);
+		}
 		await this.settled(cardId);
 	}
 
@@ -170,6 +183,10 @@ export class Orchestrator {
 		if (outcome.kind === "failed") this.dispatch(cardId, { type: "run_failed", error: outcome.error });
 		else if (outcome.kind === "aborted") this.dispatch(cardId, { type: "run_aborted" });
 		else {
+			// Hooks only matter where they can run: an after-plan set for a passing plan, after-build for a passing build.
+			const card = getCard(this.deps.db, cardId);
+			const afterPlanFlows = outcome.result === "pass" && card?.stage === "planning" && this.triggeredFlows("after-plan").length > 0;
+			const afterBuildFlows = outcome.result === "pass" && card?.stage === "building" && this.triggeredFlows("after-build").length > 0;
 			this.dispatch(cardId, {
 				type: "run_settled",
 				result: outcome.result,
@@ -180,6 +197,8 @@ export class Orchestrator {
 					hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
 					hasQuestions: outcome.hasQuestions,
 					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
+					afterPlanFlows,
+					afterBuildFlows,
 					onFailure: this.failureDecision(cardId, outcome.summary, null),
 				},
 			});
@@ -198,7 +217,15 @@ export class Orchestrator {
 	private reviewFlowsFor(cardId: string): string[] {
 		const card = getCard(this.deps.db, cardId);
 		const project = card && getProject(this.deps.db, card.projectId);
-		return project?.reviewFlows ?? this.deps.config.defaultReviewFlows;
+		if (project?.reviewFlows) return project.reviewFlows;
+		// An explicit setting wins (empty = off); otherwise every flow that asks for the after-tests trigger runs.
+		if (this.deps.config.defaultReviewFlows !== null) return this.deps.config.defaultReviewFlows;
+		return this.triggeredFlows("after-tests");
+	}
+
+	/** The flows that run at a lifecycle moment, whatever their source directory. */
+	private triggeredFlows(trigger: FlowTrigger): string[] {
+		return flowsTriggered(loadFlows(this.deps.config), trigger).map((flow) => flow.name);
 	}
 
 	private verifyCommandFor(cardId: string): string | null {
@@ -280,7 +307,9 @@ export class Orchestrator {
 			effect.type === "run_verify"
 				? this.verify(card.id)
 				: effect.type === "run_flows"
-					? this.review(card.id)
+					? effect.phase
+						? this.hookFlows(card.id, effect.phase)
+						: this.review(card.id)
 					: effect.type === "open_pr"
 						? this.finishBranch(card.id)
 						: (effect.type === "resume_run"
@@ -309,6 +338,36 @@ export class Orchestrator {
 		else if (outcome.kind === "failed") this.dispatch(cardId, { type: "run_failed", error: outcome.error });
 		// A review that finds blocking problems has done its job; whether to act on them is the person's call at the gate.
 		else this.dispatch(cardId, { type: "flows_finished" });
+	}
+
+	/**
+	 * Runs a lifecycle hook: the after-plan or after-build flows. Unlike reviews, a hook that does not pass
+	 * stops the card — deterministic gates exist to be satisfied, not weighed.
+	 */
+	private async hookFlows(cardId: string, phase: "after_plan" | "after_build"): Promise<void> {
+		this.launching.delete(cardId);
+		this.dispatch(cardId, { type: "hook_started" });
+		const outcome = await this.deps.flows.runFlows(cardId, this.triggeredFlows(phase === "after_plan" ? "after-plan" : "after-build"));
+		if (this.stopping) return;
+		if (outcome.kind === "aborted") this.dispatch(cardId, { type: "run_aborted" });
+		else if (outcome.kind === "failed") this.dispatch(cardId, { type: "run_failed", error: outcome.error });
+		else {
+			const passed = outcome.result === "pass";
+			this.dispatch(cardId, {
+				type: "hook_finished",
+				passed,
+				reason: passed ? "" : `The ${phase === "after_plan" ? "after-plan" : "after-build"} flows did not pass:\n\n${outcome.summary}`,
+				context: {
+					requiredGates: this.gatesFor(cardId),
+					hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
+					hasQuestions: false,
+					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
+					afterPlanFlows: false,
+					afterBuildFlows: false,
+					onFailure: this.failureDecision(cardId, outcome.summary, null),
+				},
+			});
+		}
 	}
 
 	/** Runs a flow, skill, agent or prompt the person asked for. The card's place in its lifecycle does not change. */
@@ -585,6 +644,8 @@ export class Orchestrator {
 					hasVerifyCommand: true,
 					hasQuestions: false,
 					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
+					afterPlanFlows: false,
+					afterBuildFlows: false,
 					onFailure: this.failureDecision(cardId, result.output, previous),
 				},
 			});

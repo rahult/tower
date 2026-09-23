@@ -119,7 +119,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 		{ id: "session" as Tab, label: "Session" },
 		{ id: "changes" as Tab, label: "Changes" },
 		{ id: "files" as Tab, label: <>Files <span className="text-slate">{artifacts.length}</span></> },
-		...(card.worktreePath ? [{ id: "run" as Tab, label: "Run" }] : []),
+		{ id: "run" as Tab, label: "Run" },
 	];
 	const onTabArrow = (event: React.KeyboardEvent) => {
 		if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -197,7 +197,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 				) : activeTab === "changes" ? (
 					<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
 				) : activeTab === "run" ? (
-					<RunPanel cardId={card.id} project={project} bench={detail.data.bench.preview} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
+					<RunPanel cardId={card.id} project={project} hasWorktree={!!card.worktreePath} bench={detail.data.bench.preview} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
 				) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
 					<GatePanel cardId={card.id} gate={pendingGate} />
 				) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (

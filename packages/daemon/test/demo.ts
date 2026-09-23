@@ -73,6 +73,33 @@ const result = (status: string, summary: string): FakeTurn => ({
 	events: [],
 	effect: ({ spec }) => writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status, summary })),
 });
+
+/** A scripted deep-research step: writes its piece where the prompt points. The brief is what the planner would read. */
+function researchTurn(label: string): FakeTurn {
+	const brief = [
+		`# ${label}`,
+		"",
+		"## TL;DR",
+		"",
+		"- Three realistic options: CRDT via Yjs, event-sourced sync via a log, and plain last-write-wins with tombstones.",
+		"- The notes app is single-user-mostly, so the merge conflicts that make CRDTs worth it are rare — but offline capture is a daily event.",
+		"- Recommendation: event-sourced sync behind the storage interface; revisit a CRDT when sharing lands.",
+		"",
+		"## Sources",
+		"",
+		"- https://github.com/yjs/yjs — CRDT library, active releases.",
+		"- https://www.inkandswitch.com/peritext/ — local-first editing research.",
+	].join("\n");
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: `${label} written.`, thinking: "", toolCalls: [] } }],
+		effect: ({ spec, prompt }) => {
+			const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+			if (report) writeFileSync(report, brief);
+			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Brief ready." }));
+		},
+	};
+}
+
 const busy: FakeTurn = {
 	hang: true,
 	delayMs: 400,
@@ -110,6 +137,9 @@ const driver = new FakeSessionDriver((spec) => {
 	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
 	if (spec.sessionId.includes("-ws-")) return [streamBuilderTurn()];
 	if (spec.sessionId.includes("-integrator")) return [integratorTurn()];
+	// The deep-research flow's two steps, so exploring-before-committing is scriptable on the demo board.
+	if (spec.sessionId.includes("deep-research-survey")) return [researchTurn("Survey notes")];
+	if (spec.sessionId.includes("deep-research-synthesize")) return [researchTurn("Research brief")];
 	const stage = spec.sessionId.includes("-plan-") ? "plan" : spec.sessionId.includes("-build-") ? "build" : spec.sessionId.includes("-test-") ? "test" : "review";
 	// One reviewer finds something blocking, so the feedback gate has something to show.
 	if (stage === "review") return [reviewTurn(spec.sessionId.includes("adversarial") ? "fail" : "pass")];
@@ -143,6 +173,25 @@ const driver = new FakeSessionDriver((spec) => {
 });
 const titles = new Map<string, string>();
 
+// The person's own flow, in <home>/flows where a real one lives: a deterministic, informational gate
+// that records the shape of every build before it is tested. Demonstrates "design your own agent".
+mkdirSync(join(root, "home", "flows"), { recursive: true });
+writeFileSync(
+	join(root, "home", "flows", "change-audit.flow.json"),
+	JSON.stringify(
+		{
+			name: "change-audit",
+			title: "Change audit",
+			description: "Records the shape of every build before it is tested — informational, it never blocks.",
+			when: ["after-build"],
+			steps: [{ name: "shape", run: "git log -1 --stat --oneline | tail -4", expect: "note", timeoutSec: 30 }],
+		},
+		null,
+		"\t",
+	) + "\n",
+);
+
+
 const daemon = await startDaemon(
 	loadConfig({
 		TOWER_HOME: join(root, "home"),
@@ -167,6 +216,7 @@ const seed: Record<string, Array<[title: string, brief: string, advance: "backlo
 		["Ship only necessary files in the npm package", "Tighten the files allowlist; ignore OS junk.", "approve"],
 		["Dark mode for the treemap view", "Follow the OS setting; keep contrast AA.", "plan"],
 		["Heatmap legend", "Show the scale and units beside the heatmap.", "backlog"],
+		["Research local-first sync for the notes app", "Offline capture and merge: a CRDT, an event log, or last-write-wins? Explore before planning.", "backlog"],
 	],
 	freeup: [["Add a dry-run flag", "Print what would be deleted without deleting.", "backlog"]],
 };
@@ -207,6 +257,14 @@ execFileSync("git", ["init", "-q", "--bare", towerOrigin]);
 const towerPath = repo("tower");
 execFileSync("git", ["remote", "add", "origin", towerOrigin], { cwd: towerPath });
 await api("POST", "/api/projects", { repoPath: towerPath });
+
+// The research card explores before any work starts: the deep-research flow runs on the backlog card,
+// straight in the project checkout, and the brief lands in the card's files.
+{
+	const board = await api("GET", "/api/board");
+	const research = board.cards.find((card: { title: string }) => card.title.startsWith("Research local-first"));
+	if (research) await api("POST", `/api/cards/${research.id}/adhoc`, { flow: "deep-research" });
+}
 
 console.log(`demo board on ${daemon.url} (data in ${root}). Ctrl+C to stop.`);
 process.on("SIGINT", () => void daemon.close().finally(() => process.exit(0)));

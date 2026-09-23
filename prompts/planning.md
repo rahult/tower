@@ -16,6 +16,8 @@ Produce an implementation plan. A different, cheaper model will implement it in 
 2. Write the plan as Markdown to the absolute path `{{planPath}}`. Include: context and goal, the files to create or change (with paths), step-by-step implementation order, existing code to reuse, edge cases, and how to verify the work (exact test/build commands).
 3. Do **not** modify any file inside the repository. Planning only.
 
+{{> research}}
+
 {{> invariant-protocol}}
 
 {{> parallel-work}}

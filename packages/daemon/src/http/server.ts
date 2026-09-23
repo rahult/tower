@@ -13,7 +13,7 @@ import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
 import { matchProject, readIntent, taggedProject } from "../assist.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
-import { loadFlows } from "../flows.ts";
+import { flowsTriggered, loadFlows, runsOnBacklogCard } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { listRemotes } from "../pr/gh.ts";
@@ -234,6 +234,14 @@ export function createApp(deps: AppDeps): Hono {
 		if (verdict?.action === "start_card") {
 			action = "start_card";
 			orchestrator.dispatch(card.id, { type: "enqueue" });
+		} else if (verdict?.action === "research_card") {
+			// Explore before committing: the card is filed and the deep-research flow runs on it, no lifecycle started.
+			action = "research_card";
+			try {
+				await orchestrator.adhoc(card.id, { flow: "deep-research" });
+			} catch (error) {
+				console.error(`assist: could not start the research run (${error instanceof Error ? error.message : String(error)})`);
+			}
 		} else if (!verdict) {
 			// The intent session failed (offline, timeout): file the line as-is rather than drop it.
 			console.error(`assist: falling back to a plain card (${readError})`);
@@ -244,7 +252,14 @@ export function createApp(deps: AppDeps): Hono {
 			action,
 			card: { id: final.id, title: final.title, stage: final.stage, status: final.status },
 			projectId: project.id,
-			reply: action === "start_card" ? `Started “${title}” on ${project.name}.` : verdict ? `Added “${title}” to ${project.name}'s backlog.` : `Tower could not reach its planner, so this was filed as-is on ${project.name}.`,
+			reply:
+				action === "start_card"
+					? `Started “${title}” on ${project.name}.`
+					: action === "research_card"
+						? `Researching “${title}” on ${project.name} — the brief will land on the card.`
+						: verdict
+							? `Added “${title}” to ${project.name}'s backlog.`
+							: `Tower could not reach its planner, so this was filed as-is on ${project.name}.`,
 		});
 	});
 
@@ -285,7 +300,12 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(orchestrator.retry(card.id, feedback), 202);
 	});
 
-	app.get("/api/flows", (c) => c.json({ flows: loadFlows(config), defaults: config.defaultReviewFlows }));
+	app.get("/api/flows", (c) => {
+		const flows = loadFlows(config);
+		// What actually runs after tests: the person's explicit list, or the flows that ask for the trigger.
+		const defaults = config.defaultReviewFlows ?? flowsTriggered(flows, "after-tests").map((flow) => flow.name);
+		return c.json({ flows, defaults });
+	});
 
 	app.get("/api/usage", (c) => c.json({ byDay: usageBy(db, "day"), byProject: usageBy(db, "project"), byModel: usageBy(db, "model"), byCard: usageBy(db, "card") }));
 
@@ -296,7 +316,12 @@ export function createApp(deps: AppDeps): Hono {
 		const text = (key: string) => (typeof body[key] === "string" && (body[key] as string).trim() ? (body[key] as string).trim() : undefined);
 		const what = [text("flow"), text("skill"), text("agent"), text("prompt")].filter(Boolean);
 		if (what.length !== 1) throw new HttpError(400, 'Send exactly one of "flow", "skill", "agent" or "prompt"');
-		if (!card.worktreePath) throw new HttpError(409, "This card has no worktree yet. Start it first.");
+		// A card with no worktree (research on a backlog card) may only run flows that touch no code.
+		if (!card.worktreePath) {
+			const flowName = text("flow");
+			const flow = flowName !== undefined ? loadFlows(config).find((candidate) => candidate.name === flowName) : undefined;
+			if (!(flow && runsOnBacklogCard(flow))) throw new HttpError(409, "This card has no worktree yet. Start it first — only read-only flows run on a backlog card.");
+		}
 		const access = text("access");
 		if (access && !["read-only", "read-and-run", "write"].includes(access)) throw new HttpError(400, '"access" must be read-only, read-and-run or write');
 		try {

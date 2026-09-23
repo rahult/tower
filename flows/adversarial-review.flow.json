@@ -2,5 +2,16 @@
   "name": "adversarial-review",
   "title": "Adversarial review",
   "description": "A reviewer who assumes the change is wrong and tries to prove it: breaks it, runs it, and hunts for what the tests do not cover.",
-  "steps": [{ "name": "review", "prompt": "adversarial-review.md", "model": "planning", "access": "read-and-run" }]
+  "when": [
+    "manual",
+    "after-tests"
+  ],
+  "steps": [
+    {
+      "name": "review",
+      "prompt": "adversarial-review.md",
+      "model": "planning",
+      "access": "read-and-run"
+    }
+  ]
 }

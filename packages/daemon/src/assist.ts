@@ -5,7 +5,7 @@ import { resolveStageConfig, type RunSpec } from "@tower/core";
 import type { Config } from "./config.ts";
 import type { SessionDriver } from "./pi/session-driver.ts";
 
-export type AssistAction = "add_card" | "start_card" | "none";
+export type AssistAction = "add_card" | "start_card" | "research_card" | "none";
 
 export interface AssistVerdict {
 	action: AssistAction;
@@ -26,8 +26,8 @@ export function assistPrompt(text: string, projects: string[]): string {
 		"",
 		'A "@name" in the line tags the project the work belongs to; prefer it over guessing.',
 		'Reply with ONE JSON object and nothing else — no prose, no code fence:',
-		'{"action":"add_card" | "start_card" | "none","project":"<name from the list, or \\"\\">","title":"<short imperative title, at most 80 characters>","brief":"<one or two sentences of context for the planner, or \\"\\">"}',
-		'"add_card" puts new work on the backlog. "start_card" adds it and begins planning right away. If the line is not a request for new work — a question, a greeting, a change to an existing card — reply {"action":"none","project":"","title":"","brief":""}.',
+		'{"action":"add_card" | "start_card" | "research_card" | "none","project":"<name from the list, or \\"\\">","title":"<short imperative title, at most 80 characters>","brief":"<one or two sentences of context for the planner, or \\"\\">"}',
+		'"add_card" puts new work on the backlog. "start_card" adds it and begins planning right away. "research_card" is for exploring unfamiliar ground before committing to work — lines like "research…", "how could we…", "what is the best…", or comparing libraries and approaches: it files the card and runs Tower\'s deep-research flow on it instead of planning. If the line is not a request for new work — a question, a greeting, a change to an existing card — reply {"action":"none","project":"","title":"","brief":""}.',
 	].join("\n");
 }
 
@@ -38,7 +38,7 @@ export function parseVerdict(text: string): AssistVerdict | null {
 	if (start === -1 || end <= start) return null;
 	try {
 		const raw = JSON.parse(text.slice(start, end + 1)) as Partial<AssistVerdict>;
-		if (raw.action !== "add_card" && raw.action !== "start_card" && raw.action !== "none") return null;
+		if (raw.action !== "add_card" && raw.action !== "start_card" && raw.action !== "research_card" && raw.action !== "none") return null;
 		return {
 			action: raw.action,
 			project: typeof raw.project === "string" ? raw.project.trim() : "",

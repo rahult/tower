@@ -4,7 +4,7 @@ import { type CardEvent, type CardState, InvalidTransition, type SettleContext, 
 const card = (stage: CardState["stage"], status: CardState["status"]): CardState => ({ stage, status, needsAttentionReason: null });
 const RETRY = { action: "retry", feedback: "2 tests failed" } as const;
 const GIVE_UP = { action: "needs_attention", reason: "Still failing after 3 build attempts." } as const;
-const context = (partial: Partial<SettleContext> = {}): SettleContext => ({ requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, onFailure: RETRY, ...partial });
+const context = (partial: Partial<SettleContext> = {}): SettleContext => ({ requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, afterPlanFlows: false, afterBuildFlows: false, onFailure: RETRY, ...partial });
 const verified = (passed: boolean, partial: Partial<SettleContext> = {}): CardEvent => ({ type: "verify_finished", passed, context: context(partial) });
 const settled = (
 	result: "pass" | "fail" | "blocked" | "missing",
@@ -14,7 +14,7 @@ const settled = (
 	type: "run_settled",
 	result,
 	summary,
-	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, onFailure: RETRY, ...context },
+	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, afterPlanFlows: false, afterBuildFlows: false, onFailure: RETRY, ...context },
 });
 
 describe("transition", () => {
@@ -27,6 +27,16 @@ describe("transition", () => {
 		["rejection re-plans with the feedback", card("planning", "awaiting_gate"), { type: "gate_decided", decision: "reject", feedback: "Too broad" }, { stage: "planning", status: "queued" }, [{ type: "start_run", stage: "planning", feedback: "Too broad" }]],
 		["a finished build is verified by the daemon when the project has a verify command", card("building", "running"), settled("pass", "", { hasVerifyCommand: true }), { stage: "testing", status: "verifying" }, [{ type: "run_verify" }]],
 		["a finished build goes to a tester agent when there is no verify command", card("building", "running"), settled("pass"), { stage: "testing", status: "queued" }, [{ type: "start_run", stage: "testing" }]],
+		["a good plan runs its after-plan hooks before anything else", card("planning", "running"), settled("pass", "", { afterPlanFlows: true }), { stage: "planning", status: "queued" }, [{ type: "run_flows", phase: "after_plan" }]],
+		["a finished build runs its after-build gates before testing", card("building", "running"), settled("pass", "", { afterBuildFlows: true }), { stage: "testing", status: "queued" }, [{ type: "run_flows", phase: "after_build" }]],
+		["a finished build runs its after-build gates before the verify command too", card("building", "running"), settled("pass", "", { afterBuildFlows: true, hasVerifyCommand: true }), { stage: "testing", status: "queued" }, [{ type: "run_flows", phase: "after_build" }]],
+		["hooks that start are running", card("testing", "queued"), { type: "hook_started" }, { stage: "testing", status: "running" }, []],
+		["passing after-plan hooks reach the plan gate", card("planning", "running"), { type: "hook_finished", passed: true, reason: "", context: context() }, { stage: "planning", status: "awaiting_gate" }, [{ type: "open_gate", kind: "plan_approval" }]],
+		["passing after-plan hooks build straight away when the policy skips the gate", card("planning", "running"), { type: "hook_finished", passed: true, reason: "", context: context({ requiredGates: ["feedback"] }) }, { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building" }]],
+		["passing after-build gates run the verify command when there is one", card("testing", "running"), { type: "hook_finished", passed: true, reason: "", context: context({ hasVerifyCommand: true }) }, { stage: "testing", status: "verifying" }, [{ type: "run_verify" }]],
+		["passing after-build gates go to a tester agent when there is no verify command", card("testing", "running"), { type: "hook_finished", passed: true, reason: "", context: context() }, { stage: "testing", status: "queued" }, [{ type: "start_run", stage: "testing" }]],
+		["a failed gate stops the card with the step's summary", card("testing", "running"), { type: "hook_finished", passed: false, reason: "size-limit: bundle grew 12% (run `pnpm size`)", context: context() }, { stage: "testing", status: "needs_attention", needsAttentionReason: "size-limit: bundle grew 12% (run `pnpm size`)" }, []],
+		["retrying a failed after-build gate rebuilds with the gate output", card("testing", "needs_attention"), { type: "retry", gateFeedback: "size-limit: bundle grew 12%" }, { stage: "building", status: "queued" }, [{ type: "start_run", stage: "building", feedback: "size-limit: bundle grew 12%" }]],
 		["passing verification rests in testing", card("testing", "verifying"), verified(true), { stage: "feedback", status: "awaiting_gate" }, [{ type: "open_gate", kind: "feedback" }]],
 		["passing tests start the project's review flows first", card("testing", "verifying"), verified(true, { hasReviewFlows: true }), { stage: "feedback", status: "queued" }, [{ type: "run_flows" }]],
 		["passing tests go straight to a pull request when nothing gates them", card("testing", "verifying"), verified(true, { requiredGates: [] }), { stage: "pull_request", status: "queued" }, [{ type: "open_pr" }]],
@@ -94,6 +104,8 @@ describe("transition", () => {
 		["skip testing on a card that is still building", card("building", "idle"), { type: "tests_already_passed", context: context() }],
 		["merge a card that has no pull request", card("building", "idle"), { type: "pr_merged" }],
 		["finish a verification that is not running", card("testing", "idle"), verified(true)],
+		["hooks that finish on a card that is not running them", card("testing", "idle"), { type: "hook_finished", passed: true, reason: "", context: context() }],
+		["hooks that start on a card in the feedback stage", card("feedback", "queued"), { type: "hook_started" }],
 	])("rejects: %s", (_name, from, event) => {
 		expect(() => transition(from, event)).toThrow(InvalidTransition);
 	});

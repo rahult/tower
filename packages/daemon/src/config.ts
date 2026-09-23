@@ -11,8 +11,8 @@ export interface Config {
 	promptsDir: string;
 	/** Review flows shipped with Tower. The person's own live in <home>/flows. */
 	flowsDir: string;
-	/** Flows a project runs after its tests pass, unless the project says otherwise. */
-	defaultReviewFlows: string[];
+	/** Review flows a project runs after its tests pass. null (env unset): discover — every flow with the after-tests trigger runs; []: none. */
+	defaultReviewFlows: string[] | null;
 	/** Whether planning and testing use the invariant-simulation protocol, unless a project says otherwise. */
 	invariantSimulation: boolean;
 	/** Whether plans may fan out to scouts and parallel stream builders, unless a project says otherwise. */
@@ -50,7 +50,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		port: Number(env.TOWER_PORT ?? 4700),
 		promptsDir: env.TOWER_PROMPTS_DIR ?? join(repoRoot, "prompts"),
 		flowsDir: env.TOWER_FLOWS_DIR ?? join(repoRoot, "flows"),
-		defaultReviewFlows: (env.TOWER_REVIEW_FLOWS ?? "adversarial-review,solid-review").split(",").map((name) => name.trim()).filter(Boolean),
+		// Unset means discovery: the flows that ask for the after-tests trigger themselves (the shipped reviews do).
+		// Set but empty means off — an explicit choice, not a request to go discover.
+		defaultReviewFlows: env.TOWER_REVIEW_FLOWS !== undefined ? env.TOWER_REVIEW_FLOWS.split(",").map((name) => name.trim()).filter(Boolean) : null,
 		invariantSimulation: !["0", "false"].includes((env.TOWER_INVARIANT_SIMULATION ?? "").toLowerCase()),
 		subagents: !["0", "false"].includes((env.TOWER_SUBAGENTS ?? "").toLowerCase()),
 		maxCrew: Number(env.TOWER_MAX_CREW ?? 3),
