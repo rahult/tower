@@ -8,6 +8,7 @@
  *   /tower settings        show which model runs each stage
  *   /tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low
  *                          set them (":thinking" is optional; "stage=default" clears one)
+ *   /tower rebuild-ui      build the board UI (after pulling updates); reload the tab to see it
  *   /tower stop            stop the daemon (running sessions become resumable)
  *
  * The daemon is a separate long-running process, so it keeps working after this pi session ends. It inherits
@@ -26,7 +27,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOME = process.env.TOWER_HOME ?? join(homedir(), ".tower");
 const PORT = process.env.TOWER_PORT ?? "4700";
 const BASE = `http://127.0.0.1:${PORT}`;
-const SUBCOMMANDS = ["open", "add", "run", "status", "settings", "stop"];
+const SUBCOMMANDS = ["open", "add", "run", "status", "settings", "rebuild-ui", "stop"];
 
 interface Card {
 	id: string;
@@ -165,9 +166,21 @@ async function stop(ctx: ExtensionContext): Promise<void> {
 	ctx.ui.notify("Tower: stopping. Sessions that were running can be resumed from the board next time.", "info");
 }
 
+/**
+ * The daemon serves the built board from packages/web/dist per request, so the UI only changes when
+ * that directory is rebuilt. After pulling Tower updates (or editing the board), this rebuilds it;
+ * the new board then appears on a page reload — no daemon restart needed.
+ */
+async function rebuildUi(ctx: ExtensionContext): Promise<void> {
+	ctx.ui.notify("Tower: building the board UI…", "info");
+	const started = Date.now();
+	await run("npm", ["run", "build", "--workspace", "@tower/web"], { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 });
+	ctx.ui.notify(`Tower: UI rebuilt in ${Math.round((Date.now() - started) / 1000)}s. Reload the board tab (${BASE}) to pick it up.`, "info");
+}
+
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("tower", {
-		description: "Tower control board: /tower [open | add <title> | run <title> | status | settings | stop]",
+		description: "Tower control board: /tower [open | add <title> | run <title> | status | settings | rebuild-ui | stop]",
 		getArgumentCompletions: (prefix: string) => {
 			if (prefix.includes(" ")) return null;
 			const matches = SUBCOMMANDS.filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name }));
@@ -183,6 +196,7 @@ export default function (pi: ExtensionAPI) {
 				} else if (subcommand === "add" || subcommand === "run") await addCard(rest.join(" "), ctx, subcommand === "run");
 				else if (subcommand === "status") await status(ctx);
 				else if (subcommand === "settings") await settings(rest, ctx);
+				else if (subcommand === "rebuild-ui") await rebuildUi(ctx);
 				else if (subcommand === "stop") await stop(ctx);
 				else ctx.ui.notify(`Unknown: /tower ${subcommand}. Try: ${SUBCOMMANDS.join(", ")}`, "warning");
 			} catch (error) {
