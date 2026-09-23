@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../api/client.ts";
 import { useTranscript } from "../api/stream.ts";
-import { BAR_CLASS, CHIP_CLASS, describeCard, isLive } from "../board/status.ts";
-import { ConfirmButton, ErrorNote } from "../app/bits.tsx";
+import { describeCard, isLive, TONE_SUFFIX } from "../board/status.ts";
+import { ConfirmButton, ErrorNote, formatMoney, formatTokens } from "../app/bits.tsx";
+import { Icon } from "../app/icons.tsx";
 import { Markdown } from "../content/Markdown.tsx";
 import { ArtifactsPanel } from "./ArtifactsPanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
@@ -26,8 +27,9 @@ interface DrawerProps {
 type Tab = "decision" | "session" | "changes" | "files" | "run";
 
 /**
- * The card's whole story, with the decision on top: when the card is waiting for the reader, the decision
- * is the first tab and it is selected; the session, the diff and the files are one click away.
+ * The card inspector: one surface docked beside whichever view is active. When the card is waiting
+ * for the reader, the decision is the first tab and it is selected; the session, the diff and the
+ * files are one click away.
  */
 export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	const detail = useQuery({ queryKey: ["card", cardId], queryFn: () => api.card(cardId) });
@@ -46,7 +48,8 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	});
 
 	const pendingGate = detail.data?.gates.find((gate) => gate.status === "pending") ?? null;
-	const asked = detail.data?.card.status === "awaiting_input" ? (runs.at(-1)?.questions ?? null) : null;
+	// The run that asked is not always the newest one — a crew's blocked builder may sit a few runs back.
+	const asked = detail.data?.card.status === "awaiting_input" ? (runs.findLast((r) => r.questions)?.questions ?? null) : null;
 	const decision = pendingGate !== null || asked !== null;
 
 	useEffect(() => {
@@ -84,14 +87,16 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 
 	if (detail.isPending)
 		return (
-			<aside aria-label="Card" className="h-full bg-sheet p-4 text-slate">
-				Loading card…
+			<aside aria-label="Card" className="inspector open">
+				<div className="insp-empty">Loading card…</div>
 			</aside>
 		);
 	if (detail.error)
 		return (
-			<aside aria-label="Card" className="h-full bg-sheet p-4">
-				<ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
+			<aside aria-label="Card" className="inspector open">
+				<div className="panel">
+					<ErrorNote error={detail.error} onRetry={() => void detail.refetch()} />
+				</div>
 			</aside>
 		);
 	if (!detail.data) return null;
@@ -99,10 +104,12 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	const project = projects.find((p) => p.id === card.projectId);
 	const { stage, status, tone } = describeCard(card);
 	const live = run?.id === runs.at(-1)?.id && (isLive(card) || run?.status === "running" || run?.status === "starting");
+	// A crew runs several sessions at once; steering one of them from the drawer would mislead the reader.
+	const crewLive = runs.some((r) => r.kind === "subagent" && (r.status === "running" || r.status === "starting"));
 	const caution = tone === "caution";
 	const totals = runs.reduce((sum, r) => ({ tokens: sum.tokens + (r.tokens?.total ?? 0), cost: sum.cost + (r.costUsd ?? 0) }), { tokens: 0, cost: 0 });
 	const sessions = runs.filter((r) => r.kind !== "verify").length;
-	const usage = totals.tokens > 0 ? `${totals.tokens.toLocaleString()} tokens across ${sessions} ${sessions === 1 ? "session" : "sessions"}${totals.cost > 0 ? `, $${totals.cost.toFixed(2)}` : ""}` : null;
+	const usage = totals.tokens > 0 ? `${formatTokens(totals.tokens)} tok · ${sessions} ${sessions === 1 ? "session" : "sessions"}${totals.cost > 0 ? ` · ${formatMoney(totals.cost)}` : ""}` : null;
 
 	// A decision that resolved while the reader watched another tab leaves no empty pane behind.
 	const chosen: Tab = tab ?? (decision ? "decision" : "session");
@@ -126,59 +133,51 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	};
 
 	return (
-		<aside aria-label={`Card ${card.title}`} className="flex h-full min-h-0 flex-col bg-sheet">
-			<div aria-hidden className={`h-1 shrink-0 ${isLive(card) ? "bg-primary" : caution ? "bg-caution" : BAR_CLASS[tone]}`} />
-			<header className={`shrink-0 border-b border-rule px-4 py-3 ${caution ? "bg-caution-soft" : ""}`}>
-				<div className="flex items-start gap-3">
-					<h2 ref={heading} tabIndex={-1} className="min-w-0 flex-1 text-[19px] leading-snug font-bold outline-none">
+		<aside aria-label={`Card ${card.title}`} className="inspector open">
+			<header className="insp-head">
+				<div className="top">
+					<h2 ref={heading} tabIndex={-1} className="min-w-0 flex-1 outline-none">
 						{card.title}
 					</h2>
-					<button type="button" onClick={onClose} className="cursor-pointer rounded px-2 py-0.5 text-[14px] text-slate hover:bg-wash hover:text-ink">
-						Close
+					<button type="button" onClick={onClose} className="iconbtn insp-close" aria-label="Close">
+						<Icon name="x" className="icon icon-lg" />
 					</button>
 				</div>
-				<p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate">
-					<span className={`rounded px-1.5 py-px text-[12px] font-semibold ${caution ? "bg-caution text-caution-ink" : CHIP_CLASS[tone]}`}>{status}</span>
-					{project?.name}
-					<span aria-hidden>·</span>
-					<span>{stage}</span>
+				<div className="ctx">
+					<strong>{project?.name}</strong>
 					{card.branchName && (
-						<>
-							<span aria-hidden>·</span>
-							<span className="max-w-[17rem] truncate font-mono text-[12px] align-bottom" title={card.branchName}>
-								{card.branchName}
-							</span>
-						</>
-					)}
-					<span className="font-mono text-[12px] text-slate/70">{card.id}</span>
-					{/* Abort lives on the meta row, a row away from Close, so the two are never a mistimed click apart. */}
-					{isLive(card) && (
-						<span className="ml-auto">
-							<ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />
+						<span className="mono flex min-w-0 items-center gap-1" title={card.branchName}>
+							<Icon name="branch" />
+							<span className="max-w-[16rem] truncate">{card.branchName}</span>
 						</span>
 					)}
-				</p>
+					<span className="mono">{card.id}</span>
+					{usage && <span className="mono">{usage}</span>}
+				</div>
+				<div className="toolbar">
+					<span className={`chip ${caution ? "needs" : TONE_SUFFIX[tone]}`}>{status}</span>
+					<span className="meta">{stage}</span>
+					{card.prUrl && (
+						<a href={card.prUrl} target="_blank" rel="noreferrer noopener" className="chip mono ok">
+							<Icon name="pr" />
+							{card.prUrl.replace("https://github.com/", "")}
+						</a>
+					)}
+					<span className="spacer" />
+					{isLive(card) && <ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />}
+				</div>
 				{card.brief && (
-					<details className="mt-2 text-[14px]">
+					<details className="text-[14px]">
 						<summary className="cursor-pointer text-[13px] text-slate select-none">The brief</summary>
 						<div className="mt-1 max-h-32 overflow-y-auto">
 							<Markdown text={card.brief} />
 						</div>
 					</details>
 				)}
-				{card.prUrl && (
-					<p className="mt-2 text-[14px]">
-						<a href={card.prUrl} target="_blank" rel="noreferrer noopener" className="font-semibold text-primary underline underline-offset-4">
-							{card.prUrl.replace("https://github.com/", "")}
-						</a>
-						{card.stage === "pull_request" && card.status === "idle" && <span className="text-slate"> is open. Tower checks it every couple of minutes.</span>}
-					</p>
-				)}
-				{usage && <p className="mt-1 text-[12px] text-slate">{usage}</p>}
-				{card.needsAttentionReason && card.status !== "awaiting_input" && <p className="mt-2 text-[14px] font-semibold">{card.needsAttentionReason}</p>}
+				{card.needsAttentionReason && card.status !== "awaiting_input" && <p className="text-[14px] font-semibold">{card.needsAttentionReason}</p>}
 			</header>
 
-			<nav className="flex shrink-0 items-center gap-4 overflow-x-auto border-b border-rule px-4" role="tablist" aria-label="Card sections" onKeyDown={onTabArrow}>
+			<nav className="tabs" role="tablist" aria-label="Card sections" onKeyDown={onTabArrow}>
 				{tabs.map(({ id, label, tone }) => (
 					<TabButton key={id} id={id} active={activeTab === id} onSelect={() => setTab(id)} tone={tone}>
 						{label}
@@ -186,7 +185,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 				))}
 			</nav>
 
-			<div key={activeTab} role="tabpanel" id={`drawer-panel-${activeTab}`} aria-labelledby={`drawer-tab-${activeTab}`} tabIndex={0} className="flex min-h-0 flex-1 flex-col outline-none">
+			<div key={activeTab} role="tabpanel" id={`drawer-panel-${activeTab}`} aria-labelledby={`drawer-tab-${activeTab}`} tabIndex={0} className="flex min-h-0 flex-col outline-none">
 				{activeTab === "files" ? (
 					<ArtifactsPanel cardId={card.id} artifacts={artifacts} />
 				) : activeTab === "changes" ? (
@@ -204,10 +203,10 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 						<RunsRail runs={runs} picked={run.id} onPick={setPickedRunId} />
 						<RunSummary run={run} />
 						<Transcript blocks={blocks} live={live} runId={run.id} />
-						{live && run.kind !== "verify" && run.kind !== "test" && <SteerBox cardId={card.id} />}
+						{live && !crewLive && run.kind !== "verify" && run.kind !== "test" && <SteerBox cardId={card.id} />}
 					</>
 				) : (
-					<p className="p-4 text-[14px] text-slate">No session has run for this card yet. Start it from the Focus view to plan it.</p>
+					<p className="p-4 text-[14px] text-slate">No session has run for this card yet. Start it from the Tower view to plan it.</p>
 				)}
 			</div>
 		</aside>
@@ -224,9 +223,10 @@ function TabButton({ id, active, onSelect, tone, children }: { id: string; activ
 			aria-controls={`drawer-panel-${id}`}
 			tabIndex={active ? 0 : -1}
 			onClick={onSelect}
-			className={`-mb-px cursor-pointer border-b-2 py-2 text-[14px] font-semibold whitespace-nowrap ${active ? (tone === "caution" ? "border-caution text-ink" : "border-primary text-ink") : "border-transparent text-slate hover:text-ink"}`}
+			style={tone === "caution" && active ? { borderBottomColor: "var(--caution)" } : undefined}
 		>
 			{children}
+			{tone === "caution" && <span className="dot needs" aria-hidden />}
 		</button>
 	);
 }
@@ -260,7 +260,13 @@ function runLabel(run: StageRun): string {
 	if (run.kind === "verify") return "your checks";
 	if (run.kind === "test") return `your tests${run.attempt > 1 ? ` ${run.attempt}×` : ""}`;
 	if (run.kind === "flow_step") return run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, "").replaceAll("-", " ");
-	if (run.kind === "stage") return `${run.stage}${run.attempt > 1 ? ` ${run.attempt}×` : ""}`;
+	if (run.kind === "subagent") {
+		const member = run.id.replace(/^c[^-]+-crew\d+-/, "");
+		if (member.startsWith("scout-")) return `scout ${member.replace("scout-", "").replaceAll("-", " ")}`;
+		if (member.startsWith("ws-")) return `builder ${member.replace("ws-", "").replaceAll("-", " ")}`;
+		return member.replaceAll("-", " ");
+	}
+	if (run.kind === "stage") return `${run.model === "crew" ? "crew" : run.stage}${run.attempt > 1 ? ` ${run.attempt}×` : ""}`;
 	return run.id.replace(/^c[^-]+-/, "").replaceAll("-", " ");
 }
 
@@ -269,7 +275,7 @@ const RESULT_CHIP: Record<string, string> = { pass: "bg-ok-soft text-ok", fail: 
 function RunSummary({ run }: { run: StageRun }) {
 	const tokens = run.tokens ? `${run.tokens.total.toLocaleString()} tokens` : null;
 	// Subscription models report $0, so tokens lead and dollars only show when there is a real figure.
-	const cost = run.costUsd ? `$${run.costUsd.toFixed(run.costUsd < 1 ? 3 : 2)}` : null;
+	const cost = run.costUsd ? formatMoney(run.costUsd) : null;
 	return (
 		<div className="shrink-0 border-b border-rule bg-sheet px-4 py-2 text-[13px] text-slate">
 			<p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
@@ -277,13 +283,15 @@ function RunSummary({ run }: { run: StageRun }) {
 					<span>
 						{run.kind === "verify" ? "Verify command" : "Test command"} <span className="font-mono text-ink">{run.model}</span>
 					</span>
+				) : run.model === "crew" ? (
+					<span>one building attempt, run by a crew of sub-agents</span>
 				) : (
 					<span>
 						<span className="font-mono text-ink">{run.model}</span> thinking {run.thinking}
 					</span>
 				)}
-				{tokens && <span>{tokens}</span>}
-				{cost && <span>{cost}</span>}
+				{tokens && <span className="tnum">{tokens}</span>}
+				{cost && <span className="tnum">{cost}</span>}
 			</p>
 			{run.resultSummary && (
 				<p className="mt-1 text-ink">

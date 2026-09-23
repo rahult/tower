@@ -6,20 +6,13 @@ import type { Card } from "@tower/core";
  */
 export type Tone = "rest" | "work" | "caution" | "ok" | "danger";
 
-export const BAR_CLASS: Record<Tone, string> = {
-	rest: "bg-rule",
-	work: "bg-primary",
-	caution: "bg-caution/60",
-	ok: "bg-ok",
-	danger: "bg-danger",
-};
-
-export const CHIP_CLASS: Record<Tone, string> = {
-	rest: "bg-wash text-slate",
-	work: "bg-primary-soft text-primary",
-	caution: "bg-caution-soft text-caution-text",
-	ok: "bg-ok-soft text-ok",
-	danger: "bg-danger-soft text-danger",
+/** The tone as a design-system class suffix (`.card needs`, `.chip working`, `.mini.warn`…). */
+export const TONE_SUFFIX: Record<Tone, string> = {
+	rest: "idle",
+	work: "working",
+	caution: "needs",
+	ok: "ok",
+	danger: "warn",
 };
 
 const STATUS: Record<Card["status"], { label: string; tone: Tone }> = {

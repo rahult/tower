@@ -1,9 +1,11 @@
 import type { Card, Project, StageRun } from "@tower/core";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
-import { type Artifact, api, type CardDetail, type Gate } from "../api/client.ts";
+import { api, type CardDetail } from "../api/client.ts";
 import { describeCard, isLive, needsYou, STAGE_LABEL } from "../board/status.ts";
-import { ConfirmButton, ErrorNote, TrayHeading, useElapsed, usePastDelay } from "../app/bits.tsx";
+import { ConfirmButton, ErrorNote, shortModel, useElapsed, usePastDelay } from "../app/bits.tsx";
+import { Icon } from "../app/icons.tsx";
+import { toast } from "../app/toasts.tsx";
 import { NewProjectForm } from "../app/quickadd.tsx";
 import { button, field } from "../ui.ts";
 
@@ -11,18 +13,20 @@ interface FocusProps {
 	projects: Project[];
 	cards: Card[];
 	activeRuns: StageRun[];
+	selectedCardId: string | null;
 	onOpen: (cardId: string) => void;
 	onAddWork: (projectId?: string) => void;
+	onOpenModels: () => void;
 }
 
 const FILTER_KEY = "tower-filter";
 
 /**
- * The default view, ordered by how much the reader is needed: the decisions that block an agent first,
- * then work in flight, then everything waiting, then what finished. A tray that is empty does not render.
- * Many projects can be narrowed to one with the filter chips without losing the global counts.
+ * The default view. A rail of projects on the left; the stream on the right, ordered by how much the
+ * reader is needed: the decisions that block an agent first, then work in flight, then everything
+ * waiting, then what finished. A tray that is empty does not render.
  */
-export function Focus({ projects, cards, activeRuns, onOpen, onAddWork }: FocusProps) {
+export function Focus({ projects, cards, activeRuns, selectedCardId, onOpen, onAddWork, onOpenModels }: FocusProps) {
 	const [filter, setFilter] = useState(() => {
 		try {
 			return localStorage.getItem(FILTER_KEY) ?? "all";
@@ -54,100 +58,182 @@ export function Focus({ projects, cards, activeRuns, onOpen, onAddWork }: FocusP
 		const byCard = new Map<string, StageRun[]>();
 		for (const run of activeRuns) if (ids.has(run.cardId)) byCard.set(run.cardId, [...(byCard.get(run.cardId) ?? []), run]);
 		return [...byCard.entries()].sort((a, b) => (a[1][0]?.startedAt ?? 0) - (b[1][0]?.startedAt ?? 0));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeRuns, cards, filter]);
 
-	if (projects.length === 0) return <EmptyBoard />;
+	const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
 
-	const waitingTotal = cards.filter(needsYou).length;
-	const quiet = attention.length === 0 && inFlight.length === 0 && queued.length === 0;
+	if (projects.length === 0) {
+		return (
+			<section className="view active" id="view-tower" aria-label="Tower">
+				<aside className="rail" aria-label="Projects">
+					<div className="rail-head flex items-center gap-2">
+						<span className="label flex-1">Projects</span>
+					</div>
+					<div className="rail-list" />
+				</aside>
+				<div className="stream" tabIndex={-1}>
+					<EmptyBoard />
+				</div>
+			</section>
+		);
+	}
+
+	const openTotal = cards.filter((card) => card.stage !== "done").length;
+	const filteredProject = projects.find((project) => project.id === filter);
+	const groupsUsed = attention.length + inFlight.length + queued.length + backlog.length + finished.length;
+
 	return (
-		<div className="mx-auto flex w-full max-w-[64rem] flex-col gap-8">
-			{projects.length > 1 && (
-				<div role="group" aria-label="Filter by project" className="flex flex-wrap items-center gap-1.5">
-					<FilterChip active={filter === "all"} onClick={() => pickFilter("all")} waiting={waitingTotal}>
-						All projects
-					</FilterChip>
+		<section className="view active" id="view-tower" aria-label="Tower">
+			<aside className="rail" aria-label="Projects">
+				<div className="rail-head flex items-center gap-2">
+					<span className="label flex-1">Projects</span>
+					<span className="meta mono text-[12px]">{openTotal} open</span>
+				</div>
+				<div className="rail-list">
+					<ProjectButton label="All projects" sub={`${projects.length} repositories`} needs={cards.filter((c) => needsYou(c) || c.status === "abandoned").length} working={cards.filter(isLive).length} active={filter === "all"} onClick={() => pickFilter("all")} />
 					{projects.map((project) => {
-						const waiting = cards.filter((card) => card.projectId === project.id && (needsYou(card) || card.status === "abandoned")).length;
+						const pc = cards.filter((card) => card.projectId === project.id);
 						return (
-							<FilterChip key={project.id} active={filter === project.id} onClick={() => pickFilter(project.id)} waiting={waiting}>
-								{project.name}
-							</FilterChip>
+							<ProjectButton
+								key={project.id}
+								label={project.name}
+								sub={`${project.defaultBranch} · ${pc.filter((card) => card.stage !== "done").length} open`}
+								needs={pc.filter((card) => needsYou(card) || card.status === "abandoned").length}
+								working={pc.filter(isLive).length}
+								active={filter === project.id}
+								onClick={() => pickFilter(project.id)}
+							/>
 						);
 					})}
 				</div>
-			)}
-
-			{quiet && cards.length > 0 && (
-				<section className="rounded-lg border border-rule bg-sheet px-5 py-6 text-center">
-					<p className="display text-[22px] font-extrabold">All clear.</p>
-					<p className="mt-1 text-[14px] text-slate">
-						Nothing is running and nothing needs you.
-						{backlog.length > 0 && ` ${backlog.length} ${backlog.length === 1 ? "card sits" : "cards sit"} in the backlog below.`}{" "}
-						<button type="button" onClick={() => onAddWork()} className={`${button.link} !text-[14px]`}>
-							Add work
-						</button>{" "}
-						whenever you like.
+				<div className="legend" aria-label="What the counts mean">
+					<div className="legend-row">
+						<span className="badge needs" aria-hidden>
+							3
+						</span>
+						<span className="grid gap-0">
+							<span className="k">Need you</span>
+							<span className="v">Plans to approve, questions, reviews</span>
+						</span>
+					</div>
+					<div className="legend-row">
+						<span className="badge working" aria-hidden>
+							2
+						</span>
+						<span className="grid gap-0">
+							<span className="k">Running</span>
+							<span className="v">An agent is working on it</span>
+						</span>
+					</div>
+				</div>
+				<div className="rail-foot" aria-label="Model tiers">
+					{(["planning", "building", "testing"] as const).map((stage) => (
+						<button key={stage} type="button" className="tier cursor-pointer text-left" onClick={onOpenModels} title="Which model runs each stage">
+							<span className="k">{stage === "planning" ? "Plan" : stage === "building" ? "Build" : "Test"}</span>
+							<span className="v">{settings.data ? shortModel(settings.data.models[stage].model) : "…"}</span>
+						</button>
+					))}
+				</div>
+			</aside>
+			<div className="stream" tabIndex={-1}>
+				<div className="stream-head">
+					<h1>{filteredProject ? filteredProject.name : "Tower"}</h1>
+					<p className="meta">
+						{attention.length > 0
+							? `${attention.length} ${attention.length === 1 ? "card needs" : "cards need"} you. Everything else is flying or waiting.`
+							: "Nothing needs you. Agents are working; you are free."}
 					</p>
-				</section>
-			)}
+				</div>
 
-			{attention.length > 0 && (
-				<section aria-label="Needs you">
-					<TrayHeading label="Needs you" count={attention.length} tone="caution" hint="These decisions block an agent" />
-					<ul className="mt-3 flex flex-col gap-2">
-						{attention.map((card) => (
-							<AttentionRow key={card.id} card={card} projectName={names.get(card.projectId)} onOpen={onOpen} />
-						))}
-					</ul>
-				</section>
-			)}
-
-			{inFlight.length > 0 && (
-				<section aria-label="In flight">
-					<TrayHeading label="In flight" count={inFlight.length} tone="work" hint="Agents at work; step in only if you must" />
-					<ul className="mt-3 flex flex-col gap-2">
-						{inFlight.map(([cardId, runs]) => (
-							<FlightRow key={cardId} card={cards.find((card) => card.id === cardId)} runs={runs} onOpen={onOpen} />
-						))}
-					</ul>
-				</section>
-			)}
-
-			{queued.length > 0 && (
-				<section aria-label="Waiting for a slot">
-					<TrayHeading label="Waiting for a slot" count={queued.length} tone="work" />
-					<ul className="mt-3 flex flex-col gap-2">
-						{queued.map((card) => (
-							<QueueRow key={card.id} card={card} projectName={names.get(card.projectId)} onOpen={onOpen} />
-						))}
-					</ul>
-				</section>
-			)}
-
-			{backlog.length > 0 && (
-				<section aria-label="Backlog">
-					<TrayHeading label="Backlog" count={backlog.length} tone="rest" hint="Told to wait for your go" />
-					<Backlog cards={backlog} names={names} onOpen={onOpen} />
-				</section>
-			)}
-
-			{finished.length > 0 && (
-				<section aria-label="Finished today">
-					<TrayHeading label="Finished today" count={finished.length} tone="ok" />
-					<ul className="mt-3 flex flex-col gap-1.5">
-						{finished.slice(0, 6).map((card) => (
-							<DoneRow key={card.id} card={card} onOpen={onOpen} />
-						))}
-					</ul>
-					{finished.length > 6 && (
-						<p className="mt-2 text-[13px] text-slate">
-							And {finished.length - 6} more — the <button type="button" onClick={() => (window.location.hash = "#board")} className={button.link}>board</button> keeps the rest (unfold Done there).
+				{attention.length === 0 && (
+					<div className="allclear">
+						<h2>All clear.</h2>
+						<p className="meta">
+							You will be nudged here, in the tab title, and by notification when a card stops for you.{" "}
+							{backlog.length > 0 && `${backlog.length} ${backlog.length === 1 ? "card sits" : "cards sit"} in the backlog below.`}
 						</p>
-					)}
-				</section>
-			)}
-		</div>
+					</div>
+				)}
+
+				{attention.length > 0 && (
+					<section className="group needs" aria-label="Needs you">
+						<div className="group-head">
+							<h2>Needs you</h2>
+							<span className="n">{attention.length}</span>
+							<span className="line" />
+						</div>
+						<div className="rows">
+							{attention.map((card, i) => (
+								<AttentionRow key={card.id} card={card} projectName={names.get(card.projectId)} selected={card.id === selectedCardId} index={i} onOpen={onOpen} />
+							))}
+						</div>
+					</section>
+				)}
+
+				{inFlight.length > 0 && (
+					<section className="group working" aria-label="In flight">
+						<div className="group-head">
+							<h2>In flight</h2>
+							<span className="n">{inFlight.length}</span>
+							<span className="line" />
+						</div>
+						<div className="rows">
+							{inFlight.map(([cardId, runs], i) => (
+								<FlightRow key={cardId} card={cards.find((card) => card.id === cardId)} runs={runs} selected={cardId === selectedCardId} index={attention.length + i} onOpen={onOpen} />
+							))}
+						</div>
+					</section>
+				)}
+
+				{(queued.length > 0 || backlog.length > 0) && (
+					<section className="group" aria-label="Queued">
+						<div className="group-head">
+							<h2>Queued</h2>
+							<span className="n">{queued.length + backlog.length}</span>
+							<span className="line" />
+						</div>
+						<div className="rows">
+							{backlog.map((card, i) => (
+								<BacklogRow key={card.id} card={card} projectName={names.get(card.projectId)} selected={card.id === selectedCardId} index={attention.length + inFlight.length + i} onOpen={onOpen} />
+							))}
+							{queued.map((card, i) => (
+								<QueueRow key={card.id} card={card} projectName={names.get(card.projectId)} selected={card.id === selectedCardId} index={attention.length + inFlight.length + backlog.length + i} onOpen={onOpen} />
+							))}
+						</div>
+					</section>
+				)}
+
+				{finished.length > 0 && (
+					<section className="group ok" aria-label="Landed today">
+						<div className="group-head">
+							<h2>Landed today</h2>
+							<span className="n">{finished.length}</span>
+							<span className="line" />
+						</div>
+						<div className="rows">
+							{finished.slice(0, 6).map((card, i) => (
+								<DoneRow key={card.id} card={card} projectName={names.get(card.projectId)} selected={card.id === selectedCardId} index={i} onOpen={onOpen} />
+							))}
+						</div>
+						{finished.length > 6 && (
+							<p className="meta mt-2">
+								And {finished.length - 6} more — the <button type="button" onClick={() => (window.location.hash = "#board")} className={button.link}>board</button> keeps the rest (unfold Done there).
+							</p>
+						)}
+					</section>
+				)}
+
+				{groupsUsed === 0 && (
+					<div className="empty">
+						<strong>No cards yet</strong>
+						<span>
+							Add work with <span className="kbd">n</span> or <code>/tower add</code> from any pi session.
+						</span>
+					</div>
+				)}
+			</div>
+		</section>
 	);
 }
 
@@ -155,7 +241,7 @@ function EmptyBoard() {
 	return (
 		<div className="mx-auto flex w-full max-w-[44rem] flex-col items-start gap-5 pt-8">
 			<div>
-				<h2 className="display text-[26px] font-extrabold">Your control tower is empty.</h2>
+				<h2 className="text-[26px] font-semibold tracking-[-0.02em]">Your control tower is empty.</h2>
 				<p className="mt-2 max-w-[52ch] text-[15px] text-slate">
 					Add a git repository from this machine, then hand Tower a piece of work. It plans with a strong model, builds with a cheap one, lets your tests judge the result, and asks
 					you only when a decision is yours.
@@ -166,17 +252,66 @@ function EmptyBoard() {
 	);
 }
 
-/** The amber rows: one decision each, with the action in place so the drawer is optional. */
-function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: string | undefined; onOpen: (id: string) => void }) {
-	const detail = useQueryCard(card.id);
+/** A rail row: the project, its open count, and the two counts that matter — amber under amber, blue under blue. */
+function ProjectButton({ label, sub, needs, working, active, onClick }: { label: string; sub: string; needs: number; working: number; active: boolean; onClick: () => void }) {
+	return (
+		<button type="button" className="proj" aria-pressed={active} onClick={onClick}>
+			<span className="min-w-0">
+				<span className="name truncate">{label}</span>
+				<span className="sub">{sub}</span>
+			</span>
+			<span className="badges">
+				{needs > 0 ? (
+					<span className="badge needs" title={`${needs} need you`}>
+						{needs}
+					</span>
+				) : (
+					<span className="badge slot" aria-hidden />
+				)}
+				{working > 0 ? (
+					<span className="badge working" title={`${working} running`}>
+						{working}
+					</span>
+				) : (
+					<span className="badge slot" aria-hidden />
+				)}
+			</span>
+		</button>
+	);
+}
+
+// --- card rows ---------------------------------------------------------------
+
+interface RowProps {
+	card: Card;
+	projectName: string | undefined;
+	selected: boolean;
+	index: number;
+	onOpen: (id: string) => void;
+}
+
+function useCardActions(card: Card) {
 	const queryClient = useQueryClient();
 	const refresh = () => {
 		void queryClient.invalidateQueries({ queryKey: ["board"] });
 		void queryClient.invalidateQueries({ queryKey: ["card", card.id] });
 	};
-	const decide = useMutation({ mutationFn: (input: { gateId: string; decision: "approve" | "reject"; feedback?: string }) => api.decideGate(card.id, input.gateId, input.decision, input.feedback), onSuccess: refresh });
-	const resume = useMutation({ mutationFn: () => api.resume(card.id), onSuccess: refresh });
-	const retry = useMutation({ mutationFn: (feedback?: string) => api.retry(card.id, feedback), onSuccess: refresh });
+	const decide = useMutation({
+		mutationFn: (input: { gateId: string; decision: "approve" | "reject"; feedback?: string; done?: string }) => api.decideGate(card.id, input.gateId, input.decision, input.feedback),
+		onSuccess: (_updated, input) => {
+			refresh();
+			if (input.done) toast(input.done);
+		},
+	});
+	const resume = useMutation({ mutationFn: () => api.resume(card.id), onSuccess: () => (refresh(), toast("Resumed where it stopped.")) });
+	const retry = useMutation({ mutationFn: (feedback?: string) => api.retry(card.id, feedback), onSuccess: () => (refresh(), toast("Running again.")) });
+	return { refresh, decide, resume, retry };
+}
+
+/** The amber rows: one decision each, with the action in place so the inspector is optional. */
+function AttentionRow({ card, projectName, selected, index, onOpen }: RowProps) {
+	const detail = useQueryCard(card.id);
+	const { refresh, decide, resume, retry } = useCardActions(card);
 	const [sendingBack, setSendingBack] = useState(false);
 	const [note, setNote] = useState("");
 	const openRow = () => onOpen(card.id);
@@ -186,26 +321,33 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 	const asked = card.status === "awaiting_input" ? (detail.data?.runs.at(-1)?.questions ?? null) : null;
 	const pending = detail.isPending;
 
+	let badge = status;
 	let context = "";
 	let actions: ReactNode = null;
 	let expand: ReactNode = null;
 
 	if (gate?.kind === "plan_approval") {
+		badge = "Plan approval";
 		context = "The plan is ready. A cheap model will build from it alone, so it has to stand on its own.";
 		actions = (
 			<>
-				<RowButton kind="primary" busy={decide.isPending} onClick={() => decide.mutate({ gateId: gate.id, decision: "approve" })}>
-					Approve & build
-				</RowButton>
-				<RowButton onClick={openRow}>Read plan</RowButton>
-				<RowButton onClick={() => setSendingBack((on) => !on)}>Send back…</RowButton>
+				<button type="button" onClick={() => decide.mutate({ gateId: gate.id, decision: "approve", done: "Plan approved. The builder starts next." })} disabled={decide.isPending} className="btn primary sm">
+					Approve &amp; build
+				</button>
+				<button type="button" onClick={openRow} className="btn sm">
+					Read plan
+				</button>
+				<button type="button" onClick={() => setSendingBack((on) => !on)} className="btn ghost sm">
+					Send back…
+				</button>
 			</>
 		);
 		expand =
 			sendingBack && gate ? (
-				<SendBack note={note} setNote={setNote} busy={decide.isPending} onSend={() => decide.mutate({ gateId: gate.id, decision: "reject", feedback: note.trim() })} onCancel={() => setSendingBack(false)} />
+				<SendBack note={note} setNote={setNote} busy={decide.isPending} onSend={() => decide.mutate({ gateId: gate.id, decision: "reject", feedback: note.trim(), done: "Sent back to planning with your note." })} onCancel={() => setSendingBack(false)} />
 			) : null;
 	} else if (gate?.kind === "feedback") {
+		badge = "Review work";
 		const runs = detail.data?.runs ?? [];
 		const verdicts = new Map<string, StageRun>();
 		for (const run of runs) if (run.kind === "flow_step") verdicts.set(flowName(run), run);
@@ -221,11 +363,15 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 		if (reports.length === 0) context = "The work is done. Approving opens the pull request.";
 		actions = (
 			<>
-				<RowButton kind="primary" busy={decide.isPending} onClick={() => decide.mutate({ gateId: gate.id, decision: "approve" })}>
-					Approve & open PR
-				</RowButton>
-				<RowButton onClick={openRow}>Read findings</RowButton>
-				<RowButton onClick={() => setSendingBack((on) => !on)}>Send back…</RowButton>
+				<button type="button" onClick={() => decide.mutate({ gateId: gate.id, decision: "approve", done: "Approved. Tower opens the pull request." })} disabled={decide.isPending} className="btn primary sm">
+					Approve &amp; open PR
+				</button>
+				<button type="button" onClick={openRow} className="btn sm">
+					Read findings
+				</button>
+				<button type="button" onClick={() => setSendingBack((on) => !on)} className="btn ghost sm">
+					Send back…
+				</button>
 			</>
 		);
 		expand =
@@ -235,18 +381,19 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 					setNote={setNote}
 					busy={decide.isPending}
 					placeholder={reports.length > 0 ? `Address the blocking findings in ${reports.map((report) => report.name).join(" and ")}.` : "What should change?"}
-					onSend={() => decide.mutate({ gateId: gate.id, decision: "reject", feedback: note.trim() })}
+					onSend={() => decide.mutate({ gateId: gate.id, decision: "reject", feedback: note.trim(), done: "Sent back to the builder with your note." })}
 					onCancel={() => setSendingBack(false)}
 				/>
 			) : null;
 	} else if (asked) {
-		// One answering surface: the drawer's Decision tab. This row only previews the questions, so a pick here
-		// can never silently disagree with the form the reader actually sends.
+		// One answering surface: the inspector's Decision tab. This row only previews the questions, so a pick
+		// here can never silently disagree with the form the reader actually sends.
+		badge = `Answer ${asked.length === 1 ? "one question" : `${asked.length} questions`}`;
 		context = card.needsAttentionReason ?? `The agent stopped to ask ${asked.length === 1 ? "a question" : `${asked.length} questions`}.`;
 		actions = (
-			<RowButton kind="primary" onClick={openRow}>
+			<button type="button" onClick={openRow} className="btn amber sm">
 				Answer
-			</RowButton>
+			</button>
 		);
 		expand = (
 			<ol className="flex list-decimal flex-col gap-1 pl-5 text-[14px] text-ink/80">
@@ -256,44 +403,55 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 			</ol>
 		);
 	} else if (card.status === "abandoned") {
+		badge = "Needs a decision";
 		context = card.needsAttentionReason ?? "This card was abandoned and went no further. Running it again starts a fresh session on the same branch.";
 		actions = (
 			<>
-				<RowButton kind="primary" busy={retry.isPending} onClick={() => retry.mutate()}>
+				<button type="button" onClick={() => retry.mutate()} disabled={retry.isPending} className="btn primary sm">
 					Run again
-				</RowButton>
-				<RowButton onClick={openRow}>Open</RowButton>
+				</button>
+				<button type="button" onClick={openRow} className="btn sm">
+					Open
+				</button>
 			</>
 		);
 	} else if (card.status === "interrupted") {
+		badge = "Interrupted";
 		context = "A restart cut this session off. Resume continues the same pi session where it stopped.";
 		actions = (
 			<>
-				<RowButton kind="primary" busy={resume.isPending} onClick={() => resume.mutate()}>
+				<button type="button" onClick={() => resume.mutate()} disabled={resume.isPending} className="btn primary sm">
 					Resume
-				</RowButton>
-				<RowButton onClick={openRow}>Open</RowButton>
+				</button>
+				<button type="button" onClick={openRow} className="btn sm">
+					Open
+				</button>
 			</>
 		);
 	} else {
+		badge = "Needs a decision";
 		context = card.needsAttentionReason ?? "The loop stopped and wants a decision.";
 		if (card.stage === "testing" && card.status === "idle") {
 			context = card.needsAttentionReason ?? "The build passed but the stage did not finish. Continue to the reviews.";
 			actions = (
 				<>
-					<RowButton kind="primary" busy={retry.isPending} onClick={() => retry.mutate()}>
+					<button type="button" onClick={() => retry.mutate()} disabled={retry.isPending} className="btn primary sm">
 						Continue
-					</RowButton>
-					<RowButton onClick={openRow}>Open</RowButton>
+					</button>
+					<button type="button" onClick={openRow} className="btn sm">
+						Open
+					</button>
 				</>
 			);
 		} else {
 			actions = (
 				<>
-					<RowButton kind="primary" busy={retry.isPending} onClick={() => retry.mutate()}>
+					<button type="button" onClick={() => retry.mutate()} disabled={retry.isPending} className="btn primary sm">
 						Run again
-					</RowButton>
-					<RowButton onClick={openRow}>Open</RowButton>
+					</button>
+					<button type="button" onClick={openRow} className="btn sm">
+						Open
+					</button>
 				</>
 			);
 		}
@@ -301,27 +459,29 @@ function AttentionRow({ card, projectName, onOpen }: { card: Card; projectName: 
 
 	const abandoned = card.status === "abandoned";
 	return (
-		<li className={`flex flex-col rounded-lg border ${abandoned ? "border-danger/40 bg-danger-soft" : status === "Waiting for your answer" || gate ? "border-caution bg-caution-soft" : "border-caution/50 bg-caution-soft/60"}`}>
-			<div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-				<div className="min-w-0 flex-1 basis-56">
-					<p className="flex items-center gap-2 text-[12px] text-slate">
-						<span className={`rounded px-1.5 py-px font-semibold ${abandoned ? "bg-danger-soft text-danger" : "bg-caution/15 text-caution-text"}`}>{gate ? (gate.kind === "plan_approval" ? "Plan approval" : "Review work") : status}</span>
-						{projectName && <span className="truncate">{projectName}</span>}
-					</p>
-					<button type="button" onClick={() => onOpen(card.id)} className="mt-0.5 block cursor-pointer text-left leading-snug font-semibold hover:underline">
-						{card.title}
-					</button>
-					{pending ? <p className="mt-0.5 text-[13px] text-slate">Reading the card…</p> : <p className="mt-0.5 text-[13.5px] leading-snug text-ink/80">{context}</p>}
-				</div>
-				<div className="flex flex-wrap items-center gap-2">{actions}</div>
+		<article className={`card ${abandoned ? "warn" : "needs"}${selected ? " selected" : ""}`} style={{ "--i": index } as React.CSSProperties} data-id={card.id}>
+			<div className="bar" />
+			<div className="card-main">
+				<button type="button" className="card-open" onClick={openRow} aria-label={`Open ${card.title}`}>
+					<span className="title line-clamp-2">{card.title}</span>
+					<span className="ctx">
+						<span className="p">{projectName}</span>
+						<span className="sep" />
+						<span>{badge}</span>
+						<span className="sep" />
+						<span className="id">{card.id}</span>
+					</span>
+					{pending ? <span className="stakes">Reading the card…</span> : <span className="stakes">{context}</span>}
+				</button>
+				<div className="card-side">{actions}</div>
+				{expand && <div className="inline-decision">{expand}</div>}
+				{(decide.error ?? resume.error ?? retry.error) && (
+					<div className="inline-decision">
+						<ErrorNote error={(decide.error ?? resume.error ?? retry.error) ?? null} onRetry={refresh} />
+					</div>
+				)}
 			</div>
-			{expand && <div className="border-t border-caution/25 px-4 py-3">{expand}</div>}
-			{(decide.error ?? resume.error ?? retry.error) && (
-				<div className="border-t border-caution/25 px-4 py-2">
-					<ErrorNote error={(decide.error ?? resume.error ?? retry.error) ?? null} onRetry={refresh} />
-				</div>
-			)}
-		</li>
+		</article>
 	);
 }
 
@@ -333,19 +493,21 @@ function SendBack({ note, setNote, onSend, onCancel, busy, placeholder }: { note
 			</label>
 			<textarea id="send-back-note" value={note} onChange={(event) => setNote(event.target.value)} rows={2} autoFocus placeholder={placeholder ?? "Keep the public API unchanged"} className={`${field} resize-y`} />
 			<div className="flex items-center gap-2">
-				<RowButton kind="primary" disabled={!note.trim() || busy} onClick={onSend}>
+				<button type="button" disabled={!note.trim() || busy} onClick={onSend} className="btn primary sm">
 					Send back
-				</RowButton>
-				<RowButton onClick={onCancel}>Cancel</RowButton>
+				</button>
+				<button type="button" onClick={onCancel} className="btn ghost sm">
+					Cancel
+				</button>
 			</div>
 		</div>
 	);
 }
 
 /** A card with a session running. Quiet on purpose: the agent is working, and that is not a question. */
-function FlightRow({ card, runs, onOpen }: { card: Card | undefined; runs: StageRun[]; onOpen: (id: string) => void }) {
+function FlightRow({ card, runs, selected, index, onOpen }: { card: Card | undefined; runs: StageRun[]; selected: boolean; index: number; onOpen: (id: string) => void }) {
 	const queryClient = useQueryClient();
-	const abort = useMutation({ mutationFn: (cardId: string) => api.abort(cardId), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board"] }) });
+	const abort = useMutation({ mutationFn: (cardId: string) => api.abort(cardId), onSuccess: () => (void queryClient.invalidateQueries({ queryKey: ["board"] }), toast("Aborted. The card waits for you.")) });
 	const primary = runs.find((run) => run.kind !== "verify") ?? runs[0];
 	const elapsed = useElapsed(primary?.startedAt, true);
 	const label =
@@ -358,127 +520,125 @@ function FlightRow({ card, runs, onOpen }: { card: Card | undefined; runs: Stage
 					: `${STAGE_LABEL[primary.stage]}${primary.attempt > 1 ? ` · attempt ${primary.attempt}` : ""}`;
 	if (!card) return null;
 	return (
-		<li className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-rule bg-sheet px-4 py-3">
-			<span aria-hidden className="sweep h-8 w-1 rounded-full" />
-			<div className="min-w-0 flex-1 basis-56">
-				<button type="button" onClick={() => onOpen(card.id)} className="block max-w-full cursor-pointer truncate text-left font-semibold hover:underline" title={card.title}>
-					{card.title}
+		<article className={`card working${selected ? " selected" : ""}`} style={{ "--i": index } as React.CSSProperties} data-id={card.id}>
+			<div className="bar" />
+			<div className="card-main">
+				<button type="button" className="card-open" onClick={() => onOpen(card.id)} aria-label={`Open ${card.title}`}>
+					<span className="title line-clamp-2">{card.title}</span>
+					<span className="stakes">
+						{label} · {shortModel(primary?.model)}
+					</span>
 				</button>
-				<p className="mt-0.5 flex flex-wrap items-baseline gap-x-2.5 text-[13px] text-slate">
-					<span className="rounded bg-primary-soft px-1.5 py-px font-semibold text-primary">{label}</span>
-					<span className="tnum">{elapsed}</span>
-					{primary && primary.kind !== "verify" && <span className="font-mono text-[12px]">{short(primary.model)}</span>}
-				</p>
+				<div className="card-side">
+					<span className="chip working">
+						<span className="dot working" />
+						{label}
+					</span>
+					<span className="elapsed tnum">{elapsed}</span>
+					<button type="button" onClick={() => onOpen(card.id)} className="btn ghost sm">
+						Open
+					</button>
+					<ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />
+				</div>
 			</div>
-			<div className="flex items-center gap-2">
-				<RowButton onClick={() => onOpen(card.id)}>Open</RowButton>
-				<ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />
-			</div>
-		</li>
+			<div className="sweep" aria-hidden />
+		</article>
 	);
 }
 
-function QueueRow({ card, projectName, onOpen }: { card: Card; projectName: string | undefined; onOpen: (id: string) => void }) {
+/** A card told to wait for your go. Start queues it; nothing runs until then. */
+function BacklogRow({ card, projectName, selected, index, onOpen }: RowProps) {
+	const queryClient = useQueryClient();
+	const start = useMutation({ mutationFn: () => api.enqueue(card.id), onSuccess: () => (void queryClient.invalidateQueries({ queryKey: ["board"] }), toast(`Queued “${card.title}” for planning.`)) });
+	return (
+		<article className={`card${selected ? " selected" : ""}`} style={{ "--i": index } as React.CSSProperties} data-id={card.id}>
+			<div className="bar" />
+			<div className="card-main">
+				<button type="button" className="card-open" onClick={() => onOpen(card.id)} aria-label={`Open ${card.title}`}>
+					<span className="title line-clamp-2">{card.title}</span>
+					<span className="ctx">
+						<span className="p">{projectName}</span>
+						<span className="sep" />
+						<span>Backlog</span>
+						<span className="sep" />
+						<span className="id">{card.id}</span>
+					</span>
+					<span className="stakes">In the backlog. Start it when you want it planned.</span>
+				</button>
+				<div className="card-side">
+					<button type="button" onClick={() => start.mutate()} disabled={start.isPending} className="btn sm">
+						<Icon name="play" />
+						Start
+					</button>
+					<button type="button" onClick={() => onOpen(card.id)} className="btn ghost sm">
+						Open
+					</button>
+				</div>
+			</div>
+		</article>
+	);
+}
+
+/** Queued: planning starts as soon as a slot frees. Removing it asks twice. */
+function QueueRow({ card, projectName, selected, index, onOpen }: RowProps) {
 	const queryClient = useQueryClient();
 	const remove = useMutation({ mutationFn: () => api.abort(card.id), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board"] }) });
 	return (
-		<li className="flex flex-wrap items-center gap-x-3 rounded-lg border border-rule bg-sheet px-4 py-2.5">
-			<div className="min-w-0 flex-1 basis-56">
-				<button type="button" onClick={() => onOpen(card.id)} className="block max-w-full cursor-pointer truncate text-left font-semibold hover:underline">
-					{card.title}
+		<article className={`card working${selected ? " selected" : ""}`} style={{ "--i": index } as React.CSSProperties} data-id={card.id}>
+			<div className="bar" />
+			<div className="card-main">
+				<button type="button" className="card-open" onClick={() => onOpen(card.id)} aria-label={`Open ${card.title}`}>
+					<span className="title line-clamp-2">{card.title}</span>
+					<span className="ctx">
+						<span className="p">{projectName}</span>
+						<span className="sep" />
+						<span>{STAGE_LABEL[card.stage]}</span>
+						<span className="sep" />
+						<span className="id">{card.id}</span>
+					</span>
+					<span className="stakes">Waiting for a free slot</span>
 				</button>
-				<p className="text-[13px] text-slate">Queued{projectName ? ` · ${projectName}` : ""} — starts when a slot frees</p>
+				<div className="card-side">
+					<span className="chip">Queued</span>
+					<button type="button" onClick={() => onOpen(card.id)} className="btn ghost sm">
+						Open
+					</button>
+					<ConfirmButton small label="Remove from queue" confirmLabel="Confirm remove?" onConfirm={() => remove.mutate()} busy={remove.isPending} />
+				</div>
 			</div>
-			<div className="flex items-center gap-2">
-				<RowButton onClick={() => onOpen(card.id)}>Open</RowButton>
-				<ConfirmButton small label="Remove" confirmLabel="Confirm remove?" onConfirm={() => remove.mutate()} busy={remove.isPending} />
-			</div>
-		</li>
+		</article>
 	);
 }
 
-function Backlog({ cards, names, onOpen }: { cards: Card[]; names: Map<string, string>; onOpen: (id: string) => void }) {
-	const [expanded, setExpanded] = useState(false);
-	const shown = expanded ? cards : cards.slice(0, 4);
-	return (
-		<>
-			<ul className="mt-3 flex flex-col gap-1.5">
-				{shown.map((card) => (
-					<BacklogRow key={card.id} card={card} projectName={names.get(card.projectId)} onOpen={onOpen} />
-				))}
-			</ul>
-			{cards.length > 4 && (
-				<button type="button" onClick={() => setExpanded((on) => !on)} className={`${button.link} mt-2`}>
-					{expanded ? "Show less" : `Show all ${cards.length}`}
-				</button>
-			)}
-		</>
-	);
-}
-
-function BacklogRow({ card, projectName, onOpen }: { card: Card; projectName: string | undefined; onOpen: (id: string) => void }) {
-	const queryClient = useQueryClient();
-	const start = useMutation({ mutationFn: () => api.enqueue(card.id), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board"] }) });
-	return (
-		<li className="flex flex-wrap items-center gap-x-3 rounded-lg border border-rule bg-sheet px-4 py-2.5">
-			<div className="min-w-0 flex-1 basis-56">
-				<button type="button" onClick={() => onOpen(card.id)} className="block max-w-full cursor-pointer truncate text-left font-semibold hover:underline">
-					{card.title}
-				</button>
-				<p className="text-[13px] text-slate">{projectName}</p>
-			</div>
-			<div className="flex items-center gap-2">
-				<RowButton kind="primary" busy={start.isPending} onClick={() => start.mutate()}>
-					Start
-				</RowButton>
-				<RowButton onClick={() => onOpen(card.id)}>Open</RowButton>
-			</div>
-		</li>
-	);
-}
-
-function DoneRow({ card, onOpen }: { card: Card; onOpen: (id: string) => void }) {
+function DoneRow({ card, projectName, selected, index, onOpen }: RowProps) {
 	// A slow tick keeps the age honest without re-rendering every second.
 	useElapsed(card.updatedAt, true, 30_000);
 	return (
-		<li className="flex flex-wrap items-center gap-x-3 rounded-lg border border-ok/25 bg-ok-soft/50 px-4 py-2">
-			<span aria-hidden className="size-1.5 shrink-0 rounded-full bg-ok" />
-			<button type="button" onClick={() => onOpen(card.id)} className="min-w-0 flex-1 basis-56 cursor-pointer truncate text-left text-[14px] hover:underline">
-				{card.title}
-			</button>
-			{card.prUrl && (
-				<a href={card.prUrl} target="_blank" rel="noreferrer noopener" className="font-mono text-[12.5px] text-primary underline underline-offset-4">
-					{card.prUrl.replace("https://github.com/", "")}
-				</a>
-			)}
-			<span className="text-[12.5px] text-slate">finished {formatAgo(card.updatedAt)}</span>
-		</li>
+		<article className={`card ok${selected ? " selected" : ""}`} style={{ "--i": index } as React.CSSProperties} data-id={card.id}>
+			<div className="bar" />
+			<div className="card-main">
+				<button type="button" className="card-open" onClick={() => onOpen(card.id)} aria-label={`Open ${card.title}`}>
+					<span className="title">{card.title}</span>
+					<span className="ctx">
+						<span className="p">{projectName}</span>
+						<span className="sep" />
+						<span className="id">{card.id}</span>
+					</span>
+				</button>
+				<div className="card-side">
+					{card.prUrl && (
+						<a href={card.prUrl} target="_blank" rel="noreferrer noopener" className="chip ok mono">
+							{card.prUrl.replace("https://github.com/", "")}
+						</a>
+					)}
+					<span className="meta">finished {formatAgo(card.updatedAt)}</span>
+				</div>
+			</div>
+		</article>
 	);
 }
 
 // --- shared row plumbing ---------------------------------------------------
-
-function FilterChip({ active, onClick, waiting, children }: { active: boolean; onClick: () => void; waiting: number; children: ReactNode }) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			aria-pressed={active}
-			className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[13px] font-medium ${active ? "border-primary bg-primary-soft font-semibold text-primary" : "border-rule bg-sheet text-slate hover:text-ink"}`}
-		>
-			{children}
-			{waiting > 0 && <span className="rounded-full bg-caution px-1.5 font-mono text-[11px] font-bold text-caution-ink">{waiting}</span>}
-		</button>
-	);
-}
-
-function RowButton({ kind = "quiet", busy, disabled, onClick, children }: { kind?: keyof typeof button; busy?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
-	return (
-		<button type="button" onClick={onClick} disabled={disabled || busy} className={`${button[kind]} !px-2.5 !py-1 !text-[13px] whitespace-nowrap`}>
-			{busy ? "…" : children}
-		</button>
-	);
-}
 
 function useQueryCard(cardId: string) {
 	const queries = useQueries({
@@ -489,7 +649,6 @@ function useQueryCard(cardId: string) {
 }
 
 const flowName = (run: StageRun) => run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, "");
-const short = (model: string) => model.split("/").pop()?.split(":")[0] ?? model;
 
 function formatAgo(at: number): string {
 	const seconds = Math.max(1, Math.floor((Date.now() - at) / 1000));

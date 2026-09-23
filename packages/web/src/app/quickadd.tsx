@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import type { Project } from "@tower/core";
 import { api } from "../api/client.ts";
-import { button, field, monoField } from "../ui.ts";
+import { field, monoField } from "../ui.ts";
 import { Modal } from "./bits.tsx";
 
 /**
@@ -41,62 +41,83 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard }: { p
 	};
 	const busy = finish.isPending || addProject.isPending;
 	const failure = finish.error ?? addProject.error;
+	const [start, setStart] = useState<"now" | "backlog">("now");
 
 	return (
 		<Modal title="Add work" onClose={onClose}>
+			<p className="meta">
+				A card gets its own worktree and branch. An expensive model plans; you approve; a cheap model builds; your tests judge.
+			</p>
 			<form
 				onSubmit={(event: FormEvent) => {
 					event.preventDefault();
-					run(false);
+					run(start === "now");
 				}}
-				className="flex flex-col gap-4"
+				className="grid gap-4"
 			>
 				{projects.length > 0 && (
-					<div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
-						<label htmlFor="quick-project" className="pt-1.5 font-semibold">
-							Project
+					<div className="field">
+						<label htmlFor="quick-project">Project</label>
+						<select id="quick-project" value={newRepo ? "" : projectId} onChange={(event) => setProjectId(event.target.value)} className={field} disabled={projects.length === 0}>
+							{projects.map((project) => (
+								<option key={project.id} value={project.id}>
+									{project.name} · {project.defaultBranch}
+								</option>
+							))}
+						</select>
+						<label className="flex cursor-pointer items-center gap-2 text-[13px] text-slate">
+							<input type="checkbox" className="size-4 accent-[var(--primary)]" checked={newRepo} onChange={(event) => setNewRepo(event.target.checked)} />
+							New repository — add it by path
 						</label>
-						<div className="flex flex-col gap-1.5">
-							<select id="quick-project" value={newRepo ? "" : projectId} onChange={(event) => setProjectId(event.target.value)} className={field} disabled={projects.length === 0}>
-								{projects.map((project) => (
-									<option key={project.id} value={project.id}>
-										{project.name}
-									</option>
-								))}
-							</select>
-							<label className="flex cursor-pointer items-center gap-2 text-[13px] text-slate">
-								<input type="checkbox" className="size-4 accent-[var(--primary)]" checked={newRepo} onChange={(event) => setNewRepo(event.target.checked)} />
-								New repository — add it by path
-							</label>
-						</div>
 					</div>
 				)}
 				{(newRepo || projects.length === 0) && (
-					<label className="block font-semibold">
-						Repository path
-						<span className="block text-[13px] font-normal text-slate">A git repository on this machine. A brand-new one is fine.</span>
-						<input value={repoPath} onChange={(event) => setRepoPath(event.target.value)} spellCheck={false} placeholder="/Users/you/code/my-project" className={`mt-1 ${monoField}`} />
-					</label>
+					<div className="field">
+						<label htmlFor="quick-repo">Repository path</label>
+						<span className="hint">A git repository on this machine. A brand-new one is fine.</span>
+						<input id="quick-repo" value={repoPath} onChange={(event) => setRepoPath(event.target.value)} spellCheck={false} placeholder="/Users/you/code/my-project" className={monoField} />
+					</div>
 				)}
-				<label className="block font-semibold">
-					What should be done?
-					<input value={title} onChange={(event) => setTitle(event.target.value)} autoFocus placeholder="Add retry with backoff to the HTTP client" className={`mt-1 ${field}`} />
-				</label>
-				<label className="block font-semibold">
-					Anything the planner should know?
-					<span className="block text-[13px] font-normal text-slate">Optional. Constraints, files, what done looks like.</span>
-					<textarea value={brief} onChange={(event) => setBrief(event.target.value)} rows={3} className={`mt-1 ${field} resize-y`} />
-				</label>
-				<div className="flex flex-wrap items-center gap-3">
-					<button type="button" onClick={() => run(true)} disabled={!ready || busy} className={button.primary}>
-						Add and start
-					</button>
-					<button type="button" onClick={() => run(false)} disabled={!ready || busy} className={button.quiet}>
-						Add to backlog
-					</button>
-					<span className="text-[13px] text-slate">Starting begins with planning once a slot is free.</span>
+				<div className="field">
+					<label htmlFor="quick-title" className="req">
+						What should change
+					</label>
+					<input
+						id="quick-title"
+						value={title}
+						onChange={(event) => setTitle(event.target.value)}
+						autoFocus
+						placeholder="Add retry with backoff to the HTTP client"
+						aria-invalid={finish.isError && !title.trim() ? true : undefined}
+						className={field}
+					/>
 				</div>
-				{failure && <p className="text-[14px] text-danger">{failure.message}</p>}
+				<div className="field">
+					<label htmlFor="quick-brief">Anything the planner should know?</label>
+					<span className="hint">Optional. Constraints, files, what done looks like.</span>
+					<textarea id="quick-brief" value={brief} onChange={(event) => setBrief(event.target.value)} rows={3} className={`${field} !min-h-0 resize-y`} />
+				</div>
+				<div className="field">
+					<label>Start</label>
+					<div className="seg" role="group" aria-label="Start">
+						<button type="button" aria-pressed={start === "now"} onClick={() => setStart("now")}>
+							Plan now
+						</button>
+						<button type="button" aria-pressed={start === "backlog"} onClick={() => setStart("backlog")}>
+							Backlog
+						</button>
+					</div>
+					<span className="hint">Plan now begins when a slot is free. Backlog waits for you to press Start.</span>
+				</div>
+				<div className="acts !justify-between">
+					<button type="button" onClick={onClose} className="btn ghost">
+						Cancel
+					</button>
+					<button type="submit" disabled={!ready || busy} className="btn primary">
+						{start === "now" ? "Add and start" : "Add card"}
+					</button>
+				</div>
+				{failure && <p className="!mt-0 text-[14px] text-danger">{failure.message}</p>}
 			</form>
 		</Modal>
 	);
@@ -125,7 +146,7 @@ export function NewProjectForm({ first }: { first?: boolean }) {
 			</label>
 			<div className="flex gap-2">
 				<input id="repo-path" value={repoPath} onChange={(event) => setRepoPath(event.target.value)} placeholder="/Users/you/code/my-project" className={monoField} />
-				<button type="submit" disabled={!repoPath.trim() || add.isPending} className={`${button.primary} whitespace-nowrap`}>
+				<button type="submit" disabled={!repoPath.trim() || add.isPending} className="btn primary whitespace-nowrap">
 					Add project
 				</button>
 			</div>

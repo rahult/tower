@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { button } from "../ui.ts";
+import { Icon } from "./icons.tsx";
 
 /** A centred dialog over a dimmed backdrop. Esc and a backdrop click both close it. */
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -11,30 +12,18 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 		return () => window.removeEventListener("keydown", onKey);
 	}, [onClose]);
 	return (
-		<div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-			<div role="dialog" aria-modal="true" aria-label={title} className={`pop mt-8 w-full ${wide ? "max-w-[52rem]" : "max-w-[34rem]"} rounded-xl border border-rule bg-sheet shadow-2xl`}>
-				<header className="flex items-center justify-between gap-3 border-b border-rule px-5 py-3">
-					<h2 className="display text-[19px] font-extrabold">{title}</h2>
-					<button type="button" onClick={onClose} aria-label="Close" className="cursor-pointer rounded px-2 py-0.5 text-slate hover:bg-wash hover:text-ink">
-						✕
+		<>
+			<div className="scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()} />
+			<div role="dialog" aria-modal="true" aria-label={title} className={`dialog${wide ? " wide" : ""}`}>
+				<header className="flex items-center justify-between gap-3">
+					<h2>{title}</h2>
+					<button type="button" onClick={onClose} aria-label="Close" className="iconbtn shrink-0">
+						<Icon name="x" className="icon icon-lg" />
 					</button>
 				</header>
-				<div className="p-5">{children}</div>
+				{children}
 			</div>
-		</div>
-	);
-}
-
-/** A tray heading: the small caps title, a count, and room for a one-line hint on the right. */
-export function TrayHeading({ label, count, tone, hint }: { label: string; count: number; tone: "caution" | "work" | "ok" | "rest"; hint?: string }) {
-	const dot = { caution: "bg-caution", work: "bg-primary", ok: "bg-ok", rest: "bg-rule" }[tone];
-	return (
-		<div className="flex items-baseline gap-2">
-			<span aria-hidden className={`size-2 rounded-full ${dot}`} />
-			<h2 className="display text-[16px] font-extrabold tracking-wide uppercase">{label}</h2>
-			<span className="font-mono text-[13px] font-medium text-slate tnum">{count}</span>
-			{hint && <span className="ml-2 hidden text-[13px] text-slate md:block">{hint}</span>}
-		</div>
+		</>
 	);
 }
 
@@ -86,14 +75,13 @@ export function ConfirmButton({ label, confirmLabel, onConfirm, disabled, busy, 
 		const timer = setTimeout(() => setArmed(false), 3000);
 		return () => clearTimeout(timer);
 	}, [armed]);
-	const size = small ? "!px-2.5 !py-1 !text-[13px]" : "";
 	return (
 		<button
 			type="button"
 			onClick={() => (armed ? (setArmed(false), onConfirm()) : setArmed(true))}
 			disabled={disabled || busy}
 			aria-label={armed ? confirmLabel : label}
-			className={`${armed ? `${button.danger} !bg-danger-soft font-bold` : button.danger} ${size} whitespace-nowrap`}
+			className={`btn danger${armed ? " armed" : ""}${small ? " sm" : ""} whitespace-nowrap`}
 		>
 			{busy ? "…" : armed ? confirmLabel : label}
 		</button>
@@ -127,4 +115,12 @@ export function useMediaQuery(query: string): boolean {
 		return () => list.removeEventListener("change", onChange);
 	}, [query]);
 	return matches;
+}
+
+export function formatTokens(tokens: number): string {
+	return tokens >= 1_000_000 ? `${(tokens / 1_000_000).toFixed(1)}M` : tokens >= 1000 ? `${Math.round(tokens / 1000)}k` : String(tokens);
+}
+
+export function formatMoney(usd: number): string {
+	return `$${usd.toFixed(2)}`;
 }
