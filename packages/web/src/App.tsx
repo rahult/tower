@@ -10,7 +10,7 @@ import { announceAttention, enableNotifications, notifyEnabled, setNotifyEnabled
 import { QuickAdd } from "./app/quickadd.tsx";
 import { useRoute, type View } from "./app/route.ts";
 import { setTabUrgency } from "./app/tab.ts";
-import { ToastHost } from "./app/toasts.tsx";
+import { ToastHost, toast } from "./app/toasts.tsx";
 import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
@@ -22,6 +22,16 @@ import { useDensity, usePrefersDark, useTheme, type Theme } from "./theme.ts";
 const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage"];
 const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", usage: "chart" } as const;
 const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", usage: "Usage" };
+
+const FILTER_KEY = "tower-filter";
+
+function readFilter(): string {
+	try {
+		return localStorage.getItem(FILTER_KEY) || "all";
+	} catch {
+		return "all";
+	}
+}
 
 export function App() {
 	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
@@ -42,6 +52,7 @@ export function App() {
 	const [density, toggleDensity] = useDensity();
 	const prefersDark = usePrefersDark();
 	const [notify, setNotify] = useState(notifyEnabled);
+	const [projectFilter, setProjectFilter] = useState(readFilter);
 
 	const projects = board.data?.projects ?? [];
 	const cards = board.data?.cards ?? [];
@@ -84,6 +95,61 @@ export function App() {
 			void enableNotifications().then(setNotify);
 		}
 	}, [notify]);
+	const filterProject = useCallback(
+		(projectId: string | null) => {
+			const next = projectId ?? "all";
+			setProjectFilter(next);
+			try {
+				localStorage.setItem(FILTER_KEY, next);
+			} catch {
+				// Storage refused; the choice lasts for this visit.
+			}
+		},
+		[],
+	);
+
+	// Walking the cards with j/k follows the order they are rendered in, so it matches what is on screen.
+	const moveCard = useCallback(
+		(dir: 1 | -1) => {
+			if (document.querySelector('[role="dialog"]')) return;
+			const ids = [...document.querySelectorAll('#view-tower .card[data-id], #matrix .mini[data-id]')].map((el) => el.getAttribute("data-id") ?? "");
+			if (ids.length === 0) return;
+			const at = ids.indexOf(route.cardId ?? "");
+			const next = dir === 1 ? Math.min(ids.length - 1, at + 1) : Math.max(0, at < 0 ? 0 : at - 1);
+			const id = ids[next];
+			if (!id || id === route.cardId) return;
+			openCard(id);
+			requestAnimationFrame(() => document.querySelector(`#view-tower .card[data-id="${id}"], #matrix .mini[data-id="${id}"]`)?.scrollIntoView({ block: "nearest" }));
+		},
+		[route.cardId, openCard],
+	);
+
+	// "a" is the approve key: it acts on the open card the way the row's own button would.
+	const approveSelected = useCallback(() => {
+		const cardId = route.cardId;
+		if (!cardId || document.querySelector('[role="dialog"]')) return;
+		const decide = async () => {
+			const detail = queryClient.fetchQuery({ queryKey: ["card", cardId], queryFn: () => api.card(cardId) });
+			const gate = (await detail).gates.find((g) => g.status === "pending");
+			if (gate) {
+				await api.decideGate(cardId, gate.id, "approve");
+				void queryClient.invalidateQueries({ queryKey: ["board"] });
+				void queryClient.invalidateQueries({ queryKey: ["card", cardId] });
+				toast(gate.kind === "plan_approval" ? "Plan approved. The builder starts next." : "Approved. Tower opens the pull request.");
+				return;
+			}
+			const card = (await detail).card;
+			if (card.status === "awaiting_input") {
+				toast("Answer the questions first — they are on the Decision tab.");
+			} else if (card.stage === "backlog" && card.status === "idle") {
+				await api.enqueue(cardId);
+				void queryClient.invalidateQueries({ queryKey: ["board"] });
+				toast(`Queued “${card.title}” for planning.`);
+			}
+		};
+		void decide().catch(() => toast("Could not approve that card — is the daemon up?"));
+	}, [route.cardId, queryClient]);
+
 	const paletteActions = useMemo(
 		() => ({
 			goToView: (view: View) => navigate({ view, cardId: null }),
@@ -93,8 +159,11 @@ export function App() {
 			openModels: () => setModelsOpen(true),
 			setTheme: (next: Theme) => setTheme(next),
 			toggleNotify,
+			toggleDensity,
+			filterProject,
+			densityCompact: density === "compact",
 		}),
-		[navigate, openCard, startCard, setTheme, toggleNotify],
+		[navigate, openCard, startCard, setTheme, toggleNotify, toggleDensity, filterProject, density],
 	);
 	useShortcuts(
 		useMemo(
@@ -102,8 +171,10 @@ export function App() {
 				palette: () => setPaletteOpen((open) => !open),
 				view: (index: number) => navigate({ view: VIEW_ORDER[index] ?? "focus", cardId: null }),
 				add: () => setAddingWork({}),
+				move: moveCard,
+				approve: approveSelected,
 			}),
-			[navigate],
+			[navigate, moveCard, approveSelected],
 		),
 	);
 
@@ -193,7 +264,17 @@ export function App() {
 					<div className="views">
 						{board.isPending && <p className="p-4 text-[14px] text-slate">Connecting to the Tower daemon…</p>}
 						{board.data && route.view === "focus" && (
-							<Focus projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} onAddWork={(projectId) => setAddingWork({ projectId })} onOpenModels={() => setModelsOpen(true)} />
+							<Focus
+								projects={projects}
+								cards={cards}
+								activeRuns={board.data.activeRuns}
+								selectedCardId={route.cardId}
+								filter={projectFilter}
+								onFilter={filterProject}
+								onOpen={openCard}
+								onAddWork={(projectId) => setAddingWork({ projectId })}
+								onOpenModels={() => setModelsOpen(true)}
+							/>
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
 						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => setAddingWork({ projectId })} />}
@@ -203,7 +284,7 @@ export function App() {
 				</div>
 			</div>
 
-			{paletteOpen && <Palette cards={cards} projectNames={names} actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
+			{paletteOpen && <Palette cards={cards} projectNames={names} projects={projects.map((project) => ({ id: project.id, name: project.name }))} actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
 			{addingWork && <QuickAdd projects={projects} presetProjectId={addingWork.projectId} onClose={() => setAddingWork(null)} onOpenCard={openCard} />}
 			{modelsOpen && (
 				<Modal title="Models" onClose={() => setModelsOpen(false)} wide>

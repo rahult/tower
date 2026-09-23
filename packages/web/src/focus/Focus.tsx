@@ -14,34 +14,21 @@ interface FocusProps {
 	cards: Card[];
 	activeRuns: StageRun[];
 	selectedCardId: string | null;
+	/** "all", or a project id — owned by the app so the command palette can set it too. */
+	filter: string;
+	onFilter: (projectId: string | null) => void;
 	onOpen: (cardId: string) => void;
 	onAddWork: (projectId?: string) => void;
 	onOpenModels: () => void;
 }
-
-const FILTER_KEY = "tower-filter";
 
 /**
  * The default view. A rail of projects on the left; the stream on the right, ordered by how much the
  * reader is needed: the decisions that block an agent first, then work in flight, then everything
  * waiting, then what finished. A tray that is empty does not render.
  */
-export function Focus({ projects, cards, activeRuns, selectedCardId, onOpen, onAddWork, onOpenModels }: FocusProps) {
-	const [filter, setFilter] = useState(() => {
-		try {
-			return localStorage.getItem(FILTER_KEY) ?? "all";
-		} catch {
-			return "all";
-		}
-	});
-	const pickFilter = (id: string) => {
-		setFilter(id);
-		try {
-			localStorage.setItem(FILTER_KEY, id);
-		} catch {
-			// Storage refused; the choice lasts for this visit.
-		}
-	};
+export function Focus({ projects, cards, activeRuns, selectedCardId, filter, onFilter, onOpen, onAddWork, onOpenModels }: FocusProps) {
+	const pickFilter = (id: string) => onFilter(id === "all" ? null : id);
 	const scope = (list: Card[]) => (filter === "all" ? list : list.filter((card) => card.projectId === filter));
 
 	// Attention is ordered by the card's own priority first, then by age — not by board order.
@@ -72,7 +59,7 @@ export function Focus({ projects, cards, activeRuns, selectedCardId, onOpen, onA
 					</div>
 					<div className="rail-list" />
 				</aside>
-				<div className="stream" tabIndex={-1}>
+				<div className="stream" id="stream" tabIndex={-1}>
 					<EmptyBoard />
 				</div>
 			</section>
@@ -136,7 +123,7 @@ export function Focus({ projects, cards, activeRuns, selectedCardId, onOpen, onA
 					))}
 				</div>
 			</aside>
-			<div className="stream" tabIndex={-1}>
+			<div className="stream" id="stream" tabIndex={-1}>
 				<div className="stream-head">
 					<h1>{filteredProject ? filteredProject.name : "Tower"}</h1>
 					<p className="meta">
