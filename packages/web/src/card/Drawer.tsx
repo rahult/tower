@@ -241,7 +241,7 @@ function TabButton({ id, active, onSelect, tone, children }: { id: string; activ
 function RunsRail({ runs, picked, onPick }: { runs: StageRun[]; picked: string; onPick: (id: string) => void }) {
 	if (runs.length <= 1) return null;
 	return (
-		<div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-rule bg-wash px-4 py-1.5">
+		<div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-rule bg-wash px-4 py-1.5">
 			{runs.map((r) => {
 				const state = r.status === "running" || r.status === "starting" ? "live" : r.resultStatus === "pass" ? "pass" : r.resultStatus === "fail" ? "fail" : r.status === "aborted" ? "stop" : r.error ? "fail" : "rest";
 				const dot = { live: "bg-primary pulse", pass: "bg-ok", fail: "bg-danger", stop: "bg-rule", rest: "bg-rule" }[state];

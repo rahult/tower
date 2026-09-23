@@ -143,20 +143,34 @@ curl -X POST http://127.0.0.1:4700/api/cards -H 'content-type: application/json'
 
 Stage defaults are in `packages/core/src/stage-spec.ts`.
 
-### Review flows
+### Flows: your own agents, deterministic or not
 
-A flow is a JSON file: shipped ones are in `flows/`, yours go in `~/.tower/flows/` (same name overrides). Each step is a prompt file, a pi skill, or one of your agent roles:
+A flow is a JSON file: shipped ones are in `flows/`, yours go in `~/.tower/flows/` (same name overrides). Each step is a prompt file, a pi skill, one of your agent roles — or a shell command, which makes the step deterministic: no model, no spend, the exit code is the verdict.
 
 ```json
 {
-  "name": "security-review",
-  "title": "Security review",
-  "description": "Looks for injection, secrets and unsafe defaults in the change.",
-  "steps": [{ "name": "scan", "skill": "security-review", "model": "planning", "access": "read-and-run" }]
+  "name": "ship-gate",
+  "title": "Ship gate",
+  "description": "The checks a build must pass before it is worth testing.",
+  "when": ["after-build"],
+  "steps": [
+    { "name": "lint", "run": "pnpm lint", "timeoutSec": 120 },
+    { "name": "size", "run": "pnpm size --strict", "expect": "note" },
+    { "name": "security", "skill": "security-review", "model": "planning", "access": "read-and-run" }
+  ]
 }
 ```
 
-`model` is a stage name (`planning` means whatever plans for you) or an explicit `provider/model`. `access` is `read-only`, `read-and-run` or `write`. Pull requests need the [`gh` CLI](https://cli.github.com) logged in.
+- `run` executes in the card's worktree. `{{worktreePath}}`, `{{repoPath}}`, `{{branchName}}`, `{{cardDir}}` and `{{title}}` are substituted. A non-zero exit fails the flow unless `expect` is `"note"` — an informational step records its output and never blocks. Output streams into the run's transcript like the verify command does.
+- `when` says when the flow runs. `manual` (the default) puts it in every card's Run tab. `after-plan` runs it between a passing plan and the plan gate; `after-build` between a passing build and testing; `after-tests` makes it one of the post-test reviews (the shipped adversarial and SOLID reviews declare this — with no `TOWER_REVIEW_FLOWS` set, every `after-tests` flow runs, in file order).
+- A triggered flow that does not pass stops the card at `needs_attention` with the failing step's own words. Retrying from a failed after-build gate sends the gate's output back to the builder as feedback — the loop closes deterministically, without an opinion in sight.
+- `model` is a stage name (`planning` means whatever plans for you) or an explicit `provider/model`. `access` is `read-only`, `read-and-run` or `write`. Pull requests need the [`gh` CLI](https://cli.github.com) logged in.
+
+### Deep research
+
+Not every line of work starts with a task; some start with a question. The shipped `deep-research` flow runs in two steps — a **survey** that maps the question and fetches evidence over the network (docs, the GitHub API, package registries, RFCs — via `curl`), and a **synthesize** step that writes a cited brief: options with trade-offs, a recommendation, what it means for *this* repository, and the open questions. The brief lands in the card's `reviews/` folder.
+
+Research belongs before the lifecycle: the flow is read-only, so it runs on a **backlog card with no worktree**, straight in the project checkout — start it from the card's Run tab, or type an exploring line into the ⌘K box ("research local-first sync @remembero") and the intent reader files the card and starts the research. When a brief exists, the planner is pointed at it, so the research flows into the plan without a copy-paste. Flows that run commands or write code still need a worktree and are refused on backlog cards.
 
 ### Sub-agent crews
 

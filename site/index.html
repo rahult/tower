@@ -154,10 +154,18 @@
 						<dt>The test cycle</dt>
 						<dd>Your verify command judges every build. A failure goes back to a builder with the output; three strikes stops for you.</dd>
 					</div>
-					<div>
-						<dt>The review rota</dt>
-						<dd>An adversarial review and a SOLID design review in fresh sessions with no edit access. Findings wait for you beside the diff.</dd>
-					</div>
+				<div>
+					<dt>The review rota</dt>
+					<dd>An adversarial review and a SOLID design review in fresh sessions with no edit access. Findings wait for you beside the diff.</dd>
+				</div>
+				<div>
+					<dt>CI you write in a sentence</dt>
+					<dd>Flows compose agents and shell gates — a lint command, a size check, a reviewer role — and attach them to the plan, the build or the tests. A failed gate sends its own output back to the builder; no model decides whether your checks passed.</dd>
+				</div>
+				<div>
+					<dt>The spike, before the plan</dt>
+					<dd>A deep-research flow maps an unfamiliar question with sources fetched over the network and writes a cited brief — options, trade-offs, what it means for this repository. It runs on a backlog card, and the planner reads the brief.</dd>
+				</div>
 					<div>
 						<dt>Watching CI</dt>
 						<dd>Tower watches the pull request it opened. Failing CI goes back to a builder on its own; a merge settles the card.</dd>
@@ -390,7 +398,7 @@ export function pickNext(candidates, state) {
 				<h2>Where it stands</h2>
 				<p>
 					Tower is early, and complete from backlog to merged: planning, the plan gate, building — single-session or a parallel sub-agent crew — testing with the retry loop,
-					invariant simulation, review flows, the feedback gate, and finishing both ways: pull requests with CI repair, or a local merge when there is no remote. Scheduling,
+					invariant simulation, review flows and your own deterministic gates, the feedback gate, and finishing both ways: pull requests with CI repair, or a local merge when there is no remote. Deep research runs before any of it, on the backlog card itself. Scheduling,
 					restart recovery, questions, model settings and on-demand runs are in. Tests run the whole daemon end to end, and planning, building, testing and questions have been
 					run against real pi sessions.
 				</p>
