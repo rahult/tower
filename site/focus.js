@@ -1,4 +1,4 @@
-// A small simulation of the Focus view. It follows the real card lifecycle: plan, wait for approval, build,
+// A small simulation of the stream. It follows the real card lifecycle: plan, wait for approval, build,
 // verify, review, wait for approval again, done. The demo answers its own questions; nothing leaves the page.
 (() => {
 	const needs = document.getElementById("needs");
@@ -66,21 +66,23 @@
 	const signatures = new Map();
 
 	function rowHTML(card) {
+		const ctx = `<p class="ctx"><span class="proj mono">${card.project}</span>`;
 		if (card.state === "gate" || card.state === "asked") {
-			const chip = card.state === "asked" ? "Waiting for your answer" : card.stage === "planning" ? "Plan approval" : "Review work";
-			const context =
+			const kind = card.state === "asked" ? "Waiting for your answer" : card.stage === "planning" ? "Plan approval" : "Review work";
+			const why =
 				card.state === "asked"
-					? `${QUESTIONS[seq % QUESTIONS.length]} <button type="button" class="act primary">Answer</button>`
+					? `${QUESTIONS[seq % QUESTIONS.length]}`
 					: card.stage === "planning"
-						? "The plan is ready. A cheap model will build from it alone. <button type=\"button\" class=\"act primary\">Approve &amp; build</button>"
-						: "One review found something blocking; the checks pass. <button type=\"button\" class=\"act primary\">Approve &amp; open PR</button>";
-			return `<p class="chips"><span class="chip amber">${chip}</span> ${card.project}</p><p class="title">${card.title}</p><p class="context">${context}</p>`;
+						? "The plan is ready. A cheap model will build from it alone."
+						: "One review found something blocking; the checks pass.";
+			const action = card.state === "asked" ? "Answer" : card.stage === "planning" ? "Approve &amp; build" : "Approve &amp; merge";
+			return `${ctx}<span class="kind">${kind}</span></p><p class="title">${card.title}</p><p class="why">${why}</p><p class="acts"><button type="button" class="btn">${action}</button></p>`;
 		}
 		if (isWorking(card)) {
-			const stage = card.state === "passed" ? "Your checks pass" : card.stage === "planning" ? "Planning" : "Building";
-			return `<p class="chips"><span class="chip blue">${stage}</span> ${card.project} · <span class="mono">${card.model}</span></p><p class="title">${card.title}</p><p class="context"><span class="elapsed">…</span></p>`;
+			const kind = card.state === "passed" ? "Your checks pass" : card.stage === "planning" ? "Planning" : "Building";
+			return `${ctx}<span class="kind">${kind}</span><span class="mono">· ${card.model}</span></p><p class="title">${card.title}</p><p class="meter" aria-hidden="true"></p><p class="why"><span class="elapsed">…</span></p>`;
 		}
-		return `<p class="title">${card.title}</p><p class="context">finished</p>`;
+		return `<p class="title">${card.title}</p><p class="why">merged locally</p>`;
 	}
 
 	function renderList(list, items, label) {
@@ -91,9 +93,9 @@
 		for (const card of items) {
 			const li = document.createElement("li");
 			const attention = card.state === "gate" || card.state === "asked";
-			li.className = `row ${attention ? "attention" : card.state}`;
+			li.className = `row ${attention ? "is-caution" : isWorking(card) ? "is-working" : "is-done"}`;
 			li.innerHTML = rowHTML(card);
-			const button = li.querySelector("button.act");
+			const button = li.querySelector("button.btn");
 			if (button) button.addEventListener("click", () => resolve(card));
 			list.appendChild(li);
 		}
@@ -131,7 +133,7 @@
 		} else {
 			card.stage = "done";
 			card.state = "done";
-			say(`${card.title}: finished`);
+			say(`${card.title}: landed`);
 		}
 		render();
 	}

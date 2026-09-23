@@ -1069,6 +1069,7 @@ textarea.input {
 	border-left: 1px solid var(--rule);
 	background: var(--sheet);
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	grid-template-rows: auto auto minmax(0, 1fr);
 	min-height: 0;
 }
