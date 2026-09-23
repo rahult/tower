@@ -64,7 +64,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	const flows = new FlowRunner({ config, db, stages });
 	orchestrator = new Orchestrator({ config, db, bus, runs, stages, flows });
 	const bench = new BenchRunner({ config, db, bus, runs });
-	const app = createApp({ config, db, bus, runs, stages, orchestrator, bench });
+	const app = createApp({ config, db, bus, runs, stages, orchestrator, bench, driver });
 	// Whatever the previous process left in flight is interrupted; queued work carries on.
 	orchestrator.recover();
 	orchestrator.watchPullRequests();

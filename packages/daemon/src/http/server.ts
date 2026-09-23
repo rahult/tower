@@ -11,6 +11,7 @@ import { listGatesForCard } from "../db/repo-gates.ts";
 import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
+import { matchProject, readIntent, taggedProject } from "../assist.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
 import { loadFlows } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
@@ -19,6 +20,7 @@ import { listRemotes } from "../pr/gh.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
 import type { RunManager } from "../run/run-manager.ts";
+import type { SessionDriver } from "../pi/session-driver.ts";
 import { describeModels, knownModels, parseModels, SettingsError, settingsFile, writeModels } from "../settings.ts";
 import type { StageRunner } from "../stage-runner.ts";
 import { serveWeb } from "./static.ts";
@@ -31,6 +33,8 @@ export interface AppDeps {
 	stages: StageRunner;
 	orchestrator: Orchestrator;
 	bench: BenchRunner;
+	/** The session seam, for one-shot sessions that belong to no card (the command box's ask). */
+	driver: SessionDriver;
 }
 
 class HttpError extends Error {
@@ -50,7 +54,7 @@ function requireString(body: Record<string, unknown>, key: string): string {
 }
 
 export function createApp(deps: AppDeps): Hono {
-	const { config, db, bus, runs, stages, orchestrator, bench } = deps;
+	const { config, db, bus, runs, stages, orchestrator, bench, driver } = deps;
 	const app = new Hono();
 
 	app.onError((error, c) => {
@@ -158,16 +162,14 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(project);
 	});
 
-	app.post("/api/cards", async (c) => {
-		const body = (await c.req.json()) as Record<string, unknown>;
-		const projectId = requireString(body, "projectId");
-		if (!getProject(db, projectId)) throw new HttpError(404, `Project not found: ${projectId}`);
+	// One factory, so cards made by the form and cards made by the ask look exactly the same.
+	const createCard = (projectId: string, title: string, brief: string, stageConfig: Card["stageConfig"] = {}): Card => {
 		const now = Date.now();
 		const card: Card = {
 			id: shortId(),
 			projectId,
-			title: requireString(body, "title"),
-			brief: typeof body.brief === "string" ? body.brief : "",
+			title,
+			brief,
 			stage: "backlog",
 			status: "idle",
 			priority: 0,
@@ -176,7 +178,7 @@ export function createApp(deps: AppDeps): Hono {
 			worktreePath: null,
 			baseCommit: null,
 			attempt: 0,
-			stageConfig: typeof body.stageConfig === "object" && body.stageConfig !== null ? (body.stageConfig as Card["stageConfig"]) : {},
+			stageConfig,
 			prUrl: null,
 			prState: null,
 			needsAttentionReason: null,
@@ -188,7 +190,62 @@ export function createApp(deps: AppDeps): Hono {
 		};
 		insertCard(db, card);
 		bus.publish({ topic: "board", type: "card_upserted", data: card });
+		return card;
+	};
+
+	app.post("/api/cards", async (c) => {
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const projectId = requireString(body, "projectId");
+		if (!getProject(db, projectId)) throw new HttpError(404, `Project not found: ${projectId}`);
+		const card = createCard(projectId, requireString(body, "title"), typeof body.brief === "string" ? body.brief : "", typeof body.stageConfig === "object" && body.stageConfig !== null ? (body.stageConfig as Card["stageConfig"]) : {});
 		return c.json(card, 201);
+	});
+
+	// The command box's free-form ask: one cheap session reads the line (an @name tags the project) and
+	// Tower does the acting, so the most a stray sentence can ever do is file or start one card.
+	app.post("/api/assist", async (c) => {
+		const text = requireString((await c.req.json()) as Record<string, unknown>, "text");
+		const projects = listProjects(db).map(({ id, name }) => ({ id, name }));
+		if (projects.length === 0) throw new HttpError(400, "Add a project to the board before asking Tower to act");
+		const tag = taggedProject(text, projects);
+
+		let verdict = null;
+		let readError: string | null = null;
+		try {
+			verdict = await readIntent({ config, driver, text, projects });
+		} catch (error) {
+			readError = error instanceof Error ? error.message : String(error);
+		}
+
+		if (verdict && verdict.action === "none") {
+			return c.json({ ok: false, reply: `Tower left that alone — it did not read as work to file or start. Name the work, e.g. “add retry with backoff @${projects[0]?.name}”.` });
+		}
+
+		const project = (verdict && matchProject(verdict.project, projects)) ?? tag ?? (projects.length === 1 ? projects[0] : null);
+		if (!project) {
+			// Nowhere certain to put it: ask, rather than guess across many projects.
+			return c.json({ ok: false, reply: `Which project? Tag it with @ — e.g. @${projects[0]?.name}.` });
+		}
+
+		const title = (verdict?.title || text.replaceAll(/@[\w.-]+/g, "").trim().slice(0, 120)) || text.trim().slice(0, 120);
+		const brief = verdict?.brief ?? "";
+		const card = createCard(project.id, title, brief);
+		let action = "add_card";
+		if (verdict?.action === "start_card") {
+			action = "start_card";
+			orchestrator.dispatch(card.id, { type: "enqueue" });
+		} else if (!verdict) {
+			// The intent session failed (offline, timeout): file the line as-is rather than drop it.
+			console.error(`assist: falling back to a plain card (${readError})`);
+		}
+		const final = getCard(db, card.id) ?? card;
+		return c.json({
+			ok: true,
+			action,
+			card: { id: final.id, title: final.title, stage: final.stage, status: final.status },
+			projectId: project.id,
+			reply: action === "start_card" ? `Started “${title}” on ${project.name}.` : verdict ? `Added “${title}” to ${project.name}'s backlog.` : `Tower could not reach its planner, so this was filed as-is on ${project.name}.`,
+		});
 	});
 
 	app.get("/api/cards/:id", (c) => {

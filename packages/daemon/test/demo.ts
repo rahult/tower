@@ -88,6 +88,24 @@ const busy: FakeTurn = {
 
 // The card's title decides how its sessions behave.
 const driver = new FakeSessionDriver((spec) => {
+	// The ask box's intent reader: the fake agent cannot read the typed line, so it files a canned
+	// verdict on the tower lane — enough to show the loop from keystroke to card.
+	if (spec.sessionId.includes("assist"))
+		return [
+			{
+				events: [
+					{
+						type: "message",
+						message: {
+							role: "assistant",
+							text: JSON.stringify({ action: "add_card", project: "tower", title: "Card filed from the ask box", brief: "The demo's fake agent scripts this verdict; a real Tower reads the line." }),
+							thinking: "",
+							toolCalls: [],
+						},
+					},
+				],
+			},
+		];
 	// The crew card's members first: their ids carry no stage token, so they must not fall through to reviews.
 	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
 	if (spec.sessionId.includes("-ws-")) return [streamBuilderTurn()];

@@ -84,6 +84,14 @@ export interface FiledFeedback {
 
 export type FeedbackKind = "bug" | "feature" | "feedback";
 
+export interface AssistOutcome {
+	ok: boolean;
+	action?: "add_card" | "start_card";
+	card?: Pick<Card, "id" | "title" | "stage" | "status">;
+	projectId?: string;
+	reply: string;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
 	const response = await fetch(path, {
 		method,
@@ -111,6 +119,7 @@ export const api = {
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
+	assist: (text: string) => request<AssistOutcome>("POST", "/api/assist", { text }),
 	fileFeedback: async (body: { kind: FeedbackKind; title: string; details: string; includeDiagnostics: boolean }): Promise<FiledFeedback> => {
 		// A 503 carries a prefilled GitHub issue form alongside the error, which the modal offers as the way out.
 		const response = await fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

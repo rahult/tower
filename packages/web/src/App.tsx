@@ -89,6 +89,21 @@ export function App() {
 		},
 		[queryClient],
 	);
+	// The palette's free-form ask: an agent on the daemon reads the line and Tower does the acting.
+	const askTower = useCallback(
+		(text: string) => {
+			toast("Tower is reading that…");
+			void api
+				.assist(text)
+				.then((outcome) => {
+					void queryClient.invalidateQueries({ queryKey: ["board"] });
+					if (outcome.ok && outcome.card) openCard(outcome.card.id);
+					toast(outcome.reply);
+				})
+				.catch((error: Error) => toast(error.message));
+		},
+		[openCard, queryClient],
+	);
 	const toggleNotify = useCallback(() => {
 		if (notify) {
 			setNotifyEnabled(false);
@@ -158,6 +173,7 @@ export function App() {
 			openCard,
 			startCard,
 			addWork: () => setAddingWork({}),
+			askTower,
 			sendFeedback: () => setFeedbackOpen(true),
 			openModels: () => setModelsOpen(true),
 			setTheme: (next: Theme) => setTheme(next),
@@ -166,7 +182,7 @@ export function App() {
 			filterProject,
 			densityCompact: density === "compact",
 		}),
-		[navigate, openCard, startCard, setTheme, toggleNotify, toggleDensity, filterProject, density],
+		[navigate, openCard, startCard, askTower, setTheme, toggleNotify, toggleDensity, filterProject, density],
 	);
 	useShortcuts(
 		useMemo(

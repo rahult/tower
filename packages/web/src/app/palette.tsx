@@ -7,6 +7,8 @@ export interface PaletteActions {
 	openCard: (cardId: string) => void;
 	startCard: (cardId: string) => void;
 	addWork: () => void;
+	/** The free-form ask: one line of natural language, an @name tagging the project. */
+	askTower: (text: string) => void;
 	sendFeedback: () => void;
 	openModels: () => void;
 	setTheme: (theme: "auto" | "light" | "dark") => void;
@@ -76,8 +78,17 @@ export function Palette({ cards, projectNames, projects, actions, onClose }: { c
 	const matches = useMemo(() => {
 		const q = query.trim().toLowerCase();
 		if (!q) return items;
-		return items.filter((item) => `${item.label} ${item.group} ${item.hint ?? ""}`.toLowerCase().includes(q));
-	}, [items, query]);
+		const found = items.filter((item) => `${item.label} ${item.group} ${item.hint ?? ""}`.toLowerCase().includes(q));
+		// An @tag is an explicit ask, and so is a line that matches nothing: put the agent's ear first.
+		const trimmed = query.trim();
+		if (trimmed.length >= 2 && (/@/.test(trimmed) || found.length === 0)) {
+			return [
+				{ group: "Ask Tower", label: `“${trimmed}”`, hint: "an agent reads this and acts", run: () => actions.askTower(trimmed) },
+				...found,
+			];
+		}
+		return found;
+	}, [items, query, actions]);
 
 	// Block bodies on purpose: an arrow-body effect returns whatever its last expression evaluates to, and
 	// React calls that return value as a cleanup on unmount — a non-function there whites out the page.
@@ -135,7 +146,7 @@ export function Palette({ cards, projectNames, projects, actions, onClose }: { c
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						onKeyDown={onKeyDown}
-						placeholder="Jump to a card, add work, switch view…"
+						placeholder="Jump to a card, add work, or ask — @project tags it…"
 						aria-label="Search commands"
 						spellCheck={false}
 						autoComplete="off"
