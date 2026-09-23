@@ -67,7 +67,7 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, mergesLocally }: 
 				<textarea id="work-feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} rows={2} className={`${field} resize-y`} placeholder="Handle the empty list case the adversarial review found" />
 				<div className="mt-2 flex flex-wrap items-center gap-2">
 					<button type="button" onClick={() => decide.mutate("approve")} disabled={decide.isPending} className={button.primary}>
-						Approve and open a pull request
+						{mergesLocally ? "Approve and merge locally" : "Approve and open a pull request"}
 					</button>
 					<button type="button" onClick={() => decide.mutate("reject")} disabled={decide.isPending || !feedback.trim()} className={button.quiet}>
 						Send back to the builder

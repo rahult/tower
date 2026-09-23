@@ -195,7 +195,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 				) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
 					<GatePanel cardId={card.id} gate={pendingGate} />
 				) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (
-					<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} />
+					<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} mergesLocally={project?.hasOrigin === false} />
 				) : activeTab === "decision" && asked ? (
 					<QuestionsPanel cardId={card.id} summary={card.needsAttentionReason} questions={asked} className="flex min-h-0 flex-1 flex-col" />
 				) : run ? (
