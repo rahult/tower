@@ -1,9 +1,10 @@
 /**
  * What a pinned tab says without being opened: the title carries the count of cards that need you,
- * and the favicon badges the same number, because tab titles truncate long before the number does.
+ * and the favicon badges the same number on a bell, because tab titles truncate long before the
+ * number does. The favicon is the only bell — an emoji here would show twice in the tab.
  */
 export function setTabUrgency(waiting: number): void {
-	document.title = waiting > 0 ? `🔔 ${waiting} need${waiting === 1 ? "s" : ""} you — Tower` : "Tower";
+	document.title = waiting > 0 ? `Tower — ${waiting} need${waiting === 1 ? "s" : ""} you` : "Tower";
 	drawFavicon(waiting);
 }
 
