@@ -8,6 +8,7 @@
  *   /tower settings        show which model runs each stage
  *   /tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low
  *                          set them (":thinking" is optional; "stage=default" clears one)
+ *   /tower update         fast-forward this install to origin, rebuild the board, say if a restart is needed
  *   /tower rebuild-ui      build the board UI (after pulling updates); reload the tab to see it
  *   /tower stop            stop the daemon (running sessions become resumable)
  *
@@ -27,7 +28,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOME = process.env.TOWER_HOME ?? join(homedir(), ".tower");
 const PORT = process.env.TOWER_PORT ?? "4700";
 const BASE = `http://127.0.0.1:${PORT}`;
-const SUBCOMMANDS = ["open", "add", "run", "status", "settings", "rebuild-ui", "stop"];
+const SUBCOMMANDS = ["open", "add", "run", "status", "settings", "update", "rebuild-ui", "stop"];
 
 interface Card {
 	id: string;
@@ -178,9 +179,46 @@ async function rebuildUi(ctx: ExtensionContext): Promise<void> {
 	ctx.ui.notify(`Tower: UI rebuilt in ${Math.round((Date.now() - started) / 1000)}s. Reload the board tab (${BASE}) to pick it up.`, "info");
 }
 
+/**
+ * `/tower update`: fast-forwards this install to origin and rebuilds the board. The running daemon
+ * keeps its boot-time code, so when daemon, prompt or flow files changed, the reader is told to
+ * restart rather than left on a half-updated install.
+ */
+async function update(ctx: ExtensionContext): Promise<void> {
+	const git = (...args: string[]) => run("git", args, { cwd: ROOT, maxBuffer: 1024 * 1024 });
+	const branch = (await git("rev-parse", "--abbrev-ref", "HEAD").catch(() => null))?.stdout.trim();
+	if (!branch || branch === "HEAD") throw new Error(`${ROOT} is not a checkout of a branch, so there is nothing to pull. Reinstall: pi install git:github.com/rahult/tower`);
+	// Untracked files are common and harmless; modified tracked files would make the fast-forward a mess.
+	const dirty = (await git("status", "--porcelain", "--untracked-files=no")).stdout.trim();
+	if (dirty) throw new Error("This install has local changes, so Tower did not pull over them. Commit or discard them there, then /tower update again.");
+	const ahead = Number((await git("rev-list", "--count", `origin/${branch}..HEAD`)).stdout.trim());
+	if (ahead > 0) throw new Error(`This install is ${ahead} ${ahead === 1 ? "commit" : "commits"} ahead of origin/${branch}; update it by hand instead of force-pulling.`);
+
+	const before = (await git("rev-parse", "HEAD")).stdout.trim();
+	await git("fetch", "origin", branch);
+	const behind = Number((await git("rev-list", "--count", `HEAD..origin/${branch}`)).stdout.trim());
+	if (behind === 0) return ctx.ui.notify(`Tower is already up to date (${before.slice(0, 7)}).`, "info");
+
+	await git("merge", "--ff-only", `origin/${branch}`);
+	const after = (await git("rev-parse", "HEAD")).stdout.trim();
+	const commits = Number((await git("rev-list", "--count", `${before}..${after}`)).stdout.trim());
+	// Daemon code runs from boot time; prompts and flows are read per run, where the new files can fail
+	// one stage until a restart — both argue for restarting, and Retry recovers a stage that caught the skew.
+	const needsRestart = (await git("diff", "--name-only", `${before}..${after}`, "--", "packages/daemon", "prompts", "flows")).stdout.trim().length > 0;
+	ctx.ui.notify("Tower: building the board UI…", "info");
+	await run("npm", ["run", "build", "--workspace", "@tower/web"], { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 });
+	ctx.ui.notify(
+		[
+			`Tower: updated ${before.slice(0, 7)} → ${after.slice(0, 7)} (${commits} ${commits === 1 ? "commit" : "commits"}). UI rebuilt — reload the board tab (${BASE}).`,
+			...(needsRestart ? ["The daemon, prompts or flows changed: /tower stop, then /tower, to pick them up. (A stage that fails meanwhile recovers on Retry.)"] : []),
+		].join("\n"),
+		needsRestart ? "warning" : "info",
+	);
+}
+
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("tower", {
-		description: "Tower control board: /tower [open | add <title> | run <title> | status | settings | rebuild-ui | stop]",
+		description: "Tower control board: /tower [open | add <title> | run <title> | status | settings | update | rebuild-ui | stop]",
 		getArgumentCompletions: (prefix: string) => {
 			if (prefix.includes(" ")) return null;
 			const matches = SUBCOMMANDS.filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name }));
@@ -196,6 +234,7 @@ export default function (pi: ExtensionAPI) {
 				} else if (subcommand === "add" || subcommand === "run") await addCard(rest.join(" "), ctx, subcommand === "run");
 				else if (subcommand === "status") await status(ctx);
 				else if (subcommand === "settings") await settings(rest, ctx);
+				else if (subcommand === "update") await update(ctx);
 				else if (subcommand === "rebuild-ui") await rebuildUi(ctx);
 				else if (subcommand === "stop") await stop(ctx);
 				else ctx.ui.notify(`Unknown: /tower ${subcommand}. Try: ${SUBCOMMANDS.join(", ")}`, "warning");
