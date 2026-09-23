@@ -18,12 +18,14 @@ export interface LiveRun {
 }
 
 /**
- * Owns live sessions. Enforces one live run per card (one writer per worktree and per session file), and turns
- * driver events into transcript items that are buffered, persisted (anchors only) and published.
+ * Owns live sessions. A card holds one run at a time — its writer, so a worktree never has two agents typing
+ * in it — except while a crew runs, when the card's stage lease covers several member sessions at once
+ * (parallel builders in their own worktrees, scouts that only read). Turns driver events into transcript
+ * items that are buffered, persisted (anchors only) and published.
  */
 export class RunManager {
 	private readonly byRun = new Map<string, LiveRun>();
-	private readonly byCard = new Map<string, string>();
+	private readonly byCard = new Map<string, Set<string>>();
 	/** Blocking questions from pi extensions that nobody has answered yet, with the timer that will cancel each. */
 	private readonly pendingUi = new Map<string, NodeJS.Timeout>();
 	private readonly uiTimeoutMs: number;
@@ -38,11 +40,15 @@ export class RunManager {
 		this.driver = driver;
 	}
 
-	async start(cardId: string, spec: RunSpec): Promise<LiveRun> {
-		if (this.byCard.has(cardId)) throw new Error(`Card ${cardId} already has a live run`);
+	/** `shared` lets a crew add member sessions while the card's lease is already held by the crew itself. */
+	async start(cardId: string, spec: RunSpec, options: { shared?: boolean } = {}): Promise<LiveRun> {
+		const held = this.byCard.get(cardId);
+		if (held && held.size > 0 && !options.shared) throw new Error(`Card ${cardId} already has a live run`);
 		const runId = spec.sessionId;
 		// Reserve before the await so two concurrent starts cannot both pass the check.
-		this.byCard.set(cardId, runId);
+		const set = held ?? new Set<string>();
+		set.add(runId);
+		this.byCard.set(cardId, set);
 		try {
 			const handle = await this.driver.start(spec);
 			const resumedFromSeq = lastRunSeq(this.db, runId);
@@ -51,16 +57,17 @@ export class RunManager {
 			this.byRun.set(runId, live);
 			return live;
 		} catch (error) {
-			this.byCard.delete(cardId);
+			this.release(cardId, runId);
 			throw error;
 		}
 	}
 
 	/** Opens a transcript for daemon-run work. Holds the card's lease like a session does. */
 	openLog(cardId: string, runId: string): LiveRun {
-		if (this.byCard.has(cardId)) throw new Error(`Card ${cardId} already has a live run`);
+		const held = this.byCard.get(cardId);
+		if (held && held.size > 0) throw new Error(`Card ${cardId} already has a live run`);
 		const live: LiveRun = { runId, cardId, handle: null, buffer: this.createBuffer(cardId, runId), detach: () => {} };
-		this.byCard.set(cardId, runId);
+		this.byCard.set(cardId, new Set([runId]));
 		this.byRun.set(runId, live);
 		return live;
 	}
@@ -117,8 +124,15 @@ export class RunManager {
 	}
 
 	liveRunForCard(cardId: string): LiveRun | null {
-		const runId = this.byCard.get(cardId);
+		const ids = this.byCard.get(cardId);
+		const runId = ids ? [...ids].at(-1) : undefined;
 		return runId ? (this.byRun.get(runId) ?? null) : null;
+	}
+
+	/** Every live session of the card: one for an ordinary run, several while a crew is in flight. */
+	liveRunsForCard(cardId: string): LiveRun[] {
+		const ids = this.byCard.get(cardId);
+		return ids ? [...ids].map((runId) => this.byRun.get(runId)).filter((live): live is LiveRun => live !== undefined) : [];
 	}
 
 	/** Live runs replay from the ring buffer; finished runs replay from persisted anchors. */
@@ -147,8 +161,15 @@ export class RunManager {
 		live.detach();
 		live.buffer.close();
 		this.byRun.delete(runId);
-		this.byCard.delete(live.cardId);
+		this.release(live.cardId, runId);
 		await live.handle?.stop().catch(() => {});
+	}
+
+	private release(cardId: string, runId: string): void {
+		const ids = this.byCard.get(cardId);
+		if (!ids) return;
+		ids.delete(runId);
+		if (ids.size === 0) this.byCard.delete(cardId);
 	}
 
 	async stopAll(): Promise<void> {

@@ -10,7 +10,7 @@ import { STAGE_RESULT_FILE } from "@tower/core";
 import { loadConfig } from "../src/config.ts";
 import { startDaemon } from "../src/daemon.ts";
 import { FakeSessionDriver, type FakeTurn } from "../src/pi/fake-driver.ts";
-import { buildingTurn, planningTurn, reviewTurn, simulationTurn, testerTurn } from "./harness.ts";
+import { buildingTurn, crewPlanningTurn, integratorTurn, planningTurn, reviewTurn, scoutTurn, simulationTurn, streamBuilderTurn, testerTurn } from "./harness.ts";
 
 const root = mkdtempSync(join(tmpdir(), "tower-demo-"));
 function repo(name: string): string {
@@ -43,6 +43,10 @@ const busy: FakeTurn = {
 
 // The card's title decides how its sessions behave.
 const driver = new FakeSessionDriver((spec) => {
+	// The crew card's members first: their ids carry no stage token, so they must not fall through to reviews.
+	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
+	if (spec.sessionId.includes("-ws-")) return [streamBuilderTurn()];
+	if (spec.sessionId.includes("-integrator")) return [integratorTurn()];
 	const stage = spec.sessionId.includes("-plan-") ? "plan" : spec.sessionId.includes("-build-") ? "build" : spec.sessionId.includes("-test-") ? "test" : "review";
 	// One reviewer finds something blocking, so the feedback gate has something to show.
 	if (stage === "review") return [reviewTurn(spec.sessionId.includes("adversarial") ? "fail" : "pass")];
@@ -50,6 +54,7 @@ const driver = new FakeSessionDriver((spec) => {
 	if (spec.sessionId.includes("invariant-simulation")) return [simulationTurn("pass")];
 	const title = titles.get(spec.sessionId.slice(1, 9)) ?? "";
 	if (title.startsWith("Add retry") && stage === "build") return [busy];
+	if (title.startsWith("Split") && stage === "plan") return [crewPlanningTurn()];
 	if (title.startsWith("Migrate") && stage === "plan") {
 		return [
 			{
@@ -82,6 +87,7 @@ const api = async (method: string, path: string, body?: unknown): Promise<any> =
 const seed: Record<string, Array<[title: string, brief: string, advance: "backlog" | "plan" | "approve"]>> = {
 	axiom: [
 		["Add retry with backoff to the HTTP client", "Wrap request() so transient 5xx and network errors are retried.", "approve"],
+		["Split the config loader into modules", "One module per source: env, file, flags. The plan splits it into parallel streams.", "approve"],
 		["Expose closure predicates over the CLI", "Add `axiom closure <predicate>` with JSON output.", "plan"],
 		["Migrate persistence to the new schema", "Move facts and rules tables to schema v4.", "plan"],
 		["Document the rule engine", "A README section with two worked examples.", "backlog"],

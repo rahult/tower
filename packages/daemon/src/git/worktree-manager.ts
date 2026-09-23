@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -94,6 +94,30 @@ export async function ensureWorktree(options: { repoPath: string; path: string; 
 	return { path, branchName, baseCommit: await git(path, "merge-base", "HEAD", baseBranch), created };
 }
 
+/**
+ * One worktree per crew stream, branched from the card's own base commit so every stream merges back cleanly.
+ * Reused across a card's attempts: the branch is reset to the base and untracked files are cleared, but ignored
+ * ones (an installed node_modules) survive, so the project's setup command runs once per stream, not per attempt.
+ */
+export async function ensureStreamWorktree(options: { repoPath: string; path: string; branchName: string; baseCommit: string }): Promise<Worktree> {
+	const { repoPath, path, branchName, baseCommit } = options;
+	const created = !existsSync(path);
+	if (created) {
+		mkdirSync(dirname(path), { recursive: true });
+		await git(repoPath, "worktree", "add", "-b", branchName, path, baseCommit);
+	} else {
+		await git(path, "checkout", "-q", "-B", branchName, baseCommit);
+		await git(path, "clean", "-qfd");
+	}
+	return { path, branchName, baseCommit, created };
+}
+
 export async function removeWorktree(repoPath: string, path: string): Promise<void> {
 	if (existsSync(path)) await git(repoPath, "worktree", "remove", "--force", path);
+}
+
+/** The stream worktrees of a card live beside its own, named `<cardId>-ws-<slug>`; this lists their paths. */
+export function streamWorktreePaths(worktreesDir: string, cardId: string): string[] {
+	if (!existsSync(worktreesDir)) return [];
+	return readdirSync(worktreesDir, { withFileTypes: true }).filter((entry) => entry.isDirectory() && entry.name.startsWith(`${cardId}-ws-`)).map((entry) => join(worktreesDir, entry.name));
 }

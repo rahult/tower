@@ -2,6 +2,7 @@ export * from "./types.ts";
 export * from "./stage-spec.ts";
 export * from "./stage-config.ts";
 export * from "./stage-result.ts";
+export * from "./subagents.ts";
 export * from "./prompt-render.ts";
 export * from "./policy/model-routing.ts";
 export * from "./policy/gates.ts";

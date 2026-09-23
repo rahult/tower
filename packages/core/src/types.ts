@@ -18,8 +18,9 @@ export type CardStatus =
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-/** "test" is a person's on-demand run of the project's test command; "verify" is Tower's own gate. */
-export type RunKind = "stage" | "verify" | "test" | "flow_step" | "adhoc";
+/** "test" is a person's on-demand run of the project's test command; "verify" is Tower's own gate.
+ *  "subagent" is one member of a card's crew: a scout, a stream builder or the integrator. */
+export type RunKind = "stage" | "verify" | "test" | "flow_step" | "adhoc" | "subagent";
 export type RunStatus = "starting" | "running" | "settled" | "interrupted" | "failed" | "aborted";
 export type ResultStatus = "pass" | "fail" | "blocked" | "missing";
 
@@ -44,6 +45,8 @@ export interface Project {
 	reviewFlows: string[] | null;
 	/** Invariant simulation in planning and testing. null = Tower's default. */
 	invariantSimulation: boolean | null;
+	/** Parallel sub-agents: scouts and stream crews fanned out from the plan. null = Tower's default. */
+	subagents: boolean | null;
 	createdAt: number;
 }
 

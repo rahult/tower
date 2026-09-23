@@ -107,6 +107,8 @@ Environment variables, read when the daemon starts:
 | `TOWER_PORT` | `4700` | Port. The daemon only ever binds `127.0.0.1`; there is no authentication |
 | `TOWER_MAX_CONCURRENT` | `3` | Sessions and verify commands running at once, across all projects |
 | `TOWER_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
+| `TOWER_SUBAGENTS` | on | Whether plans may fan out to scouts and parallel stream builders. `0` turns it off everywhere |
+| `TOWER_MAX_CREW` | `3` | How many of a card's scouts or stream builders run at once |
 | `TOWER_REVIEW_FLOWS` | `adversarial-review,solid-review` | Review flows a project runs unless its Settings say otherwise. Empty turns them off |
 | `TOWER_MAX_CI_FIX_ATTEMPTS` | `2` | Times a failing pull request is repaired before the card asks for you |
 | `TOWER_PR_POLL_MS` | `120000` | How often open pull requests are checked |
@@ -128,7 +130,7 @@ Names are pi's `provider/model-id` selectors (`pi --list-models`). A stage you l
 
 If a provider rejects a request (no credit, a bad key, an unknown model), the card stops and shows the provider's own message.
 
-Per project, under **Settings** on its lane: the verify command, the setup command, which review flows run, and how many of its cards may run at once (default 1).
+Per project, under **Settings** on its lane: the verify command, the setup command, which review flows run, whether sub-agent crews may fan out, and how many of its cards may run at once (default 1).
 
 Per card, models can be overridden when creating it through the API:
 
@@ -155,6 +157,17 @@ A flow is a JSON file: shipped ones are in `flows/`, yours go in `~/.tower/flows
 ```
 
 `model` is a stage name (`planning` means whatever plans for you) or an explicit `provider/model`. `access` is `read-only`, `read-and-run` or `write`. Pull requests need the [`gh` CLI](https://cli.github.com) logged in.
+
+### Sub-agent crews
+
+When a plan genuinely decomposes, the planner may append two optional sections to it, and Tower fans the build out to parallel sub-agents:
+
+- **`## Scouts`** — read-only researchers who answer one question each before building starts, in parallel. Their reports land in the card's `research/` folder and the builders are told to read them.
+- **`## Streams`** — independent workstreams. Each is built by its own agent in its **own worktree** (branch `tower/<card>-ws-<slug>`, dependencies installed once, reused across attempts), and an **integrator** agent then merges the branches into the card's branch, resolves conflicts and fixes the seams before testing runs.
+
+The whole crew is one building attempt: the card's lifecycle, retries and gates work exactly as with a single builder. Scouts are advisory (a scout that fails costs nothing but a missing report); a blocked builder or integrator stops the card for your answers, and a retry re-runs the crew with your note in every member's instructions. Most plans should have neither section — the planner is told to split only when streams are truly independent, and the crew section of the planning prompt is written only when sub-agents are on.
+
+Sub-agents are on by default and can be set per project (Tower default / on / off) under **Settings → Parallel sub-agents**. Every member session shows up in the card's drawer as its own run (`scout <slug>`, `builder <slug>`, `integrator`), and their tokens are part of the card's spend.
 
 ### How sessions are run
 

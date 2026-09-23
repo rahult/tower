@@ -15,6 +15,10 @@ export interface Config {
 	defaultReviewFlows: string[];
 	/** Whether planning and testing use the invariant-simulation protocol, unless a project says otherwise. */
 	invariantSimulation: boolean;
+	/** Whether plans may fan out to scouts and parallel stream builders, unless a project says otherwise. */
+	subagents: boolean;
+	/** How many of a card's scouts or stream builders may run at once. */
+	maxCrew: number;
 	/** How often open pull requests are checked, and how many times a failing one is repaired before asking. */
 	prPollMs: number;
 	maxCiFixAttempts: number;
@@ -44,6 +48,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		flowsDir: env.TOWER_FLOWS_DIR ?? join(repoRoot, "flows"),
 		defaultReviewFlows: (env.TOWER_REVIEW_FLOWS ?? "adversarial-review,solid-review").split(",").map((name) => name.trim()).filter(Boolean),
 		invariantSimulation: !["0", "false"].includes((env.TOWER_INVARIANT_SIMULATION ?? "").toLowerCase()),
+		subagents: !["0", "false"].includes((env.TOWER_SUBAGENTS ?? "").toLowerCase()),
+		maxCrew: Number(env.TOWER_MAX_CREW ?? 3),
 		prPollMs: Number(env.TOWER_PR_POLL_MS ?? 120_000),
 		maxCiFixAttempts: Number(env.TOWER_MAX_CI_FIX_ATTEMPTS ?? 2),
 		uiRequestTimeoutMs: Number(env.TOWER_UI_REQUEST_TIMEOUT_MS ?? 5 * 60_000),

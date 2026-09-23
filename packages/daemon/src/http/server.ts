@@ -70,7 +70,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db) }));
 
-	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation });
+	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, maxCrew: config.maxCrew });
 
 	app.get("/api/settings", (c) => c.json(settingsView()));
 
@@ -109,6 +109,7 @@ export function createApp(deps: AppDeps): Hono {
 			stageConfig: {},
 			reviewFlows: null,
 			invariantSimulation: null,
+			subagents: null,
 			createdAt: Date.now(),
 		};
 		insertProject(db, project);
@@ -138,6 +139,11 @@ export function createApp(deps: AppDeps): Hono {
 			// null goes back to Tower's default.
 			if (body.invariantSimulation !== null && typeof body.invariantSimulation !== "boolean") throw new HttpError(400, '"invariantSimulation" must be a boolean, or null for the default');
 			settings.invariantSimulation = body.invariantSimulation as boolean | null;
+		}
+		if (body.subagents !== undefined) {
+			// null goes back to Tower's default.
+			if (body.subagents !== null && typeof body.subagents !== "boolean") throw new HttpError(400, '"subagents" must be a boolean, or null for the default');
+			settings.subagents = body.subagents as boolean | null;
 		}
 		if (body.concurrencyLimit !== undefined) {
 			const limit = Number(body.concurrencyLimit);
@@ -296,7 +302,7 @@ export function createApp(deps: AppDeps): Hono {
 		const file = join(paths.cardDir(config, card.id), name);
 		// Only a bare file name, or one inside reviews/: anything else (.., sessions/, absolute paths) is refused.
 		const parts = name.split("/");
-		const allowed = parts.every((part) => part !== "" && part !== ".." && basename(part) === part) && (parts.length === 1 || (parts.length === 2 && parts[0] === "reviews"));
+		const allowed = parts.every((part) => part !== "" && part !== ".." && basename(part) === part) && (parts.length === 1 || (parts.length === 2 && (parts[0] === "reviews" || parts[0] === "research")));
 		if (!allowed || !existsSync(file) || !statSync(file).isFile()) throw new HttpError(404, `Artifact not found: ${name}`);
 		return c.text(readFileSync(file, "utf8"));
 	});
@@ -322,6 +328,6 @@ function listArtifacts(config: Config, cardId: string): Array<{ name: string; by
 						return { name: `${prefix}${entry.name}`, bytes: stat.size, modifiedAt: stat.mtimeMs };
 					})
 			: [];
-	// pr-body.md is scaffolding for gh, not something to read.
-	return [...list(root, ""), ...list(join(root, "reviews"), "reviews/")].filter((file) => file.name !== "pr-body.md");
+	// pr-body.md is scaffolding for gh, not something to read; crew/ holds mechanical per-builder verdicts.
+	return [...list(root, ""), ...list(join(root, "reviews"), "reviews/"), ...list(join(root, "research"), "research/")].filter((file) => file.name !== "pr-body.md");
 }

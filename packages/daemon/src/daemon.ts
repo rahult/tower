@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Config } from "./config.ts";
 import { paths } from "./config.ts";
 import { BenchRunner } from "./bench.ts";
+import { CrewRunner } from "./crew-runner.ts";
 import { openDb } from "./db/open.ts";
 import { Bus } from "./events/bus.ts";
 import { createApp } from "./http/server.ts";
@@ -26,13 +27,18 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	const db = openDb(paths.db(config));
 	const bus = new Bus();
 	const runs = new RunManager(db, bus, driver, config.uiRequestTimeoutMs);
-	// The runner reports to the orchestrator, which in turn starts runs: bind late to close the loop.
+	// The runners report to the orchestrator, which in turn starts runs: bind late to close the loop.
+	// The crew sits between the stage runner and its sessions: it fans a building attempt out through
+	// the same startCustom door the review flows use.
 	let orchestrator: Orchestrator;
-	const stages = new StageRunner({
+	let stages: StageRunner;
+	const crew = new CrewRunner({ config, db, stages: () => stages });
+	stages = new StageRunner({
 		config,
 		db,
 		bus,
 		runs,
+		crew,
 		onStarted: (cardId) => orchestrator.handleStarted(cardId),
 		onOutcome: (cardId, outcome) => orchestrator.handleOutcome(cardId, outcome),
 	});

@@ -111,7 +111,8 @@
 						<h3>A cheap model builds from the plan alone</h3>
 						<p>
 							Building is a fresh pi session that sees the plan and nothing of the planner's conversation. It works in the card's own git worktree and commits on the card's branch.
-							Building defaults to <code>zai/glm-5.3</code>.
+							Building defaults to <code>zai/glm-5.3</code>. When the plan splits cleanly — and only then — the planner says so, and a crew takes over: scouts answer open questions in
+							parallel, each stream is built by its own agent in its own worktree, and an integrator merges the branches before your tests run.
 						</p>
 					</li>
 					<li>
@@ -158,6 +159,10 @@
 					<div>
 						<dt>A worktree per card</dt>
 						<dd>pi has no repository locking, so Tower gives every card its own git worktree and branch. Two cards can build in one project at once, and your checkout is never touched.</dd>
+					</div>
+					<div>
+						<dt>Parallel, when the plan allows it</dt>
+						<dd>A plan that splits into independent streams is built by a crew of sub-agents: scouts research the open questions first, each stream gets its own agent and worktree, and an integrator merges the branches so testing still judges one change. Most plans shouldn't split; the planner decides, per project toggle.</dd>
 					</div>
 					<div>
 						<dt>A fresh session per stage</dt>
@@ -270,9 +275,9 @@ export function pickNext(candidates, state) {
 			<section class="wrap prose">
 				<h2>Where it stands</h2>
 				<p>
-					Tower is early, and complete from backlog to merged pull request: planning, the plan gate, building, testing with the retry loop, invariant simulation, review flows, the
-					feedback gate, pull requests with CI repair, scheduling, restart recovery, questions, model settings and on-demand runs. Tests run the whole daemon end to end, and
-					planning, building, testing and questions have been run against real pi sessions.
+					Tower is early, and complete from backlog to merged pull request: planning, the plan gate, building — single-session or a parallel sub-agent crew — testing with the
+					retry loop, invariant simulation, review flows, the feedback gate, pull requests with CI repair, scheduling, restart recovery, questions, model settings and on-demand
+					runs. Tests run the whole daemon end to end, and planning, building, testing and questions have been run against real pi sessions.
 				</p>
 				<p>
 					Not yet proven against the real thing: the pull request stage has only met a stand-in for GitHub. Expect rough edges there, and

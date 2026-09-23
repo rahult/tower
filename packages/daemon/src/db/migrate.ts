@@ -109,6 +109,10 @@ const MIGRATIONS: string[] = [
 	ALTER TABLE projects ADD COLUMN preview_command TEXT;
 	ALTER TABLE projects ADD COLUMN preview_url TEXT;
 	`,
+	`
+	-- Parallel sub-agents: scouts and stream crews fanned out from the plan. NULL means Tower's default.
+	ALTER TABLE projects ADD COLUMN subagents INTEGER;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

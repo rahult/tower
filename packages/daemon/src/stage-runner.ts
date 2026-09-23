@@ -3,6 +3,9 @@ import { join } from "node:path";
 import {
 	type AgentStage,
 	type Card,
+	type CrewPlan,
+	hasCrew,
+	parseCrewPlan,
 	type Project,
 	type ResultStatus,
 	type RunSpec,
@@ -17,13 +20,14 @@ import {
 	STAGE_SPECS,
 } from "@tower/core";
 import { type Config, paths } from "./config.ts";
+import type { CrewContext } from "./crew-runner.ts";
 import type { Db } from "./db/open.ts";
 import { getCard, updateCard } from "./db/repo-cards.ts";
 import { getProject } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, listRunsForCard, type RunPatch, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import { runSetup } from "./git/setup.ts";
-import { branchNameFor, ensureWorktree } from "./git/worktree-manager.ts";
+import { branchNameFor, ensureWorktree, type Worktree } from "./git/worktree-manager.ts";
 import { buildPiArgs } from "./pi/argv.ts";
 import type { LiveRun, RunManager } from "./run/run-manager.ts";
 
@@ -37,18 +41,24 @@ export type RunOutcome =
 	| { kind: "failed"; error: string }
 	| { kind: "aborted" };
 
-/** A session that is not a card stage: a review-flow step or an ad hoc run. */
+/** A session that is not a card stage: a review-flow step, an ad hoc run, or a crew member. */
 export interface CustomRun {
 	sessionId: string;
-	kind: "flow_step" | "adhoc";
+	kind: "flow_step" | "adhoc" | "subagent";
 	attempt: number;
 	model: string;
 	thinking: ThinkingLevel;
 	tools: string[];
 	prompt: string;
 	appendSystemPromptFiles?: string[];
-	/** Whether the session must end by writing stage-result.json. */
+	/** Whether the session must end by writing its result file. */
 	requireResult: boolean;
+	/** Crew members hold the card's lease together with their crew instead of alone. */
+	shared?: boolean;
+	/** Where the result is expected, relative to the card's folder. Default: the stage result file. */
+	resultPath?: string;
+	/** Where the session works. Default: the card's worktree; a stream builder gets its own. */
+	cwd?: string;
 }
 
 export interface StageRunnerDeps {
@@ -56,6 +66,8 @@ export interface StageRunnerDeps {
 	db: Db;
 	bus: Bus;
 	runs: RunManager;
+	/** Late-bound crew runner: scouts and stream builders are driven through this runner's own startCustom. */
+	crew: { run: (ctx: CrewContext) => Promise<RunOutcome> };
 	/** Called synchronously once the session is up, before any work is driven, so it always precedes onOutcome. */
 	onStarted: (cardId: string) => void;
 	onOutcome: (cardId: string, outcome: RunOutcome) => void;
@@ -104,6 +116,17 @@ export class StageRunner {
 		rmSync(join(cardDir, STAGE_RESULT_FILE), { force: true });
 
 		const attempt = countRunsForStage(db, card.id, stage) + 1;
+
+		// A crew fans the build out only from the plan, only in building, and only when a CI repair — a single
+		// targeted fix — is not what is being asked for.
+		let crew: CrewPlan = { scouts: [], streams: [] };
+		if (stage === "building" && !options.fixingCi && (project.subagents ?? config.subagents)) {
+			const planFile = join(paths.cardDir(config, card.id), "plan.md");
+			const plan = existsSync(planFile) ? readFileSync(planFile, "utf8") : "";
+			crew = parseCrewPlan(plan);
+		}
+		if (hasCrew(crew)) return this.startCrew(card, project, attempt, worktree, crew, options.feedback);
+
 		const spec = this.buildSpec(card, project, stage, attempt, worktree.path);
 		// A build that repairs a failing pull request is told apart from ordinary builds by its session id.
 		if (options.fixingCi) spec.sessionId = `c${card.id}-cifix-${attempt}`;
@@ -151,6 +174,57 @@ export class StageRunner {
 	}
 
 	/**
+	 * The building attempt the plan split into a crew: one marker row stands for the attempt (the lifecycle's
+	 * attempt counter and the drawer's rail both read it), while the members — scouts, builders, integrator —
+	 * run as their own recorded sessions. The crew's combined verdict settles the marker and the card alike.
+	 */
+	private async startCrew(card: Card, project: Project, attempt: number, worktree: Worktree, crew: CrewPlan, feedback?: string): Promise<StageRun> {
+		const { db, config } = this.deps;
+		const cardDir = paths.cardDir(config, card.id);
+		const fallbackPrompt = this.renderStagePrompt(card, project, "building", worktree.path, worktree.branchName, worktree.baseCommit, feedback);
+		const run: StageRun = {
+			id: sessionIdFor(card.id, "building", attempt),
+			cardId: card.id,
+			kind: "stage",
+			stage: "building",
+			attempt,
+			model: "crew",
+			thinking: "off",
+			args: ["crew", String(crew.streams.length)],
+			status: "running",
+			resultStatus: null,
+			resultSummary: null,
+			questions: null,
+			tokens: null,
+			costUsd: null,
+			lastEntryId: null,
+			startedAt: Date.now(),
+			endedAt: null,
+			error: null,
+		};
+		insertRun(db, run);
+		this.patchCard(card.id, { attempt, worktreePath: worktree.path, branchName: worktree.branchName, baseCommit: worktree.baseCommit });
+		this.deps.onStarted(card.id);
+
+		const work = this.deps.crew
+			.run({ card, project, attempt, worktree, crew, ...(feedback ? { feedback } : {}), fallbackPrompt })
+			.then((outcome) => {
+				if (this.stopping) return;
+				if (outcome.kind === "settled") {
+					this.patchRun(run.id, { status: "settled", resultStatus: outcome.result, resultSummary: outcome.summary, questions: outcome.hasQuestions ? (listRunsForCard(db, card.id).findLast((member) => member.questions)?.questions ?? null) : null, endedAt: Date.now() });
+				} else if (outcome.kind === "failed") {
+					this.patchRun(run.id, { status: "failed", error: outcome.error, endedAt: Date.now() });
+				} else {
+					this.patchRun(run.id, { status: "aborted", endedAt: Date.now() });
+				}
+				this.deps.onOutcome(card.id, outcome);
+			})
+			.finally(() => this.inFlight.delete(run.id));
+		this.inFlight.set(run.id, work);
+		return getRun(db, run.id) as StageRun;
+	}
+
+	/**
 	 * Runs a session that is not one of the card's stages: a review-flow step or something the person asked for.
 	 * It holds the card's lease like any session and streams like one, but its outcome goes to the caller, not to
 	 * the card's lifecycle. Resolves when the session has finished.
@@ -162,12 +236,13 @@ export class StageRunner {
 		if (!card || !project) throw new Error(`Card not found: ${cardId}`);
 		if (!card.worktreePath) throw new Error("This card has no worktree yet. Start it first.");
 		const cardDir = paths.cardDir(config, card.id);
+		const resultFile = request.resultPath ?? STAGE_RESULT_FILE;
 		mkdirSync(join(cardDir, "reviews"), { recursive: true });
-		if (request.requireResult) rmSync(join(cardDir, STAGE_RESULT_FILE), { force: true });
+		if (request.requireResult) rmSync(join(cardDir, resultFile), { force: true });
 
 		const spec: RunSpec = {
 			sessionId: request.sessionId,
-			cwd: card.worktreePath,
+			cwd: request.cwd ?? card.worktreePath,
 			sessionDir: paths.sessionDir(config, card.id),
 			model: request.model,
 			thinking: request.thinking,
@@ -198,14 +273,14 @@ export class StageRunner {
 		});
 		let live: LiveRun;
 		try {
-			live = await runs.start(card.id, spec);
+			live = await runs.start(card.id, spec, { shared: request.shared === true });
 		} catch (error) {
 			this.patchRun(spec.sessionId, { status: "failed", error: error instanceof Error ? error.message : String(error), endedAt: Date.now() });
 			throw error;
 		}
 		this.patchRun(spec.sessionId, { status: "running" });
 		return new Promise<RunOutcome>((resolve) => {
-			const work = this.drive(live, "building", request.prompt, cardDir, { requireResult: request.requireResult, deliver: resolve }).finally(() => {
+			const work = this.drive(live, "building", request.prompt, cardDir, { requireResult: request.requireResult, resultFile, deliver: resolve }).finally(() => {
 				this.inFlight.delete(spec.sessionId);
 				// On shutdown drive() delivers nothing; do not leave the caller hanging.
 				resolve({ kind: "aborted" });
@@ -216,7 +291,8 @@ export class StageRunner {
 
 	/**
 	 * Reopens the session a restart interrupted (same session id, so pi restores its history) and tells the agent
-	 * to carry on. Falls back to a fresh run when there is nothing to reopen.
+	 * to carry on. Falls back to a fresh run when there is nothing to reopen, or when the interrupted attempt was
+	 * a crew: a crew's sessions are its members', so it starts over as a fresh crew, told what was said.
 	 */
 	async resume(cardId: string, stage: AgentStage, message?: string): Promise<StageRun> {
 		const { config, db, runs } = this.deps;
@@ -225,7 +301,10 @@ export class StageRunner {
 		const interrupted = listRunsForCard(db, cardId).findLast((run) => run.kind === "stage" && run.stage === stage && (message !== undefined || run.status === "interrupted"));
 		const card = getCard(db, cardId);
 		const project = card && getProject(db, card.projectId);
-		if (!interrupted || !card?.worktreePath || !project) return this.start(cardId, stage);
+		if (!interrupted || !card?.worktreePath || !project) return this.start(cardId, stage, message ? { feedback: message } : {});
+		// A crew attempt has no session of its own to reopen; its members do, but the attempt is cheapest to
+		// redo than to partially resume, so it starts over with the guidance carried in.
+		if (interrupted.model === "crew") return this.start(cardId, stage, message ? { feedback: message } : {});
 
 		const spec = { ...this.buildSpec(card, project, stage, interrupted.attempt, card.worktreePath), model: interrupted.model, thinking: interrupted.thinking };
 		let live: LiveRun;
@@ -253,11 +332,13 @@ export class StageRunner {
 	}
 
 	async abort(cardId: string): Promise<void> {
-		const live = this.deps.runs.liveRunForCard(cardId);
-		if (!live?.handle) throw new Error("This card has no running session to abort");
-		this.aborts.get(live.runId)?.();
-		await live.handle.abort().catch(() => {});
-		await this.inFlight.get(live.runId);
+		// A crew holds several sessions; an abort stops every one of them, not just the newest.
+		const lives = this.deps.runs.liveRunsForCard(cardId).filter((live) => live.handle);
+		for (const live of lives) {
+			this.aborts.get(live.runId)?.();
+			await live.handle?.abort().catch(() => {});
+		}
+		await Promise.all(lives.map((live) => this.inFlight.get(live.runId)).filter((work): work is Promise<void> => work !== undefined));
 	}
 
 	private buildSpec(card: Card, project: Project, stage: AgentStage, attempt: number, cwd: string): RunSpec {
@@ -283,8 +364,9 @@ export class StageRunner {
 			const cardDir = paths.cardDir(config, card.id);
 			const read = (...parts: string[]) => readFileSync(join(config.promptsDir, ...parts), "utf8");
 			const partials: Record<string, string> = { "stage-result-contract": read("partials", "stage-result-contract.md") };
-			// The templates reference the block, so the key must always exist; simulation off leaves it empty.
+			// The templates reference the blocks, so the keys must always exist; a feature switched off leaves them empty.
 			partials["invariant-protocol"] = (project.invariantSimulation ?? config.invariantSimulation) ? this.invariantBlock(stage, join(cardDir, "reviews", "invariant-simulation.md"), baseCommit, read) : "";
+			partials["parallel-work"] = this.parallelWorkBlock(stage, project);
 			return renderPrompt(
 				read(STAGE_SPECS[stage].promptFile),
 				{
@@ -326,13 +408,41 @@ export class StageRunner {
 		return `# Invariant checklist\n\nNo simulation has been run for this card, so derive the checklist yourself and test against it: apply the method below to the change (\`git diff ${baseCommit}\` and \`git log ${baseCommit}..HEAD\`) and to the plan. In the test report, give a verdict per invariant — **held**, **violated** (with the evidence) or **not observable** — before your overall verdict.\n\n${method}`;
 	}
 
+	/**
+	 * The block that lets a planner split the work across a crew. Present only when sub-agents are on for the
+	 * project — the planner never writes crew sections it was never offered, so a switched-off project pays
+	 * nothing and a switched-on one only pays when the plan really does decompose.
+	 */
+	private parallelWorkBlock(stage: AgentStage, project: Project): string {
+		if (stage !== "planning" || !(project.subagents ?? this.deps.config.subagents)) return "";
+		return [
+			"# Building in parallel (optional)",
+			"",
+			"This task may be built by a small crew of sub-agents working at the same time. If — and only if — the work genuinely decomposes, append either or both of the sections below to the plan, exactly as spelled here. Most tasks should have neither.",
+			"",
+			"## Scouts",
+			"",
+			"Read-only researchers who answer one question each before building starts; their reports wait for the builders. One bullet per question:",
+			"",
+			"- **<slug>**: <the question, with a hint at where in the codebase the answer likely lives>",
+			"",
+			"## Streams",
+			"",
+			"Independent workstreams, each implemented by its own agent in its own worktree and merged afterwards. One bullet per stream:",
+			"",
+			"- **<slug>**: <what to build: the files it owns, what it must not touch, and how to verify it on its own>",
+			"",
+			"Rules: streams must not need each other's output — disjoint files, no shared edits — and foundations every stream needs belong in the main steps, not in a stream. Two or three streams at most. A wrong split costs a merge and a rebuild, so when in doubt, write neither section.",
+		].join("\n");
+	}
+
 	/** Prompt → settle → validate result (one nudge if missing) → record outcome. Never throws. */
 	private async drive(
 		liveRun: LiveRun,
 		stage: AgentStage,
 		prompt: string,
 		cardDir: string,
-		custom?: { requireResult: boolean; deliver: (outcome: RunOutcome) => void },
+		custom?: { requireResult: boolean; resultFile?: string; deliver: (outcome: RunOutcome) => void },
 	): Promise<void> {
 		const { runs } = this.deps;
 		const live = liveRun as LiveRun & { handle: NonNullable<LiveRun["handle"]> };
@@ -358,8 +468,9 @@ export class StageRunner {
 			// Asking again would only fail the same way, so stop here with the provider's own words.
 			if (providerError && !aborted) throw new Error(`${getRun(this.deps.db, live.runId)?.model ?? "The model"} could not answer: ${providerError}`);
 		};
+		const resultFile = custom?.resultFile ?? STAGE_RESULT_FILE;
 		const readResult = () => {
-			const file = join(cardDir, STAGE_RESULT_FILE);
+			const file = join(cardDir, resultFile);
 			return parseStageResult(existsSync(file) ? readFileSync(file, "utf8") : null);
 		};
 
@@ -367,7 +478,7 @@ export class StageRunner {
 			await turn(prompt);
 			let parsed = custom && !custom.requireResult ? ({ ok: true, result: { status: "pass", summary: "" } } as ReturnType<typeof parseStageResult>) : readResult();
 			if (!aborted && !parsed.ok) {
-				await turn(NUDGE);
+				await turn(resultFile === STAGE_RESULT_FILE ? NUDGE : NUDGE.replace(STAGE_RESULT_FILE, resultFile));
 				parsed = readResult();
 			}
 			const usage = await live.handle.stats().catch(() => null);

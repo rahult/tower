@@ -20,6 +20,7 @@ function toProject(row: Row): Project {
 		stageConfig: JSON.parse(row.stage_config_json as string),
 		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
 		invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
+		subagents: row.subagents == null ? null : row.subagents === 1,
 		createdAt: row.created_at as number,
 	};
 }
@@ -27,8 +28,8 @@ function toProject(row: Row): Project {
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
 		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, trust_project_pi,
-			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -44,6 +45,7 @@ export function insertProject(db: Db, project: Project): void {
 		project.concurrencyLimit,
 		JSON.stringify(project.stageConfig),
 		project.invariantSimulation == null ? null : project.invariantSimulation ? 1 : 0,
+		project.subagents == null ? null : project.subagents ? 1 : 0,
 		project.createdAt,
 	);
 }
@@ -57,14 +59,15 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", concurrencyLimit: "concurrency_limit" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, invariantSimulation, ...plain } = settings;
+	const { reviewFlows, invariantSimulation, subagents, ...plain } = settings;
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
 	if (invariantSimulation !== undefined) db.prepare("UPDATE projects SET invariant_simulation = ? WHERE id = ?").run(invariantSimulation == null ? null : invariantSimulation ? 1 : 0, id);
+	if (subagents !== undefined) db.prepare("UPDATE projects SET subagents = ? WHERE id = ?").run(subagents == null ? null : subagents ? 1 : 0, id);
 	const keys = Object.keys(plain) as Array<keyof typeof SETTING_COLUMNS>;
 	if (keys.length > 0) {
 		const sets = keys.map((key) => `${SETTING_COLUMNS[key]} = ?`).join(", ");

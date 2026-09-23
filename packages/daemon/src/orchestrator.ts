@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
 	type Card,
 	type CardEvent,
@@ -25,7 +25,7 @@ import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
-import { removeWorktree } from "./git/worktree-manager.ts";
+import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { createPullRequest, pushBranch, pushRemote, viewPullRequest } from "./pr/gh.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
@@ -391,13 +391,16 @@ export class Orchestrator {
 		this.prTimer.unref();
 	}
 
-	/** The card is finished: its worktree goes, and its branch too once it is merged (git refuses otherwise). */
+	/** The card is finished: its worktrees go, and its branch too once it is merged (git refuses otherwise). */
 	private async cleanup(cardId: string): Promise<void> {
 		const card = getCard(this.deps.db, cardId);
 		const project = card && getProject(this.deps.db, card.projectId);
 		if (!card?.worktreePath || !project) return;
 		try {
+			// A card that was crewed has stream worktrees beside its own; they go with it.
+			const streamWorktrees = streamWorktreePaths(dirname(card.worktreePath), card.id);
 			await removeWorktree(project.repoPath, card.worktreePath);
+			await Promise.all(streamWorktrees.map((path) => removeWorktree(project.repoPath, path)));
 		} catch (error) {
 			console.error(`could not remove the worktree of card ${cardId}:`, error instanceof Error ? error.message : error);
 		}

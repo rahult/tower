@@ -75,8 +75,13 @@ export function listActiveRuns(db: Db): StageRun[] {
 	return (db.prepare("SELECT * FROM stage_runs WHERE status IN ('starting', 'running')").all() as Row[]).map(toRun);
 }
 
+/**
+ * How many lifecycle attempts a card has made in a stage: its own stage sessions plus the verify command,
+ * which stands in for a testing session. Crew members are deliberately excluded — a crew of three builders
+ * is one building attempt, and the crew's stage row is what makes the attempt count.
+ */
 export function countRunsForStage(db: Db, cardId: string, stage: string): number {
-	return (db.prepare("SELECT count(*) AS n FROM stage_runs WHERE card_id = ? AND stage = ?").get(cardId, stage) as { n: number }).n;
+	return (db.prepare("SELECT count(*) AS n FROM stage_runs WHERE card_id = ? AND stage = ? AND kind IN ('stage', 'verify')").get(cardId, stage) as { n: number }).n;
 }
 
 export function lastRunForCard(db: Db, cardId: string): StageRun | null {
@@ -104,8 +109,9 @@ export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): Us
 			`SELECT ${key} AS key, count(*) AS runs,
 				coalesce(sum(json_extract(r.tokens_json, '$.total')), 0) AS tokens, coalesce(sum(r.cost_usd), 0) AS costUsd
 			 FROM stage_runs r JOIN cards c ON c.id = r.card_id
-			 -- Usage counts model sessions only: daemon-run work (verify, a person's test runs) spends no tokens.
-			 WHERE r.kind IN ('stage', 'flow_step', 'adhoc') GROUP BY ${key} ORDER BY tokens DESC`,
+			 -- Usage counts model sessions only: daemon-run work (verify, a person's test runs) spends no tokens,
+			 -- and neither does the marker row that stands for a crew attempt — its members carry their own usage.
+			 WHERE r.kind IN ('stage', 'flow_step', 'adhoc', 'subagent') AND r.tokens_json IS NOT NULL GROUP BY ${key} ORDER BY tokens DESC`,
 		)
 		.all() as unknown as UsageRow[];
 }

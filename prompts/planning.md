@@ -18,4 +18,6 @@ Produce an implementation plan. A different, cheaper model will implement it in 
 
 {{> invariant-protocol}}
 
+{{> parallel-work}}
+
 {{> stage-result-contract}}

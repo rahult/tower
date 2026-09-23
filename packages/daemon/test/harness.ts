@@ -1,11 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { STAGE_RESULT_FILE } from "@tower/core";
+import { STAGE_RESULT_FILE, type RunSpec } from "@tower/core";
 import { loadConfig } from "../src/config.ts";
 import { type Daemon, startDaemon } from "../src/daemon.ts";
 import { type FakeScript, FakeSessionDriver, type FakeTurn } from "../src/pi/fake-driver.ts";
+
+export type { FakeScript, FakeTurn };
 
 export interface Harness {
 	daemon: Daemon;
@@ -281,6 +284,119 @@ export function byStage(overrides: { build?: () => FakeTurn } = {}): FakeScript 
 	return (spec) => {
 		if (spec.sessionId.includes("-plan-")) return [planningTurn()];
 		if (spec.sessionId.includes("-build-") || spec.sessionId.includes("-cifix-")) return [overrides.build?.() ?? buildingTurn()];
+		if (spec.sessionId.includes("-test-")) return [testerTurn()];
+		return [reviewTurn()];
+	};
+}
+
+export const CREW_PLAN = `# Plan
+
+## Context and goal
+
+Requests to the payments API fail on transient errors; wrap request() with retries and document it.
+
+## Steps
+
+1. The shared groundwork: read src/http/client.ts.
+
+## Scouts
+
+- **auth-shape**: How does the middleware resolve the current user, and does a retry replay it safely?
+  Check src/http/middleware.ts first.
+
+## Streams
+
+- **api**: Add retry.ts with exponential backoff around request(). Owns src/retry.ts only. Verify by importing it with node.
+- **docs**: Document the retry behaviour. Owns README.md only. Verify by re-reading it.
+
+## Verify
+
+- [ ] pnpm test
+`;
+
+export const SCOUT_PLAN = `# Plan
+
+## Context and goal
+
+Wrap request() with retries.
+
+## Steps
+
+1. Add retry.ts.
+
+## Scouts
+
+- **auth-shape**: How does the middleware resolve the current user, and does a retry replay it safely?
+`;
+
+/** A scripted planning turn whose plan declares a crew, so building fans out. */
+export function crewPlanningTurn(plan: string = CREW_PLAN): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Plan and crew written.", thinking: "", toolCalls: [] } }],
+		effect: ({ spec }) => {
+			const cardDir = join(spec.sessionDir, "..");
+			writeFileSync(join(cardDir, "plan.md"), plan);
+			writeFileSync(join(cardDir, STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Plan and streams ready." }));
+		},
+	};
+}
+
+/** A scripted scout: writes its report where the prompt points. No result file — scouts are advisory. */
+export function scoutTurn(): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Report written.", thinking: "", toolCalls: [] } }],
+		effect: ({ prompt }) => {
+			const report = prompt.match(/absolute path `([^`]+research\/[^`]+)`/)?.[1];
+			if (report) {
+				mkdirSync(dirname(report), { recursive: true });
+				writeFileSync(report, "# Scout report\n\nThe middleware resolves the user from `req.session.userId`; a retry replays only after the response is consumed.\n");
+			}
+		},
+	};
+}
+
+/** A scripted stream builder: commits a distinct file in its own worktree and writes its own result file. */
+export function streamBuilderTurn(): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Stream built.", thinking: "", toolCalls: [] } }],
+		effect: ({ spec, prompt }) => {
+			const slug = spec.sessionId.match(/-ws-([\w-]+)$/)?.[1] ?? "stream";
+			writeFileSync(join(spec.cwd, `${slug}.txt`), `stream ${slug} built by ${spec.sessionId}\n`);
+			execFileSync("git", ["add", "."], { cwd: spec.cwd });
+			execFileSync("git", ["-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", `Stream ${slug}`], { cwd: spec.cwd });
+			const result = prompt.match(/absolute path `([^`]+-result\.json)`/)?.[1];
+			if (result) writeFileSync(result, JSON.stringify({ status: "pass", summary: `Stream ${slug} done.` }));
+		},
+	};
+}
+
+/** A scripted integrator: really merges the stream branches named in its prompt, then reports for the whole. */
+export function integratorTurn(verdict: "pass" | "blocked" = "pass"): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: "Merged.", thinking: "", toolCalls: [] } }],
+		effect: ({ spec, prompt }: { spec: RunSpec; prompt: string }) => {
+			for (const branch of [...prompt.matchAll(/`(tower\/[\w-]+-ws-[\w-]+)`/g)].flatMap((match) => match[1] ?? [])) {
+				execFileSync("git", ["merge", "--no-ff", "-m", `Merge ${branch}`, branch], { cwd: spec.cwd });
+			}
+			const result = prompt.match(/absolute path `([^`]+stage-result\.json)`/)?.[1];
+			const body =
+				verdict === "pass"
+					? { status: "pass", summary: "Streams merged; the combined tree is coherent." }
+					: { status: "blocked", summary: "The streams disagree on one decision.", questions: [{ question: "Which retry budget wins when streams differ?", options: ["The stricter one", "The plan's 5 attempts"] }] };
+			if (result) writeFileSync(result, JSON.stringify(body));
+		},
+	};
+}
+
+/** Scripts a whole crew run by session id: planners, scouts, stream builders, integrator, then the stages. */
+export function byCrew(overrides: { ws?: () => FakeTurn; builder?: () => FakeTurn } = {}): FakeScript {
+	return (spec) => {
+		if (spec.sessionId.includes("-plan-")) return [crewPlanningTurn()];
+		if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
+		if (spec.sessionId.includes("-ws-")) return [overrides.ws?.() ?? streamBuilderTurn()];
+		if (spec.sessionId.includes("-integrator")) return [integratorTurn()];
+		if (spec.sessionId.includes("-builder")) return [overrides.builder?.() ?? buildingTurn()];
+		if (spec.sessionId.includes("-build-") || spec.sessionId.includes("-cifix-")) return [buildingTurn()];
 		if (spec.sessionId.includes("-test-")) return [testerTurn()];
 		return [reviewTurn()];
 	};
