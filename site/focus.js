@@ -1,6 +1,33 @@
 // A small simulation of the stream. It follows the real card lifecycle: plan, wait for approval, build,
 // verify, review, wait for approval again, done. The demo answers its own questions; nothing leaves the page.
 (() => {
+	// Scroll reveals: only arm them when motion is welcome; the observer lands each
+	// block as it enters the view, and direct children stagger by index.
+	const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	if (!reducedMotion) {
+		document.documentElement.classList.add("js-reveal");
+		for (const group of document.querySelectorAll("[data-reveal-group]")) {
+			[...group.children].forEach((child, i) => child.style.setProperty("--i", String(i)));
+		}
+		const revealables = document.querySelectorAll("[data-reveal], [data-reveal-group]");
+		if ("IntersectionObserver" in window) {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						if (entry.isIntersecting) {
+							entry.target.classList.add("in");
+							observer.unobserve(entry.target);
+						}
+					}
+				},
+				{ rootMargin: "0px 0px -8% 0px", threshold: 0.08 },
+			);
+			for (const el of revealables) observer.observe(el);
+		} else {
+			for (const el of revealables) el.classList.add("in");
+		}
+	}
+
 	// Night toggle: light is the default; the choice persists across visits.
 	const themeButton = document.getElementById("theme-toggle");
 	const syncThemeButton = () => {

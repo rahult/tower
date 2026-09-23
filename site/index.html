@@ -4,9 +4,9 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="theme-color" content="#f4f5f7" />
-		<title>Tower — the control tower for coding agents</title>
-		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: planning, building, testing, review, merge. The agents fly; you work the tower. Every decision that is yours lands on one amber row — one click each." />
-		<meta property="og:title" content="Tower — the control tower for coding agents" />
+		<title>Tower: stop writing code. Start landing it.</title>
+		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: planning, building, testing, review, merge. The agents write; you land. Every decision that is yours arrives as one amber row — one click each." />
+		<meta property="og:title" content="Tower: stop writing code. Start landing it." />
 		<meta property="og:description" content="The whole software life cycle, run by coding agents from one board. A strong model plans, a cheap one builds, your tests judge — and every decision that is yours lands on one amber row, one click each." />
 		<meta property="og:image" content="https://tower.rahultrikha.com/assets/tower.png" />
 		<meta property="og:url" content="https://tower.rahultrikha.com/" />
@@ -56,8 +56,8 @@
 			<section class="hero wrap">
 				<p class="eyebrow">The control tower for coding agents</p>
 				<h1 class="display">
-					<span class="line">The life cycle runs.</span>
-					<span class="line"><span class="amber">You decide.</span></span>
+					<span class="line">Stop writing code.</span>
+					<span class="line"><span class="amber">Start landing it.</span></span>
 				</h1>
 				<svg class="scope" viewBox="0 0 600 600" aria-hidden="true">
 					<g fill="none" stroke="currentColor" stroke-width="1">
@@ -65,6 +65,10 @@
 						<circle cx="300" cy="300" r="210" stroke-dasharray="2 7" opacity="0.3" />
 						<circle cx="300" cy="300" r="290" stroke-dasharray="2 7" opacity="0.18" />
 						<path d="M300 14 V586 M14 300 H586" opacity="0.1" />
+					</g>
+					<g class="sweep" aria-hidden="true">
+						<path d="M300 300 L300 20 A280 280 0 0 1 398 34 Z" fill="currentColor" opacity="0.08" />
+						<path d="M300 300 L300 20" stroke="currentColor" stroke-width="1.5" opacity="0.35" />
 					</g>
 					<circle class="blip-amber" cx="394" cy="178" r="4.5" />
 					<circle class="blip-ring" cx="394" cy="178" r="11" />
@@ -94,7 +98,7 @@
 					<h2 id="demo-title">Live from the tower: what needs you is amber, and this simulation answers itself.</h2>
 					<button type="button" id="pause" class="quiet" aria-pressed="false">Pause</button>
 				</div>
-				<div class="stream-demo" role="region" aria-label="Simulated Tower stream">
+				<div class="stream-demo" role="region" aria-label="Simulated Tower stream" data-reveal>
 					<div class="console-head" aria-hidden="true">
 						<span>Tower · 127.0.0.1:4700</span>
 						<span class="live"><span class="live-dot"></span>Live</span>
@@ -120,7 +124,7 @@
 				</ul>
 			</section>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.01 — The stream</span>
 				<img src="assets/tower.png" width="1600" height="1000" alt="The Tower board. A projects rail lists three repositories with amber and blue counts. The stream holds four amber rows under Needs you — review approvals with Approve &amp; merge buttons and a card asking three questions with suggested answers — above In flight and Queued. A docked inspector shows the open card's Decision tab: three questions, two suggested answers already chosen, a typed answer, and a Send answers and continue button." loading="lazy" />
 				<figcaption>The board opens on this: a rail of projects, a stream where amber means you, and an inspector docked beside it. The questions came from the agent; the suggested answers are one click each.</figcaption>
@@ -133,7 +137,7 @@
 					The software life cycle used to be a dozen tabs: a tracker for the work, a board for the status, a queue for the tests, a rota for review, a dashboard for CI. Tower
 					collapses that pipeline — the agents do the stages, the board does the chasing, and your test suite stays the judge.
 				</p>
-				<dl class="swap">
+				<dl class="swap" data-reveal-group>
 					<div>
 						<dt>Ticket tracker and sprint board</dt>
 						<dd>The queue. Cards carry a brief, a branch and a budget; global and per-project caps decide what runs.</dd>
@@ -165,7 +169,7 @@
 				</dl>
 			</section>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.02 — The decision</span>
 				<img src="assets/review.png" width="1600" height="1000" alt="A card's Decision tab over the stream. The checks line reads Verify command passed; an adversarial review has one blocking finding, Retries are not capped on a non-idempotent request, with severity and file. Below it, the buttons Approve and merge locally and Send back to the builder." loading="lazy" />
 				<figcaption>Review findings wait with the diff, severity and file. Approve and Tower merges — locally when the repository has no remote, by pull request when it has one.</figcaption>
@@ -175,7 +179,7 @@
 				<p class="eyebrow">Flight plan</p>
 				<h2>How a card moves</h2>
 				<p>Tell Tower what you want done. From there the card drives itself through seven stages and stops twice, both times for you.</p>
-				<ol class="route">
+				<ol class="route" data-reveal-group>
 					<li>
 						<h3>A strong model plans</h3>
 						<p>
@@ -221,13 +225,13 @@
 				</ol>
 			</section>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.03 — The crew rail</span>
 				<img src="assets/session.png" width="1600" height="1000" alt="A running card in the docked inspector, Session tab. A rail lists the card's sessions: planning, crew, scout auth shape, builder api, builder docs, integrator, your checks, adversarial review, solid review, invariant simulation. The transcript shows the builder's reasoning, a file read and a test command running, with a steer box at the bottom. The stream beside it shows the amber Needs you rows and the running card with its sweep." loading="lazy" />
 				<figcaption>Every session streams to the board — and a card that was built by a crew keeps the whole crew in its rail: scouts, stream builders, integrator. Steer a live run mid-flight, or read the diff under Changes.</figcaption>
 			</figure>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.04 — Modeling, on demand</span>
 				<img src="assets/invariants.png" width="1600" height="1000" alt="An invariant simulation selected in a card's session rail. The verdict line reads pass, Nothing blocking, with the model and token count above." loading="lazy" />
 				<figcaption>Any resting card can run an invariant simulation — domains, actors, scenarios — and report what would break before your tests do.</figcaption>
@@ -236,7 +240,7 @@
 			<section id="systems" class="wrap prose">
 				<p class="eyebrow">Systems</p>
 				<h2>What it takes care of</h2>
-				<dl class="facts">
+				<dl class="facts" data-reveal-group>
 					<div>
 						<dt>Attention, not alarms</dt>
 						<dd>Everything that needs you gathers in one amber group, ordered by what blocks an agent. Answer in place, or open the card for the whole story. Away from the tab? One bell per card, a badge in the title, and the favicon wears the count.</dd>
@@ -280,19 +284,19 @@
 				</dl>
 			</section>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.05 — The command box</span>
 				<img src="assets/palette.png" width="1600" height="1000" alt="The command palette open over the stream. One search box reaches commands, themes, views, project filters and cards, with keyboard hints along the bottom: arrows move, enter runs, j/k cards, a approve, n add." loading="lazy" />
 				<figcaption>The command box reaches everything — add work, jump to a card, filter, theme, density — and the board writes its keys where you can see them.</figcaption>
 			</figure>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.06 — The matrix</span>
 				<img src="assets/board.png" width="1600" height="1000" alt="The Board view: a matrix with a column per stage from Backlog to Pull request and a row per project. Amber mini cards fill where work needs you, running cards carry a blue bar, and each lane reads main · merges locally." loading="lazy" />
 				<figcaption>Prefer the whole picture? The matrix keeps a column per stage and a row per project, with foldable columns and done folded away until you want it.</figcaption>
 			</figure>
 
-			<figure class="shot wide">
+			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.07 — The ledger</span>
 				<img src="assets/usage.png" width="1600" height="1000" alt="The Usage view: stat cards for tokens and sessions today and all time, a by-day bar, and tables breaking spend down by project, model and costliest card." loading="lazy" />
 				<figcaption>Where the money goes, counted to the cent: by day, by project, by model, by card.</figcaption>
@@ -361,7 +365,7 @@ export function pickNext(candidates, state) {
   const [first] = [...candidates].sort((a, b) =&gt; a.queuedAt - b.queuedAt);
   return first?.cardId ?? null;
 }</code></pre>
-				<dl class="facts compact">
+				<dl class="facts compact" data-reveal-group>
 					<div>
 						<dt><code>requiredGates</code></dt>
 						<dd>When may a small plan skip your approval?</dd>
