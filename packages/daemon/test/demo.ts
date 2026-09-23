@@ -3,7 +3,7 @@
  * every state. Run: node packages/daemon/test/demo.ts   then open http://127.0.0.1:4720
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { STAGE_RESULT_FILE } from "@tower/core";
@@ -13,6 +13,51 @@ import { FakeSessionDriver, type FakeTurn } from "../src/pi/fake-driver.ts";
 import { buildingTurn, crewPlanningTurn, integratorTurn, planningTurn, reviewTurn, scoutTurn, simulationTurn, streamBuilderTurn, testerTurn } from "./harness.ts";
 
 const root = mkdtempSync(join(tmpdir(), "tower-demo-"));
+
+// The feedback loop is part of the demo, so it needs a GitHub that cannot be broken: a stub gh whose
+// "issues" live in a local file. Feedback filed from the board lands there; intake reads it back as cards.
+const ghBin = join(root, "gh-bin");
+mkdirSync(ghBin, { recursive: true });
+const ghState = join(root, "github.json");
+writeFileSync(
+	ghState,
+	JSON.stringify({
+		issues: [
+			{ number: 12, title: "Keyboard focus escapes the inspector", body: "Tabbing past the last tab bar button throws focus back to the page.", author: "board", url: "https://github.com/rahult/tower/issues/12" },
+			{ number: 13, title: "Show the branch on the mini card", body: "I want to see which branch a running card is on without opening it.", author: "board", url: "https://github.com/rahult/tower/issues/13" },
+		],
+		nextNumber: 41,
+		pr: null,
+	}),
+);
+writeFileSync(
+	join(ghBin, "gh"),
+	`#!/usr/bin/env node
+const fs = require("fs");
+const state = JSON.parse(fs.readFileSync(${JSON.stringify(ghState)}, "utf8"));
+const args = process.argv.slice(2);
+if (args[0] === "label" && args[1] === "create") { console.log("ok"); }
+else if (args[0] === "issue" && args[1] === "list") { console.log(JSON.stringify(state.issues.map((i) => ({ ...i, author: { login: i.author } })))); }
+else if (args[0] === "issue" && args[1] === "create") {
+	const body = fs.readFileSync(args[args.indexOf("--body-file") + 1], "utf8");
+	const issue = { number: state.nextNumber++, title: args[args.indexOf("--title") + 1], body, author: "board", url: \`https://github.com/rahult/tower/issues/\${state.nextNumber - 1}\` };
+	state.issues.push(issue);
+	fs.writeFileSync(${JSON.stringify(ghState)}, JSON.stringify(state));
+	console.log(issue.url);
+} else if (args[0] === "issue" && args[1] === "comment") { console.log("commented"); }
+else if (args[0] === "issue" && args[1] === "close") { console.log("closed"); }
+else if (args[0] === "pr" && args[1] === "view") { if (!state.pr) { process.exit(1); } console.log(JSON.stringify(state.pr)); }
+else if (args[0] === "pr" && args[1] === "create") {
+	const url = "https://github.com/rahult/tower/pull/77";
+	state.pr = { url, state: "OPEN", headRefOid: "sha-demo", statusCheckRollup: [] };
+	fs.writeFileSync(${JSON.stringify(ghState)}, JSON.stringify(state));
+	console.log(url);
+} else { console.error("unexpected gh call: " + args.join(" ")); process.exit(2); }
+`,
+);
+chmodSync(join(ghBin, "gh"), 0o755);
+process.env.PATH = `${ghBin}:${process.env.PATH}`;
+
 function repo(name: string): string {
 	const path = join(root, name);
 	mkdirSync(path, { recursive: true });
@@ -80,7 +125,15 @@ const driver = new FakeSessionDriver((spec) => {
 });
 const titles = new Map<string, string>();
 
-const daemon = await startDaemon(loadConfig({ TOWER_HOME: join(root, "home"), TOWER_PORT: process.env.TOWER_PORT ?? "4720", TOWER_MAX_CONCURRENT: "3" }), driver);
+const daemon = await startDaemon(
+	loadConfig({
+		TOWER_HOME: join(root, "home"),
+		TOWER_PORT: process.env.TOWER_PORT ?? "4720",
+		TOWER_MAX_CONCURRENT: "3",
+		TOWER_FEEDBACK_REPO: "rahult/tower",
+		TOWER_ISSUES_POLL_MS: "4000",
+	}),
+	driver);
 const api = async (method: string, path: string, body?: unknown): Promise<any> =>
 	(await fetch(`${daemon.url}${path}`, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined })).json();
 
@@ -128,5 +181,14 @@ for (const [name, cards] of Object.entries(seed)) {
 		}
 	}
 }
+// Tower itself, so the feedback loop has a lane: the checkout's origin parses as the feedback repo,
+// and intake lands the stub GitHub's open issues here as inert backlog cards within seconds.
+const towerOrigin = join(root, "github.com", "rahult", "tower.git");
+mkdirSync(towerOrigin, { recursive: true });
+execFileSync("git", ["init", "-q", "--bare", towerOrigin]);
+const towerPath = repo("tower");
+execFileSync("git", ["remote", "add", "origin", towerOrigin], { cwd: towerPath });
+await api("POST", "/api/projects", { repoPath: towerPath });
+
 console.log(`demo board on ${daemon.url} (data in ${root}). Ctrl+C to stop.`);
 process.on("SIGINT", () => void daemon.close().finally(() => process.exit(0)));

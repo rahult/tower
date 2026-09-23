@@ -69,6 +69,10 @@ export interface Card {
 	prUrl: string | null;
 	prState: string | null;
 	needsAttentionReason: string | null;
+	/** The GitHub issue this card came from, when intake filed it from the feedback repo. */
+	issueUrl: string | null;
+	issueNumber: number | null;
+	issueAuthor: string | null;
 	createdAt: number;
 	updatedAt: number;
 }

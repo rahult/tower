@@ -7,6 +7,7 @@ export interface PaletteActions {
 	openCard: (cardId: string) => void;
 	startCard: (cardId: string) => void;
 	addWork: () => void;
+	sendFeedback: () => void;
 	openModels: () => void;
 	setTheme: (theme: "auto" | "light" | "dark") => void;
 	toggleNotify: () => void;
@@ -34,6 +35,7 @@ export function Palette({ cards, projectNames, projects, actions, onClose }: { c
 	const items = useMemo(() => {
 		const commands: Item[] = [
 			{ group: "Commands", label: "Add work…", hint: "n", run: actions.addWork },
+			{ group: "Commands", label: "Send feedback…", hint: "bug, idea, praise", run: actions.sendFeedback },
 			{ group: "Commands", label: "Model settings…", hint: "which model runs each stage", run: actions.openModels },
 			{ group: "Commands", label: "Notify me when a card needs attention", hint: "browser notifications", run: actions.toggleNotify },
 			{ group: "Commands", label: actions.densityCompact ? "Standard density" : "Compact density", run: actions.toggleDensity },

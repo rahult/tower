@@ -48,6 +48,7 @@ export interface Settings {
 	invariantSimulation: boolean;
 	subagents: boolean;
 	maxCrew: number;
+	feedbackRepo: string;
 }
 
 export interface FlowInfo {
@@ -74,6 +75,14 @@ export interface CardDiff {
 	diff: string;
 	untracked: string[];
 }
+
+export interface FiledFeedback {
+	repo: string;
+	number: number;
+	url: string;
+}
+
+export type FeedbackKind = "bug" | "feature" | "feedback";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
 	const response = await fetch(path, {
@@ -102,6 +111,13 @@ export const api = {
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
+	fileFeedback: async (body: { kind: FeedbackKind; title: string; details: string; includeDiagnostics: boolean }): Promise<FiledFeedback> => {
+		// A 503 carries a prefilled GitHub issue form alongside the error, which the modal offers as the way out.
+		const response = await fetch("/api/feedback", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+		const json = (await response.json()) as Partial<FiledFeedback> & { error?: string; fallback?: string };
+		if (!response.ok) throw Object.assign(new Error(json.error ?? "Filing the issue failed"), { fallback: json.fallback });
+		return json as FiledFeedback;
+	},
 	diff: (cardId: string) => request<CardDiff>("GET", `/api/cards/${cardId}/diff`),
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),
 	answer: (cardId: string, answers: Array<{ question: string; answer: string }>) => request<Card>("POST", `/api/cards/${cardId}/answers`, { answers }),

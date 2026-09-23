@@ -73,3 +73,59 @@ export async function createPullRequest(options: { cwd: string; title: string; b
 	const out = await run("gh", ["pr", "create", "--title", options.title, "--body-file", options.bodyFile, "--base", options.base, "--head", options.head], options.cwd);
 	return out.split("\n").findLast((line) => line.startsWith("http")) ?? out;
 }
+
+export interface Issue {
+	number: number;
+	title: string;
+	body: string;
+	author: string;
+	url: string;
+}
+
+/** The feedback repo's open issues, oldest first so intake cards appear in a stable order. */
+export async function listIssues(repo: string): Promise<Issue[]> {
+	const raw = await run("gh", ["issue", "list", "--repo", repo, "--state", "open", "--limit", "200", "--json", "number,title,body,author,url"], process.cwd());
+	const parsed = JSON.parse(raw) as Array<{ number: number; title: string; body?: string; author?: { login?: string }; url: string }>;
+	return parsed
+		.sort((a, b) => a.number - b.number)
+		.map((issue) => ({ number: issue.number, title: issue.title, body: issue.body ?? "", author: issue.author?.login ?? "", url: issue.url }));
+}
+
+/** Creates the label when it is missing; false when gh could not (so the issue files without one). */
+export async function ensureLabel(repo: string, name: string, description: string): Promise<boolean> {
+	try {
+		await run("gh", ["label", "create", name, "--repo", repo, "--description", description, "--color", "0E8A16"], process.cwd());
+		return true;
+	} catch (error) {
+		return /already exist/i.test((error as Error).message);
+	}
+}
+
+export async function createIssue(options: { repo: string; title: string; body: string; bodyFile: string; labels: string[] }): Promise<{ number: number; url: string }> {
+	writeFileSync(options.bodyFile, options.body);
+	const args = ["issue", "create", "--repo", options.repo, "--title", options.title, "--body-file", options.bodyFile, ...options.labels.flatMap((label) => ["--label", label])];
+	const out = await run("gh", args, process.cwd());
+	const url = (out.split("\n").findLast((line) => line.includes("/issues/")) ?? out).trim();
+	return { number: Number(url.match(/\/issues\/(\d+)/)?.[1] ?? 0), url };
+}
+
+export async function commentOnIssue(repo: string, number: number, body: string, bodyFile: string): Promise<void> {
+	writeFileSync(bodyFile, body);
+	await run("gh", ["issue", "comment", String(number), "--repo", repo, "--body-file", bodyFile], process.cwd());
+}
+
+export async function closeIssue(repo: string, number: number, comment: string): Promise<void> {
+	await run("gh", ["issue", "close", String(number), "--repo", repo, "--comment", comment], process.cwd());
+}
+
+/** The origin remote as "owner/name", or null when git has none or it is not GitHub. */
+export async function originSlug(repoPath: string): Promise<string | null> {
+	let url: string;
+	try {
+		url = await run("git", ["remote", "get-url", "origin"], repoPath);
+	} catch {
+		return null;
+	}
+	const match = url.match(/github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/i);
+	return match ? `${match[1]}/${match[2]}` : null;
+}

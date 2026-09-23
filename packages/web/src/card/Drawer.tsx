@@ -163,6 +163,12 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 							{card.prUrl.replace("https://github.com/", "")}
 						</a>
 					)}
+					{card.issueUrl && card.issueNumber !== null && (
+						<a href={card.issueUrl} target="_blank" rel="noreferrer noopener" className="chip mono" title="This card came from a GitHub issue on the feedback repo">
+							<Icon name="issue" />
+							issue #{card.issueNumber}
+						</a>
+					)}
 					<span className="spacer" />
 					{isLive(card) && <ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />}
 				</div>

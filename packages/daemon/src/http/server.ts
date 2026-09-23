@@ -11,6 +11,7 @@ import { listGatesForCard } from "../db/repo-gates.ts";
 import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
+import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
 import { loadFlows } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
@@ -71,7 +72,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db) }));
 
-	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, maxCrew: config.maxCrew });
+	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, maxCrew: config.maxCrew, feedbackRepo: config.feedbackRepo });
 
 	app.get("/api/settings", (c) => c.json(settingsView()));
 
@@ -179,6 +180,9 @@ export function createApp(deps: AppDeps): Hono {
 			prUrl: null,
 			prState: null,
 			needsAttentionReason: null,
+			issueUrl: null,
+			issueNumber: null,
+			issueAuthor: null,
 			createdAt: now,
 			updatedAt: now,
 		};
@@ -198,6 +202,24 @@ export function createApp(deps: AppDeps): Hono {
 	app.delete("/api/cards/:id/preview", (c) => c.json(bench.stopPreview(cardOr404(c.req.param("id")).id)));
 
 	app.post("/api/cards/:id/enqueue", (c) => c.json(orchestrator.dispatch(cardOr404(c.req.param("id")).id, { type: "enqueue" }), 202));
+
+	// Anyone running this Tower can say what is wrong or missing; it lands on the feedback repo as an
+	// issue, and intake turns it into a backlog card only a person's approval can start.
+	app.post("/api/feedback", async (c) => {
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const kind = body.kind as FeedbackKind;
+		if (kind !== "bug" && kind !== "feature" && kind !== "feedback") throw new HttpError(400, '"kind" must be "bug", "feature" or "feedback"');
+		const title = requireString(body, "title");
+		const details = typeof body.details === "string" ? body.details : "";
+		const includeDiagnostics = body.includeDiagnostics !== false;
+		try {
+			return c.json(await fileFeedback({ repo: config.feedbackRepo, kind, title, details, includeDiagnostics }), 201);
+		} catch (error) {
+			// gh could not reach GitHub (no auth, offline): hand back the prefilled issue form instead.
+			const message = error instanceof Error ? error.message : String(error);
+			return c.json({ error: message, fallback: feedbackFallbackUrl(config.feedbackRepo, kind, title, details, includeDiagnostics) }, 503);
+		}
+	});
 
 	app.post("/api/cards/:id/retry", async (c) => {
 		const card = cardOr404(c.req.param("id"));

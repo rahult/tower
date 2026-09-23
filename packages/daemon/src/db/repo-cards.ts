@@ -21,6 +21,9 @@ function toCard(row: Row): Card {
 		prUrl: row.pr_url as string | null,
 		prState: row.pr_state as string | null,
 		needsAttentionReason: row.needs_attention_reason as string | null,
+		issueUrl: row.issue_url as string | null,
+		issueNumber: row.issue_number as number | null,
+		issueAuthor: row.issue_author as string | null,
 		createdAt: row.created_at as number,
 		updatedAt: row.updated_at as number,
 	};
@@ -28,8 +31,8 @@ function toCard(row: Row): Card {
 
 export function insertCard(db: Db, card: Card): void {
 	db.prepare(
-		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at, issue_url, issue_number, issue_author)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		card.id,
 		card.projectId,
@@ -43,6 +46,9 @@ export function insertCard(db: Db, card: Card): void {
 		JSON.stringify(card.stageConfig),
 		card.createdAt,
 		card.updatedAt,
+		card.issueUrl,
+		card.issueNumber,
+		card.issueAuthor,
 	);
 }
 
@@ -56,6 +62,9 @@ const COLUMNS = {
 	needsAttentionReason: "needs_attention_reason",
 	prUrl: "pr_url",
 	prState: "pr_state",
+	issueUrl: "issue_url",
+	issueNumber: "issue_number",
+	issueAuthor: "issue_author",
 } as const;
 
 export type CardPatch = Partial<Pick<Card, keyof typeof COLUMNS>>;
@@ -76,6 +85,12 @@ export function listCards(db: Db): Card[] {
 
 export function getCard(db: Db, id: string): Card | null {
 	const row = db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as Row | undefined;
+	return row ? toCard(row) : null;
+}
+
+/** The card an issue was intake'd into, or null when the issue has never been seen. */
+export function getCardByIssue(db: Db, issueNumber: number): Card | null {
+	const row = db.prepare("SELECT * FROM cards WHERE issue_number = ? ORDER BY created_at LIMIT 1").get(issueNumber) as Row | undefined;
 	return row ? toCard(row) : null;
 }
 

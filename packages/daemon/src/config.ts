@@ -21,6 +21,10 @@ export interface Config {
 	maxCrew: number;
 	/** How often open pull requests are checked, and how many times a failing one is repaired before asking. */
 	prPollMs: number;
+	/** Where board feedback is filed as issues, and whose issues come back as backlog cards ("owner/name"). */
+	feedbackRepo: string;
+	/** How often the feedback repo's open issues are checked for ones without a card yet. 0 turns intake off. */
+	issuesPollMs: number;
 	maxCiFixAttempts: number;
 	/** How long a blocking question from a pi extension may wait for an answer before it is cancelled. */
 	uiRequestTimeoutMs: number;
@@ -51,6 +55,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		subagents: !["0", "false"].includes((env.TOWER_SUBAGENTS ?? "").toLowerCase()),
 		maxCrew: Number(env.TOWER_MAX_CREW ?? 3),
 		prPollMs: Number(env.TOWER_PR_POLL_MS ?? 120_000),
+		feedbackRepo: env.TOWER_FEEDBACK_REPO ?? "rahult/tower",
+		issuesPollMs: Number(env.TOWER_ISSUES_POLL_MS ?? 180_000),
 		maxCiFixAttempts: Number(env.TOWER_MAX_CI_FIX_ATTEMPTS ?? 2),
 		uiRequestTimeoutMs: Number(env.TOWER_UI_REQUEST_TIMEOUT_MS ?? 5 * 60_000),
 		webDist: env.TOWER_WEB_DIST ?? join(repoRoot, "packages", "web", "dist"),

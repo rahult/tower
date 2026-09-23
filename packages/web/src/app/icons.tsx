@@ -20,6 +20,7 @@ export function IconSprite() {
 				<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l11-7z" /></symbol>
 				<symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="8" r="2.5" /><path d="M6 8.5v7M18 10.5c0 4-12 2-12 6" /></symbol>
 				<symbol id="i-pr" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2.5" /><circle cx="6" cy="19" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M6 7.5v9M18 16.5V10a3 3 0 0 0-3-3h-3M14 4l-2 3 2 3" /></symbol>
+				<symbol id="i-issue" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" /></symbol>
 				<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></symbol>
 				<symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4l-4 16-4-7-8-1z" /></symbol>
 				<symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5" /></symbol>
@@ -36,7 +37,7 @@ export function IconSprite() {
 	);
 }
 
-export type IconName = "tower" | "search" | "plus" | "bell" | "sun" | "moon" | "x" | "check" | "back" | "play" | "branch" | "pr" | "ext" | "send" | "retry" | "board" | "folder" | "chart" | "focus" | "density" | "density-compact" | "chev-l" | "chev-r";
+export type IconName = "tower" | "search" | "plus" | "bell" | "sun" | "moon" | "x" | "check" | "back" | "play" | "branch" | "pr" | "issue" | "ext" | "send" | "retry" | "board" | "folder" | "chart" | "focus" | "density" | "density-compact" | "chev-l" | "chev-r";
 
 /** A stroke icon from the shared sprite; `className` defaults to the 16px `.icon` size. */
 export function Icon({ name, className = "icon" }: { name: IconName; className?: string }): JSX.Element {

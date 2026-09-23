@@ -21,6 +21,8 @@ export interface Daemon {
 	whenIdle(): Promise<void>;
 	/** Checks open pull requests now, instead of waiting for the next poll. */
 	pollPullRequests(): Promise<void>;
+	/** Takes the feedback repo's open issues in as backlog cards now, instead of waiting for the next poll. */
+	pollIssues(): Promise<void>;
 	close(): Promise<void>;
 }
 
@@ -66,6 +68,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	// Whatever the previous process left in flight is interrupted; queued work carries on.
 	orchestrator.recover();
 	orchestrator.watchPullRequests();
+	orchestrator.watchIssues();
 
 	const server: ServerType = await new Promise((resolve) => {
 		const started = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, () => resolve(started));
@@ -76,6 +79,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 		url: `http://${config.host}:${port}`,
 		whenIdle: () => orchestrator.whenIdle(),
 		pollPullRequests: () => orchestrator.pollPullRequests(),
+		pollIssues: () => orchestrator.pollIssues(),
 		async close() {
 			orchestrator.beginShutdown();
 			bench.beginShutdown();

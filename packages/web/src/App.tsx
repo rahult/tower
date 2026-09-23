@@ -4,6 +4,7 @@ import { api } from "./api/client.ts";
 import { type Connection, useConnection, useEventStream } from "./api/stream.ts";
 import { isLive, needsYou } from "./board/status.ts";
 import { Modal, formatMoney, formatTokens } from "./app/bits.tsx";
+import { FeedbackModal } from "./app/feedback.tsx";
 import { Icon, IconSprite } from "./app/icons.tsx";
 import { Palette, useShortcuts } from "./app/palette.tsx";
 import { announceAttention, enableNotifications, notifyEnabled, setNotifyEnabled, setNotifyOpener } from "./app/notifications.ts";
@@ -47,6 +48,7 @@ export function App() {
 
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [addingWork, setAddingWork] = useState<null | { projectId?: string }>(null);
+	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [modelsOpen, setModelsOpen] = useState(false);
 	const [theme, cycleTheme, setTheme] = useTheme();
 	const [density, toggleDensity] = useDensity();
@@ -156,6 +158,7 @@ export function App() {
 			openCard,
 			startCard,
 			addWork: () => setAddingWork({}),
+			sendFeedback: () => setFeedbackOpen(true),
 			openModels: () => setModelsOpen(true),
 			setTheme: (next: Theme) => setTheme(next),
 			toggleNotify,
@@ -239,6 +242,9 @@ export function App() {
 						<span className="txt">Add work</span>
 						<span className="kbd">n</span>
 					</button>
+					<button type="button" onClick={() => setFeedbackOpen(true)} className="iconbtn" title="Send feedback — files an issue on Tower's GitHub" aria-label="Send feedback to Tower's GitHub">
+						<Icon name="send" className="icon icon-lg" />
+					</button>
 					<button type="button" onClick={() => setPaletteOpen(true)} className="iconbtn" title="Command palette (⌘K)" aria-label="Open the command palette (⌘K)">
 						<Icon name="search" className="icon icon-lg" />
 					</button>
@@ -286,6 +292,7 @@ export function App() {
 
 			{paletteOpen && <Palette cards={cards} projectNames={names} projects={projects.map((project) => ({ id: project.id, name: project.name }))} actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
 			{addingWork && <QuickAdd projects={projects} presetProjectId={addingWork.projectId} onClose={() => setAddingWork(null)} onOpenCard={openCard} />}
+			{feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
 			{modelsOpen && (
 				<Modal title="Models" onClose={() => setModelsOpen(false)} wide>
 					<ModelSettings onDone={() => setModelsOpen(false)} />

@@ -1698,6 +1698,15 @@ textarea.input {
 .mini.needs .s {
 	color: var(--caution-ink);
 }
+.mini .issue-tag {
+	flex: none;
+	padding: 0 5px;
+	border-radius: 5px;
+	background: var(--wash);
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 16px;
+}
 .done-note {
 	font-size: var(--fs-meta);
 	color: var(--muted);

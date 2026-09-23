@@ -324,16 +324,17 @@ function Mini({ card, projectName, startedAt, selected, withProject, onOpen }: {
 	return (
 		<button type="button" className={`mini ${suffix}${selected ? " selected" : ""}`} onClick={onOpen} data-id={card.id} aria-label={`Open ${card.title}`}>
 			<span className="bar" aria-hidden />
-			<span className="in">
-				<span className="t line-clamp-2">{card.title}</span>
-				<span className="s">
-					<span className="truncate">
-						{withProject && projectName && <span className="proj-tag">{projectName} · </span>}
-						{sub}
-					</span>
-					<span>{card.id}</span>
+		<span className="in">
+			<span className="t line-clamp-2">{card.title}</span>
+			<span className="s">
+				<span className="truncate">
+					{card.issueNumber !== null && <span className="issue-tag">#{card.issueNumber}</span>}
+					{withProject && projectName && <span className="proj-tag">{projectName} · </span>}
+					{sub}
 				</span>
+				<span>{card.id}</span>
 			</span>
+		</span>
 		</button>
 	);
 }

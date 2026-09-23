@@ -19,15 +19,16 @@ import {
 } from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
-import { getCard, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard } from "./db/repo-cards.ts";
+import { getCard, getCardByIssue, insertCard, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard } from "./db/repo-cards.ts";
 import { decideGate, getGate, insertGate } from "./db/repo-gates.ts";
 import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
+import { issueBrief } from "./feedback.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
-import { createPullRequest, listRemotes, pushBranch, viewPullRequest } from "./pr/gh.ts";
+import { type Issue, closeIssue, commentOnIssue, createPullRequest, listIssues, listRemotes, originSlug, pushBranch, viewPullRequest } from "./pr/gh.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
 import { runVerify } from "./verifier.ts";
@@ -57,6 +58,9 @@ export class Orchestrator {
 	/** The head commit whose failing checks were already handed to a builder, per card, so one failure is fixed once. */
 	private readonly handledCiFailures = new Map<string, string>();
 	private prTimer: NodeJS.Timeout | null = null;
+	private issueTimer: NodeJS.Timeout | null = null;
+	/** Said once per process, not once per poll: the feedback repo has issues but no project tracks it. */
+	private warnedNoIntakeProject = false;
 
 	constructor(deps: OrchestratorDeps) {
 		this.deps = deps;
@@ -131,6 +135,7 @@ export class Orchestrator {
 	beginShutdown(): void {
 		this.stopping = true;
 		if (this.prTimer) clearInterval(this.prTimer);
+		if (this.issueTimer) clearInterval(this.issueTimer);
 		this.deps.stages.beginShutdown();
 		for (const stop of this.verifyAborts.values()) stop();
 	}
@@ -341,6 +346,14 @@ export class Orchestrator {
 			});
 			console.log(`card ${cardId}: merged ${card.branchName} into ${project.defaultBranch} (${merge.via === "checkout" ? "in the checkout" : "by moving the ref"})`);
 			this.dispatch(cardId, { type: "merged_locally", note: `Merged into ${project.defaultBranch} locally — no pull request, nowhere to open one. The work is on ${project.defaultBranch}.` });
+			// The issue lives on the feedback repo, which gh reaches by name; nothing here depends on this project's remotes.
+			if (card.issueNumber) {
+				try {
+					await closeIssue(this.deps.config.feedbackRepo, card.issueNumber, `Tower merged the fix for this (\`${merge.commit.slice(0, 10)}\` on ${project.defaultBranch}) locally — the repository it was built in has no origin remote, so the work landed without a pull request. Reopen if it persists.`);
+				} catch (error) {
+					console.error(`card ${cardId}: could not close issue #${card.issueNumber}:`, error instanceof Error ? error.message : error);
+				}
+			}
 			return;
 		}
 
@@ -350,6 +363,15 @@ export class Orchestrator {
 		const url = existing?.state === "OPEN" ? existing.url : await createPullRequest({ cwd: card.worktreePath, title: card.title, body: this.pullRequestBody(card), base: project.defaultBranch, head: card.branchName, bodyFile });
 		const updated = updateCard(db, cardId, { prUrl: url, prState: "OPEN" });
 		this.deps.bus.publish({ topic: "board", type: "card_upserted", data: updated });
+		if (card.issueNumber) {
+			// Tell the reporter their issue is taken on; merging the pull request closes it via "Fixes #N".
+			const commentFile = join(paths.cardDir(config, cardId), "issue-comment.md");
+			try {
+				await commentOnIssue(this.deps.config.feedbackRepo, card.issueNumber, `Tower took this on — the pull request is up: ${url}. Merging it closes this issue.`, commentFile);
+			} catch (error) {
+				console.error(`card ${cardId}: could not comment on issue #${card.issueNumber}:`, error instanceof Error ? error.message : error);
+			}
+		}
 		this.dispatch(cardId, { type: "pr_opened" });
 	}
 
@@ -364,6 +386,7 @@ export class Orchestrator {
 			"## Checks",
 			last((run) => run.kind === "verify" || (run.kind === "stage" && run.stage === "testing")) ?? "Not recorded.",
 			...(reviews.length > 0 ? ["## Reviews", reviews.join("\n")] : []),
+			...(card.issueNumber ? [`Fixes #${card.issueNumber}.`] : []),
 			"",
 			"Opened by [Tower](https://tower.rahultrikha.com) after a human approved the work.",
 		]
@@ -401,6 +424,83 @@ export class Orchestrator {
 		if (this.deps.config.prPollMs <= 0) return;
 		this.prTimer = setInterval(() => void this.pollPullRequests(), this.deps.config.prPollMs);
 		this.prTimer.unref();
+	}
+
+	/**
+	 * Intake: open issues on the feedback repo become inert backlog cards on the project that tracks it.
+	 * Nothing runs until a person approves the card, so a stranger's issue can only ever add a suggestion
+	 * to the board.
+	 */
+	async pollIssues(): Promise<void> {
+		const { config } = this.deps;
+		let issues: Issue[];
+		try {
+			issues = await listIssues(config.feedbackRepo);
+		} catch (error) {
+			console.error(`intake: could not list issues on ${config.feedbackRepo}:`, error instanceof Error ? error.message : error);
+			return;
+		}
+		const project = await this.intakeProject(config.feedbackRepo);
+		if (!project) {
+			if (issues.length > 0 && !this.warnedNoIntakeProject) {
+				this.warnedNoIntakeProject = true;
+				console.error(`intake: ${issues.length} open issue${issues.length === 1 ? "" : "s"} on ${config.feedbackRepo}, but no project on this board tracks that repository — add it as a project to turn issues into cards.`);
+			}
+			return;
+		}
+		for (const issue of issues) {
+			if (this.stopping) return;
+			try {
+				this.intake(issue, project.id);
+			} catch (error) {
+				console.error(`intake: could not card issue #${issue.number}:`, error instanceof Error ? error.message : error);
+			}
+		}
+	}
+
+	/** The project whose origin is the feedback repo; issues become cards there. */
+	private async intakeProject(feedbackRepo: string) {
+		for (const project of listProjects(this.deps.db)) {
+			if ((await originSlug(project.repoPath)) === feedbackRepo) return project;
+		}
+		return null;
+	}
+
+	private intake(issue: Issue, projectId: string): void {
+		if (getCardByIssue(this.deps.db, issue.number)) return;
+		const now = Date.now();
+		const card: Card = {
+			id: randomUUID().replaceAll("-", "").slice(0, 8),
+			projectId,
+			title: issue.title,
+			brief: issueBrief(issue),
+			stage: "backlog",
+			status: "idle",
+			priority: 0,
+			position: now,
+			branchName: null,
+			worktreePath: null,
+			baseCommit: null,
+			attempt: 0,
+			stageConfig: {},
+			prUrl: null,
+			prState: null,
+			needsAttentionReason: null,
+			issueUrl: issue.url,
+			issueNumber: issue.number,
+			issueAuthor: issue.author,
+			createdAt: now,
+			updatedAt: now,
+		};
+		insertCard(this.deps.db, card);
+		this.deps.bus.publish({ topic: "board", type: "card_upserted", data: card });
+	}
+
+	/** Starts watching the feedback repo's issues alongside the pull requests. */
+	watchIssues(): void {
+		if (this.deps.config.issuesPollMs <= 0) return;
+		this.issueTimer = setInterval(() => void this.pollIssues(), this.deps.config.issuesPollMs);
+		this.issueTimer.unref();
 	}
 
 	/** The card is finished: its worktrees go, and so does its branch when it merged locally (a pull request keeps it). */

@@ -117,6 +117,12 @@ const MIGRATIONS: string[] = [
 	-- Probed from the repository: with an origin remote cards finish as pull requests, without one Tower merges locally.
 	ALTER TABLE projects ADD COLUMN has_origin INTEGER;
 	`,
+	`
+	-- Where a card came from: a GitHub issue on the feedback repo (intake), or nothing (made on this board).
+	ALTER TABLE cards ADD COLUMN issue_url TEXT;
+	ALTER TABLE cards ADD COLUMN issue_number INTEGER;
+	ALTER TABLE cards ADD COLUMN issue_author TEXT;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */
