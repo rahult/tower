@@ -1,15 +1,15 @@
 /* ============================================================
    TOWER — brand site. The control tower for coding agents.
    One idea carries everything: the agents do the flying, amber
-   means you. Light (day tower) is the default theme; the night
-   shift is opt-in via the NIGHT toggle (html[data-theme="night"]).
+   means you. Styled like the board: Linear dark is the native
+   theme; the day shift is opt-in via the DAY toggle
+   (html[data-theme="day"]).
    ============================================================ */
 
 @font-face {
-	font-family: "Archivo";
-	src: url("assets/fonts/archivo-latin-wdth-normal.woff2") format("woff2-variations");
+	font-family: "Inter";
+	src: url("assets/fonts/inter-var.woff2") format("woff2-variations");
 	font-weight: 100 900;
-	font-stretch: 62% 125%;
 	font-display: swap;
 }
 @font-face {
@@ -26,98 +26,98 @@
 }
 
 /* ============================================================
-   1. Tokens — light is the default; night only overrides them.
+   1. Tokens — Linear dark is the default; day is the opt-in.
    ============================================================ */
 :root {
 	/* surfaces */
-	--sky: #f4f5f7;
-	--panel: #ffffff;
-	--panel-2: #f1f3f6;
-	--rule: #dfe3e8;
-	--rule-strong: #c9cfd7;
+	--sky: #08090a;
+	--panel: #0f1011;
+	--panel-2: #191a1b;
+	--rule: rgb(255 255 255 / 0.05);
+	--rule-strong: rgb(255 255 255 / 0.08);
 
 	/* ink */
-	--ink: #111418;
-	--muted: #5b6470;
-	--faint: #8b93a0;
+	--ink: #f7f8f8;
+	--muted: #8a8f98;
+	--faint: #767c86;
 
 	/* state colours — same semantics as the board */
-	--amber: #e5a100;
-	--amber-deep: #c79000;
-	--amber-ink: #231a00;
-	--amber-text: #6f4c00; /* amber-meaning text on paper */
-	--amber-soft: #fff3d1;
-	--blue: #2f6fed;
-	--blue-text: #1d4fb8; /* links and working-state text */
-	--green: #1c7f4b;
+	--amber: #eab308;
+	--amber-deep: #f5cd45;
+	--amber-ink: #1c1600;
+	--amber-text: #eab308; /* amber-meaning text on paper */
+	--amber-soft: rgb(234 179 8 / 0.12);
+	--blue: #5e6ad2; /* Linear indigo: the working colour and the one accent */
+	--blue-text: #828fff; /* links and working-state text */
+	--green: #27a644;
 	--green-ink: #ffffff;
 
-	/* actions: the board's primary is blue; amber stays semantic */
-	--action-bg: #2f6fed;
-	--action-bg-hover: #1d4fb8;
+	/* actions: the board's primary is indigo; amber stays semantic */
+	--action-bg: #5e6ad2;
+	--action-bg-hover: #828fff;
 	--action-ink: #ffffff;
-	--action-glow: 0 1px 2px rgb(17 20 24 / 0.25);
+	--action-glow: 0 0 24px rgb(94 106 210 / 0.35);
 
 	/* atmosphere */
-	--grid-line: rgb(17 20 24 / 0.035);
-	--wash-amber: rgb(229 161 0 / 0.05);
-	--wash-blue: rgb(47 111 237 / 0.035);
-	--bar-bg: rgb(255 255 255 / 0.85);
-	--glow-amber: rgb(229 161 0 / 0.3);
-	--glow-dot: rgb(229 161 0 / 0.55);
-	--caution-inner: rgb(229 161 0 / 0.06);
-	--scope: #9aa6b4;
-	--shadow-panel: 0 1px 2px rgb(17 20 24 / 0.05), 0 16px 40px rgb(17 20 24 / 0.08);
-	--shadow-shot: 0 1px 2px rgb(17 20 24 / 0.06), 0 2px 10px rgb(17 20 24 / 0.06), 0 24px 64px rgb(17 20 24 / 0.12);
+	--grid-line: rgb(255 255 255 / 0.028);
+	--wash-amber: rgb(234 179 8 / 0.06);
+	--wash-blue: rgb(94 106 210 / 0.08);
+	--bar-bg: rgb(8 9 10 / 0.8);
+	--glow-amber: rgb(234 179 8 / 0.35);
+	--glow-dot: rgb(234 179 8 / 0.7);
+	--caution-inner: rgb(234 179 8 / 0.05);
+	--scope: rgb(255 255 255 / 0.14);
+	--shadow-panel: rgba(0, 0, 0, 0.4) 0px 2px 4px, rgba(0, 0, 0, 0.08) 0px 0px 1px;
+	--shadow-shot: 0 0 0 1px rgb(255 255 255 / 0.04), 0 2px 4px rgb(0 0 0 / 0.4), 0 24px 64px rgb(0 0 0 / 0.5);
 
-	--sans: "Archivo", system-ui, sans-serif;
+	--sans: "Inter", "SF Pro Display", -apple-system, system-ui, "Segoe UI", sans-serif;
 	--mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 	--measure: 66ch;
 	--gutter: clamp(1.25rem, 4vw, 3rem);
 	--r-control: 8px;
-	--r-panel: 14px;
+	--r-panel: 12px;
 	--track: 0.18em;
 
-	color-scheme: light;
+	color-scheme: dark;
 }
 
-[data-theme="night"] {
-	--sky: #0a0d12;
-	--panel: #10141b;
-	--panel-2: #151b24;
-	--rule: #222a35;
-	--rule-strong: #333e4d;
-	--ink: #e8edf2;
-	--muted: #9aa6b4;
-	--faint: #6b7887;
+[data-theme="day"] {
+	--sky: #f7f8f8;
+	--panel: #ffffff;
+	--panel-2: #f3f4f5;
+	--rule: #e6e6e6;
+	--rule-strong: #d0d6e0;
+	--ink: #08090a;
+	--muted: #62666d;
+	--faint: #8a8f98;
 
-	--amber: #f2b23e;
-	--amber-deep: #ffc95e;
-	--amber-ink: #171004;
-	--amber-text: #f2b23e;
-	--amber-soft: rgb(242 178 62 / 0.12);
-	--blue: #5b8def;
-	--blue-text: #86a8ff;
-	--green: #43b97f;
-	--green-ink: #06170e;
+	--amber: #eab308;
+	--amber-deep: #ca9f07;
+	--amber-ink: #1c1600;
+	--amber-text: #946200;
+	--amber-soft: rgb(234 179 8 / 0.15);
+	--blue: #5e6ad2;
+	--blue-text: #4752c4;
+	--green: #27a644;
+	--green-ink: #ffffff;
 
-	--action-bg: #f2b23e;
-	--action-bg-hover: #ffc95e;
-	--action-ink: #171004;
-	--action-glow: 0 0 24px rgb(242 178 62 / 0.25);
+	--action-bg: #5e6ad2;
+	--action-bg-hover: #4752c4;
+	--action-ink: #ffffff;
+	--action-glow: 0 1px 2px rgb(8 9 10 / 0.2);
 
-	--grid-line: rgb(232 237 242 / 0.022);
-	--wash-amber: rgb(242 178 62 / 0.07);
-	--wash-blue: rgb(91 141 239 / 0.05);
-	--bar-bg: rgb(10 13 18 / 0.82);
-	--glow-amber: rgb(242 178 62 / 0.35);
-	--glow-dot: rgb(242 178 62 / 0.8);
-	--caution-inner: rgb(242 178 62 / 0.05);
-	--scope: #6b7887;
-	--shadow-panel: 0 0 0 1px rgb(0 0 0 / 0.4), 0 16px 48px rgb(0 0 0 / 0.45);
-	--shadow-shot: 0 0 0 1px rgb(0 0 0 / 0.45), 0 2px 10px rgb(0 0 0 / 0.4), 0 32px 90px rgb(0 0 0 / 0.55);
+	--grid-line: rgb(8 9 10 / 0.03);
+	--wash-amber: rgb(234 179 8 / 0.07);
+	--wash-blue: rgb(94 106 210 / 0.05);
+	--bar-bg: rgb(247 248 248 / 0.85);
+	--glow-amber: rgb(234 179 8 / 0.3);
+	--glow-dot: rgb(234 179 8 / 0.55);
+	--caution-inner: rgb(234 179 8 / 0.06);
+	--scope: #b7bdc5;
+	--shadow-panel: 0 1px 2px rgb(8 9 10 / 0.05), 0 16px 40px rgb(8 9 10 / 0.08);
+	--shadow-shot: 0 1px 2px rgb(8 9 10 / 0.06), 0 2px 10px rgb(8 9 10 / 0.06), 0 24px 64px rgb(8 9 10 / 0.12);
 
-	color-scheme: dark;
+	color-scheme: light;
 }
 
 /* ============================================================
@@ -144,6 +144,11 @@ body {
 	font-family: var(--sans);
 	font-size: 1.0625rem;
 	line-height: 1.65;
+	font-feature-settings: "cv01", "ss03";
+}
+strong,
+b {
+	font-weight: 590;
 }
 /* the chart grid */
 body::before {
@@ -253,10 +258,9 @@ pre {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.6rem;
-	font-stretch: 75%;
-	font-weight: 800;
+	font-weight: 590;
 	font-size: 1.2rem;
-	letter-spacing: 0.06em;
+	letter-spacing: 0.14em;
 	color: var(--ink);
 	text-decoration: none;
 }
@@ -390,27 +394,27 @@ pre {
 }
 .display {
 	margin: 0;
-	font-stretch: 62%;
-	font-weight: 800;
-	font-size: clamp(2.9rem, 7vw, 6rem);
-	line-height: 0.95;
-	letter-spacing: 0.005em;
+	font-weight: 590;
+	font-size: clamp(2.9rem, 7vw, 5.6rem);
+	line-height: 0.98;
+	letter-spacing: -0.01em;
 	text-transform: uppercase;
 }
 .display .line {
 	display: block;
 }
-/* Day: ink with an amber highlighter sweep. Night: amber with the glow. */
+/* Dark (native): amber with the glow. Day: ink with an amber highlighter sweep. */
 .display .amber {
+	color: var(--amber);
+	background: none;
+	text-shadow: 0 0 56px var(--glow-amber);
+}
+[data-theme="day"] .display .amber {
 	color: var(--ink);
 	background: linear-gradient(transparent 60%, var(--amber-soft) 60%);
 	padding-inline: 0.08em;
 	margin-inline: -0.08em;
-}
-[data-theme="night"] .display .amber {
-	color: var(--amber);
-	background: none;
-	text-shadow: 0 0 56px var(--glow-amber);
+	text-shadow: none;
 }
 .scope {
 	position: absolute;
@@ -504,7 +508,7 @@ pre {
 	padding-inline: 1.1rem;
 	font: inherit;
 	font-size: 0.8125rem;
-	font-weight: 700;
+	font-weight: 510;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	cursor: pointer;
@@ -550,11 +554,10 @@ section.prose {
 }
 .prose h2 {
 	margin: 0 0 1.25rem;
-	font-stretch: 68%;
-	font-weight: 750;
+	font-weight: 590;
 	font-size: clamp(2rem, 4.4vw, 3.4rem);
-	line-height: 1;
-	letter-spacing: 0.005em;
+	line-height: 1.05;
+	letter-spacing: -0.01em;
 	text-transform: uppercase;
 	text-wrap: balance;
 }
@@ -570,7 +573,7 @@ section[id] {
 h3 {
 	margin: 0 0 0.3rem;
 	font-size: 1.125rem;
-	font-weight: 700;
+	font-weight: 590;
 	line-height: 1.3;
 	color: var(--ink);
 }
@@ -594,7 +597,6 @@ p {
 .demo-bar h2 {
 	margin: 0;
 	font-family: var(--sans);
-	font-stretch: 100%;
 	font-size: 1rem;
 	font-weight: 400;
 	letter-spacing: 0;
@@ -720,9 +722,8 @@ p {
 }
 .row {
 	position: relative;
-	padding: 0.7rem 0.9rem 0.7rem 1.05rem;
+	padding: 0.7rem 0.9rem;
 	border: 1px solid var(--rule);
-	border-left-width: 3px;
 	border-radius: var(--r-control);
 	background: var(--panel-2);
 	font-size: 0.9375rem;
@@ -730,14 +731,10 @@ p {
 	animation: land 0.35s ease-out;
 }
 .row.is-caution {
-	border-left-color: var(--amber);
+	background: color-mix(in srgb, var(--amber-soft) 55%, var(--panel));
 	box-shadow: inset 0 0 32px var(--caution-inner);
 }
-.row.is-working {
-	border-left-color: var(--blue);
-}
 .row.is-done {
-	border-left-color: var(--rule-strong);
 	background: none;
 	padding-block: 0.45rem;
 }
@@ -751,14 +748,14 @@ p {
 }
 .row .ctx .kind {
 	color: var(--amber-text);
-	font-weight: 600;
+	font-weight: 510;
 }
 .row.is-working .ctx .kind {
 	color: var(--blue-text);
 }
 .row .title {
 	margin: 0;
-	font-weight: 700;
+	font-weight: 510;
 	font-size: 1rem;
 	color: var(--ink);
 }
@@ -796,7 +793,7 @@ p {
 	color: var(--action-ink);
 	font: inherit;
 	font-size: 0.8125rem;
-	font-weight: 700;
+	font-weight: 510;
 	padding: 0.18rem 0.7rem;
 	border-radius: var(--r-control);
 	cursor: pointer;
@@ -903,7 +900,7 @@ p {
 	border-top: 1px solid var(--rule);
 }
 .facts dt {
-	font-weight: 700;
+	font-weight: 510;
 	color: var(--ink);
 }
 .facts dd {
@@ -1132,9 +1129,8 @@ pre {
 	color: var(--ink);
 }
 .brandname {
-	font-stretch: 75%;
-	font-weight: 800;
-	letter-spacing: 0.06em;
+	font-weight: 590;
+	letter-spacing: 0.14em;
 }
 .foot p {
 	max-width: var(--measure);

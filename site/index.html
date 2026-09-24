@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="theme-color" content="#f4f5f7" />
+		<meta name="theme-color" content="#08090a" />
 		<title>Tower: stop writing code. Start landing it.</title>
 		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: research, planning, building, testing, review, merge. The agents write; you land. Every decision that is yours arrives as one amber row — one click each." />
 		<meta property="og:title" content="Tower: stop writing code. Start landing it." />
@@ -12,12 +12,12 @@
 		<meta property="og:url" content="https://tower.rahultrikha.com/" />
 		<meta name="twitter:card" content="summary_large_image" />
 	<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-	<link rel="preload" href="assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin />
+	<link rel="preload" href="assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
 	<link rel="stylesheet" href="styles.css" />
 	<script>
-		// Apply the saved theme before first paint; light is the default.
+		// Apply the saved theme before first paint; dark (Linear) is the default.
 		try {
-			if (localStorage.getItem("tower-site-theme") === "night") document.documentElement.dataset.theme = "night";
+			if (localStorage.getItem("tower-site-theme") === "day") document.documentElement.dataset.theme = "day";
 		} catch {}
 	</script>
 	</head>
@@ -46,7 +46,7 @@
 					<a href="#replaces">What it replaces</a>
 					<a href="#how">How it works</a>
 					<a href="#install">Install</a>
-					<button type="button" id="theme-toggle" class="night-toggle" aria-label="Switch to the night theme">Night</button>
+					<button type="button" id="theme-toggle" class="night-toggle" aria-label="Switch to the day theme">Day</button>
 					<a class="gh" href="https://github.com/rahult/tower">GitHub</a>
 				</nav>
 			</div>
@@ -126,7 +126,7 @@
 
 			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.01 — The stream</span>
-				<img src="assets/tower.png" width="1600" height="1000" alt="The Tower board. A projects rail lists three repositories with amber and blue counts. The stream holds four amber rows under Needs you — review approvals with Approve &amp; merge buttons and a card asking three questions with suggested answers — above In flight and Queued. A docked inspector shows the open card's Decision tab: three questions, two suggested answers already chosen, a typed answer, and a Send answers and continue button." loading="lazy" />
+				<img src="assets/tower.png" width="1600" height="1000" alt="The Tower board. A projects rail lists repositories with amber and indigo counts. The stream holds four amber rows under Needs you — review approvals with Approve &amp; merge buttons and a card asking three questions with suggested answers — above In flight and Queued. A docked inspector shows the open card's Decision tab: three questions, two suggested answers already chosen, a typed answer, and a Send answers and continue button." loading="lazy" />
 				<figcaption>The board opens on this: a rail of projects, a stream where amber means you, and an inspector docked beside it. The questions came from the agent; the suggested answers are one click each.</figcaption>
 			</figure>
 
@@ -263,7 +263,7 @@
 
 			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.06 — Modeling, on demand</span>
-				<img src="assets/invariants.png" width="1600" height="1000" alt="An invariant simulation selected in a card's session rail. The verdict line reads pass, Nothing blocking, with the model and token count above." loading="lazy" />
+				<img src="assets/invariants.png" width="1600" height="1000" alt="An invariant simulation run on a resting backlog card. The verdict line reads pass, Nothing blocking, with the model and token count above." loading="lazy" />
 				<figcaption>Any resting card can run an invariant simulation — domains, actors, scenarios — and report what would break before your tests do.</figcaption>
 			</figure>
 
@@ -326,7 +326,7 @@
 
 			<figure class="shot wide" data-reveal>
 				<span class="fig">Fig.08 — The matrix</span>
-				<img src="assets/board.png" width="1600" height="1000" alt="The Board view: a matrix with a column per stage from Backlog to Pull request and a row per project. Amber mini cards fill where work needs you, running cards carry a blue bar, and each lane reads main · merges locally." loading="lazy" />
+				<img src="assets/board.png" width="1600" height="1000" alt="The Board view: a matrix with a column per stage from Backlog to Pull request and a row per project. Amber-tinted mini cards mark where work needs you while the rest stay quiet, and each lane reads main · merges locally." loading="lazy" />
 				<figcaption>Prefer the whole picture? The matrix keeps a column per stage and a row per project, with foldable columns and done folded away until you want it.</figcaption>
 			</figure>
 

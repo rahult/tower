@@ -28,20 +28,20 @@
 		}
 	}
 
-	// Night toggle: light is the default; the choice persists across visits.
+	// Day toggle: dark (Linear) is the default; the choice persists across visits.
 	const themeButton = document.getElementById("theme-toggle");
 	const syncThemeButton = () => {
-		const night = document.documentElement.dataset.theme === "night";
-		themeButton.textContent = night ? "Day" : "Night";
-		themeButton.setAttribute("aria-label", night ? "Switch to the day theme" : "Switch to the night theme");
+		const day = document.documentElement.dataset.theme === "day";
+		themeButton.textContent = day ? "Night" : "Day";
+		themeButton.setAttribute("aria-label", day ? "Switch to the night theme" : "Switch to the day theme");
 	};
 	if (themeButton) {
 		themeButton.addEventListener("click", () => {
-			const night = document.documentElement.dataset.theme === "night";
-			if (night) delete document.documentElement.dataset.theme;
-			else document.documentElement.dataset.theme = "night";
+			const day = document.documentElement.dataset.theme === "day";
+			if (day) delete document.documentElement.dataset.theme;
+			else document.documentElement.dataset.theme = "day";
 			try {
-				localStorage.setItem("tower-site-theme", night ? "day" : "night");
+				localStorage.setItem("tower-site-theme", day ? "day" : "dark");
 			} catch {
 				// Storage refused; the choice lasts for this visit.
 			}
