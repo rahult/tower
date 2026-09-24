@@ -215,7 +215,7 @@ export function useShortcuts(map: Shortcuts): void {
 				event.preventDefault();
 				map.view(Number(event.key) - 1);
 			} else if (!typing && !mod && !event.altKey) {
-				if (event.key === "n" || event.key === "N") {
+				if (event.key === "n" || event.key === "N" || event.key === "c" || event.key === "C") {
 					event.preventDefault();
 					map.add();
 				} else if (event.key === "/") {
