@@ -39,7 +39,7 @@ export interface Config {
 	verifyTimeoutMs: number;
 }
 
-const repoRoot = join(import.meta.dirname, "..", "..", "..");
+export const repoRoot = join(import.meta.dirname, "..", "..", "..");
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	const home = env.TOWER_HOME ?? join(homedir(), ".tower");

@@ -93,9 +93,10 @@ Your data lives in `~/.tower` and is not touched by either.
 ```sh
 git clone https://github.com/rahult/tower && cd tower
 pnpm install        # or: npm install
-pnpm build          # build the board UI
 pnpm start          # daemon and board on http://127.0.0.1:4700
 ```
+
+`pnpm start` builds the board UI first when it is missing or older than the web sources — the built `dist` is gitignored, so it never arrives with `git pull` or `pi update`. Run `pnpm build` ahead of time if you would rather not wait at startup.
 
 ## Configuration
 

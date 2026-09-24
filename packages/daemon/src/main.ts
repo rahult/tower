@@ -1,10 +1,12 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig } from "./config.ts";
+import { loadConfig, repoRoot } from "./config.ts";
 import { startDaemon } from "./daemon.ts";
 import { PiSessionDriver } from "./pi/pi-driver.ts";
+import { ensureWebDist } from "./web-build.ts";
 
 const config = loadConfig();
+ensureWebDist(config.webDist, repoRoot);
 // Children inherit this process's environment: several providers (zai, deepseek, minimax, moonshot) authenticate
 // through env vars, so start the daemon from a shell that has them.
 const daemon = await startDaemon(config, new PiSessionDriver());
