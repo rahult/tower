@@ -24,6 +24,8 @@ Produce an implementation plan. A different, cheaper model will implement it in 
 
 {{> acceptance}}
 
+{{> annotations}}
+
 {{> parallel-work}}
 
 {{> stage-result-contract}}

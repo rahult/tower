@@ -13,6 +13,7 @@ import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
 import { matchProject, readIntent, taggedProject } from "../assist.ts";
+import { addAnnotation, AnnotationError, deleteAnnotation, loadAnnotations, setAnnotationResolved } from "../annotations.ts";
 import { suggestCommands } from "../project-probe.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
 import { flowsTriggered, loadFlows, runsOnBacklogCard } from "../flows.ts";
@@ -63,6 +64,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.onError((error, c) => {
 		if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
+		if (error instanceof AnnotationError) return c.json({ error: error.message }, 400);
 		if (error instanceof BenchError) return c.json({ error: error.message }, error.status);
 		if (error instanceof SettingsError) return c.json({ error: error.message }, 400);
 		if (error instanceof InvalidTransition || error instanceof ConflictError) return c.json({ error: error.message }, 409);
@@ -396,7 +398,38 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/cards/:id", (c) => {
 		const card = cardOr404(c.req.param("id"));
-		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id), bench: { preview: bench.previewFor(card.id) } });
+		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id), annotations: loadAnnotations(paths.cardDir(config, card.id)), bench: { preview: bench.previewFor(card.id) } });
+	});
+
+	// Margin notes: a person pins text on the plan, a review, a report — the notes ride back to the
+	// agents with gate rejections and into the stage prompts while they are unresolved.
+	const annotationDir = (cardId: string, artifact: string): string => {
+		const card = cardOr404(cardId);
+		if (!listArtifacts(config, card.id).some((candidate) => candidate.name === artifact)) throw new HttpError(400, `This card has no artifact "${artifact}" to annotate`);
+		return paths.cardDir(config, card.id);
+	};
+
+	app.post("/api/cards/:id/annotations", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const artifact = requireString(body, "artifact");
+		const cardDir = annotationDir(card.id, artifact);
+		const annotation = addAnnotation(cardDir, { artifact, quote: requireString(body, "quote"), note: requireString(body, "note") });
+		return c.json({ annotation, annotations: loadAnnotations(cardDir) }, 201);
+	});
+
+	app.patch("/api/cards/:id/annotations/:annotationId", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const body = (await c.req.json()) as Record<string, unknown>;
+		if (typeof body.resolved !== "boolean") throw new HttpError(400, '"resolved" must be a boolean');
+		const annotations = setAnnotationResolved(paths.cardDir(config, card.id), c.req.param("annotationId"), body.resolved);
+		return c.json({ annotations });
+	});
+
+	app.delete("/api/cards/:id/annotations/:annotationId", (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const annotations = deleteAnnotation(paths.cardDir(config, card.id), c.req.param("annotationId"));
+		return c.json({ annotations });
 	});
 
 	// Hands-on access to the card's worktree. Neither run can pass or fail the card.
@@ -507,7 +540,9 @@ export function createApp(deps: AppDeps): Hono {
 		const body = (await c.req.json()) as Record<string, unknown>;
 		if (body.decision !== "approve" && body.decision !== "reject") throw new HttpError(400, '"decision" must be "approve" or "reject"');
 		const feedback = typeof body.feedback === "string" ? body.feedback.trim() : "";
-		if (body.decision === "reject" && !feedback) throw new HttpError(400, "Say what should change so the planner can act on it");
+		// A rejection can be notes alone: the margin notes ride along as the what-should-change.
+		const hasOpenNotes = loadAnnotations(paths.cardDir(config, card.id)).some((annotation) => !annotation.resolved);
+		if (body.decision === "reject" && !feedback && !hasOpenNotes) throw new HttpError(400, "Say what should change so the planner can act on it");
 		if (!listGatesForCard(db, card.id).some((gate) => gate.id === c.req.param("gateId"))) throw new HttpError(404, "Gate not found");
 		return c.json(orchestrator.decideGate(card.id, c.req.param("gateId"), body.decision, feedback));
 	});

@@ -94,6 +94,10 @@ and where existing repositories are understood before they are changed.
   that already passes fails the gate); the builder inherits the specs as a contract it may
   not weaken; the `acceptance-green` after-build gate only lets a build move on when every
   spec passes. An empty harness never counts as a pass.
+- **Margin notes**: select text on the plan, a review or any card file and pin a note. Notes
+  are stored on the card (`annotations.json` + rendered `annotations.md`), highlighted inline,
+  and ride back to the agents two ways — a gate rejection always carries the open notes (a
+  rejection can be notes alone), and open notes enter every stage prompt until resolved.
 
 ## P3 — Verification depth (next)
 

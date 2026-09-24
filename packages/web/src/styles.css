@@ -2615,3 +2615,13 @@ textarea.input {
 		animation: none;
 	}
 }
+
+/* Margin notes: pinned text in a reader, and the note anchored to it. */
+.margin-note {
+	background: var(--caution-soft);
+	border-bottom: 2px solid var(--caution);
+	cursor: help;
+	border-radius: 2px;
+	padding: 0 1px;
+	color: inherit;
+}

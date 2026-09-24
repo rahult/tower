@@ -16,6 +16,7 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 - **Reviews before you look.** Once tests pass, review flows run in fresh sessions that never saw the builder's work: an adversarial review that tries to break the change, and a SOLID design review. Their findings are waiting at the feedback gate.
 - **Pull requests, watched.** Approve the work and Tower pushes the branch and opens the pull request with `gh`. Failing CI goes to a builder with the failing checks (twice at most), a merge finishes the card and removes its worktree. A repository with no remote simply finishes with the branch ready to merge.
 - **Run anything on a card.** A review flow, any pi skill, one of your `~/.pi/agent/agents` roles, or a plain prompt with the model you choose.
+- **Margin notes.** Select text on the plan, a review or a report and pin a note to it. Notes ride back to the agents: a gate rejection carries them even when you typed nothing, and open notes appear in the stage prompts until you resolve them.
 - **From an idea, or into an existing system.** "New from idea" scaffolds a project from an archetype — the engineering baseline — and the idea becomes the first card, planned immediately. Existing repositories get a **system model**: a read-only pass that maps domains, actors, state and invariants as built, which every planner reads before planning. Acceptance gates make projects test-first: the plan's test targets become failing specs before building, and a build moves on only when they pass.
 - **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff. Every session a card has had stays reachable from the rail above its transcript.
 - **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
@@ -192,6 +193,12 @@ Two doors, one harness. **New from idea** (Projects wall, or the ⌘K box: "crea
 2. After the plan passes, the `acceptance-red` flow writes those targets as specs and proves them **red** (`npm run accept -- --expect-red`). A spec that already passes fails the gate: behavior before its build is a lie.
 3. The builder inherits the specs as a contract it must not edit, delete or weaken.
 4. After the build, `acceptance-green` runs the specs; a build moves on only when every one of them passes. No specs at all fails both gates — an empty harness never looks like a pass.
+
+### Margin notes
+
+Reading is judging, and judging should stick to the text. Select any passage on the plan (at its gate), a review report or any card file, and pin a note to it. Notes live on the card (`annotations.json`, rendered as `annotations.md` for people and agents alike), are highlighted where the quoted text appears, and can be resolved or deleted from the note list.
+
+Two ways back to the agents: **a gate rejection always carries the open notes** — you can send work back having typed nothing, because the notes are the what-should-change — and **open notes appear in every planning, building and testing prompt** (a "Margin notes" block) until you resolve them. Resolved notes leave the agents alone but stay on the record.
 
 ### Sub-agent crews
 

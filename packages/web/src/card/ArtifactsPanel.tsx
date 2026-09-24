@@ -1,9 +1,12 @@
+import type { Annotation } from "@tower/core";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { type Artifact, api } from "../api/client.ts";
 import { FileView } from "../content/FileView.tsx";
+import { Annotatable } from "./Annotations.tsx";
 
-export function ArtifactsPanel({ cardId, artifacts }: { cardId: string; artifacts: Artifact[] }) {
+/** The card's produced files, any of them annotatable: select text, pin a margin note. */
+export function ArtifactsPanel({ cardId, artifacts, annotations }: { cardId: string; artifacts: Artifact[]; annotations: Annotation[] }) {
 	const [picked, setPicked] = useState<string | null>(null);
 	// Open the plan by default: it is what people come here for.
 	const open = picked ?? artifacts.find((a) => a.name === "plan.md")?.name ?? artifacts[0]?.name ?? null;
@@ -28,7 +31,17 @@ export function ArtifactsPanel({ cardId, artifacts }: { cardId: string; artifact
 				))}
 			</ul>
 			<div className="min-h-0 flex-1 overflow-y-auto bg-sheet px-5 py-4">
-				{content.isPending ? <p className="text-slate">Loading…</p> : content.error ? <p className="text-danger">{content.error.message}</p> : open && <FileView name={open} text={content.data} />}
+				{content.isPending ? (
+					<p className="text-slate">Loading…</p>
+				) : content.error ? (
+					<p className="text-danger">{content.error.message}</p>
+				) : (
+					open && (
+						<Annotatable cardId={cardId} artifact={open} annotations={annotations} contentKey={content.data?.length}>
+							<FileView name={open} text={content.data} />
+						</Annotatable>
+					)
+				)}
 			</div>
 		</div>
 	);

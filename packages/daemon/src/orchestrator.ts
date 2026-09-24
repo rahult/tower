@@ -31,6 +31,7 @@ import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
 import { type Issue, closeIssue, commentOnIssue, createPullRequest, listIssues, listRemotes, originSlug, pushBranch, viewPullRequest } from "./pr/gh.ts";
+import { feedbackWithAnnotations } from "./annotations.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
 import { modelState, promoteSystemModel } from "./system-model.ts";
@@ -263,9 +264,12 @@ export class Orchestrator {
 		const gate = getGate(this.deps.db, gateId);
 		if (!gate || gate.cardId !== cardId) throw new Error(`Gate not found: ${gateId}`);
 		if (gate.status !== "pending") throw new ConflictError("This gate has already been decided");
+		// A rejection carries the person's margin notes even when they typed nothing: the notes are the
+		// what-should-change, and they land in the gate's record and the next attempt alike.
+		const composed = decision === "reject" ? feedbackWithAnnotations(feedback, paths.cardDir(this.deps.config, cardId)) : feedback;
 		// Transition first: if it is invalid nothing is recorded.
-		const card = this.dispatch(cardId, { type: "gate_decided", decision, feedback });
-		decideGate(this.deps.db, gateId, decision === "approve" ? "approved" : "rejected", feedback || null);
+		const card = this.dispatch(cardId, { type: "gate_decided", decision, feedback: composed });
+		decideGate(this.deps.db, gateId, decision === "approve" ? "approved" : "rejected", composed || null);
 		this.deps.bus.publish({ topic: "board", type: "gate_decided", data: { cardId, gateId, decision } });
 		return card;
 	}

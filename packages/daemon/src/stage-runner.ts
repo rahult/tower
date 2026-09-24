@@ -31,6 +31,7 @@ import { branchNameFor, ensureWorktree, type Worktree } from "./git/worktree-man
 import { buildPiArgs } from "./pi/argv.ts";
 import type { LiveRun, RunManager } from "./run/run-manager.ts";
 import { readModelMeta } from "./system-model.ts";
+import { unresolvedAnnotationsBlock } from "./annotations.ts";
 
 const RESUME = `You were interrupted by a restart of the orchestrator; nothing else changed. Check the state of your work, then continue the task from where you left off. Your original instructions still apply, including writing ${STAGE_RESULT_FILE} when you are done.`;
 
@@ -372,6 +373,8 @@ export class StageRunner {
 			partials["research"] = this.researchBlock(stage, cardDir);
 			partials["system-model"] = this.systemModelBlock(stage, project);
 			partials["acceptance"] = this.acceptanceBlock(stage, project, worktreePath);
+			// The person's margin notes, while any are open: requests, not observations.
+			partials["annotations"] = unresolvedAnnotationsBlock(cardDir);
 			return renderPrompt(
 				read(STAGE_SPECS[stage].promptFile),
 				{

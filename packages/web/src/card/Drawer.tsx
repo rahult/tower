@@ -100,7 +100,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 			</aside>
 		);
 	if (!detail.data) return null;
-	const { card, artifacts } = detail.data;
+	const { card, artifacts, annotations } = detail.data;
 	const project = projects.find((p) => p.id === card.projectId);
 	const { stage, status, tone } = describeCard(card);
 	const live = run?.id === runs.at(-1)?.id && (isLive(card) || run?.status === "running" || run?.status === "starting");
@@ -193,15 +193,15 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 
 			<div key={activeTab} role="tabpanel" id={`drawer-panel-${activeTab}`} aria-labelledby={`drawer-tab-${activeTab}`} tabIndex={0} className="flex min-h-0 flex-col outline-none">
 				{activeTab === "files" ? (
-					<ArtifactsPanel cardId={card.id} artifacts={artifacts} />
+					<ArtifactsPanel cardId={card.id} artifacts={artifacts} annotations={annotations} />
 				) : activeTab === "changes" ? (
 					<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
 				) : activeTab === "run" ? (
 					<RunPanel cardId={card.id} project={project} hasWorktree={!!card.worktreePath} bench={detail.data.bench.preview} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
 				) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
-					<GatePanel cardId={card.id} gate={pendingGate} />
+					<GatePanel cardId={card.id} gate={pendingGate} annotations={annotations} />
 				) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (
-					<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} mergesLocally={project?.hasOrigin === false} />
+					<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} annotations={annotations} mergesLocally={project?.hasOrigin === false} />
 				) : activeTab === "decision" && asked ? (
 					<QuestionsPanel cardId={card.id} summary={card.needsAttentionReason} questions={asked} className="flex min-h-0 flex-1 flex-col" />
 				) : run ? (

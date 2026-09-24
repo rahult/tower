@@ -17,6 +17,8 @@ Implement the plan at the absolute path `{{planPath}}`. Read it first; it was wr
 
 {{> acceptance}}
 
+{{> annotations}}
+
 {{feedbackSection}}
 
 {{> stage-result-contract}}

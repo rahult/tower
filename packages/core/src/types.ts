@@ -111,6 +111,19 @@ export interface TokenUsage {
 	total: number;
 }
 
+/** A margin note a person pinned to text on a card — the plan, a review, a report. */
+export interface Annotation {
+	id: string;
+	/** The artifact the note is pinned to, e.g. `plan.md` or `reviews/adversarial-review.md`. */
+	artifact: string;
+	/** The exact text the note is about. */
+	quote: string;
+	note: string;
+	/** Resolved notes drop out of the agents' way but stay on the record. */
+	resolved: boolean;
+	createdAt: number;
+}
+
 export interface StageModelConfig {
 	model: string;
 	thinking: ThinkingLevel;

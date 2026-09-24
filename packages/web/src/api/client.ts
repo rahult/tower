@@ -1,4 +1,4 @@
-import type { Card, Project, StageRun } from "@tower/core";
+import type { Annotation, Card, Project, StageRun } from "@tower/core";
 
 export interface Board {
 	projects: Project[];
@@ -32,6 +32,7 @@ export interface CardDetail {
 	runs: StageRun[];
 	gates: Gate[];
 	artifacts: Artifact[];
+	annotations: Annotation[];
 	bench: { preview: Preview };
 }
 
@@ -158,6 +159,11 @@ export const api = {
 	suggestCommands: (projectId: string) => request<CommandSuggestions>("POST", `/api/projects/${projectId}/suggest-commands`),
 	usage: () => request<Usage>("GET", "/api/usage"),
 	adhoc: (cardId: string, body: Record<string, string | undefined>) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/adhoc`, body),
+	addAnnotation: (cardId: string, body: { artifact: string; quote: string; note: string }) =>
+		request<{ annotation: Annotation; annotations: Annotation[] }>("POST", `/api/cards/${cardId}/annotations`, body),
+	setAnnotation: (cardId: string, annotationId: string, resolved: boolean) =>
+		request<{ annotations: Annotation[] }>("PATCH", `/api/cards/${cardId}/annotations/${annotationId}`, { resolved }),
+	deleteAnnotation: (cardId: string, annotationId: string) => request<{ annotations: Annotation[] }>("DELETE", `/api/cards/${cardId}/annotations/${annotationId}`),
 	checkPr: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/check-pr`),
 	answerUi: (runId: string, requestId: string, answer: Record<string, unknown>) => request<{ ok: true }>("POST", `/api/runs/${runId}/ui/${requestId}`, answer),
 	settings: () => request<Settings>("GET", "/api/settings"),

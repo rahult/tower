@@ -17,6 +17,8 @@ Report `pass` only if the checks pass and the change does what was asked. Report
 
 {{> invariant-protocol}}
 
+{{> annotations}}
+
 {{feedbackSection}}
 
 {{> stage-result-contract}}
