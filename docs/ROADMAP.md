@@ -98,6 +98,10 @@ and where existing repositories are understood before they are changed.
   are stored on the card (`annotations.json` + rendered `annotations.md`), highlighted inline,
   and ride back to the agents two ways — a gate rejection always carries the open notes (a
   rejection can be notes alone), and open notes enter every stage prompt until resolved.
+- **Plan to backlog**: a work-breakdown session (planning tier, tool-less) cuts a plan —
+  pasted text or an existing card's `plan.md` — into proposed backlog cards with self-contained
+  briefs. The draft returns as a checklist; filing lands the picked cards as inert backlog
+  cards in the plan's order, so a spec can become a night's queue.
 
 ## P3 — Verification depth (next)
 

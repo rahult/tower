@@ -17,6 +17,7 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 - **Pull requests, watched.** Approve the work and Tower pushes the branch and opens the pull request with `gh`. Failing CI goes to a builder with the failing checks (twice at most), a merge finishes the card and removes its worktree. A repository with no remote simply finishes with the branch ready to merge.
 - **Run anything on a card.** A review flow, any pi skill, one of your `~/.pi/agent/agents` roles, or a plain prompt with the model you choose.
 - **Margin notes.** Select text on the plan, a review or a report and pin a note to it. Notes ride back to the agents: a gate rejection carries them even when you typed nothing, and open notes appear in the stage prompts until you resolve them.
+- **Plan to backlog.** Paste a plan (or point at a card's `plan.md`) and the work-breakdown agent drafts the backlog cards it cuts into. You tick and untick the draft, file the survivors, and the backlog holds a queue of work ready to be let loose.
 - **From an idea, or into an existing system.** "New from idea" scaffolds a project from an archetype — the engineering baseline — and the idea becomes the first card, planned immediately. Existing repositories get a **system model**: a read-only pass that maps domains, actors, state and invariants as built, which every planner reads before planning. Acceptance gates make projects test-first: the plan's test targets become failing specs before building, and a build moves on only when they pass.
 - **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff. Every session a card has had stays reachable from the rail above its transcript.
 - **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
@@ -193,6 +194,10 @@ Two doors, one harness. **New from idea** (Projects wall, or the ⌘K box: "crea
 2. After the plan passes, the `acceptance-red` flow writes those targets as specs and proves them **red** (`npm run accept -- --expect-red`). A spec that already passes fails the gate: behavior before its build is a lie.
 3. The builder inherits the specs as a contract it must not edit, delete or weaken.
 4. After the build, `acceptance-green` runs the specs; a build moves on only when every one of them passes. No specs at all fails both gates — an empty harness never looks like a pass.
+
+### Plan to backlog
+
+A plan is not work until it is cards. **Plan to backlog** (the button on a project's card on the Projects wall) takes a plan — pasted text, or an existing card's `plan.md` that turned out bigger than one card — and a work-breakdown session cuts it into proposed backlog cards: each one coherent, independently verifiable, briefs that stand alone, foundations first. Nothing files itself: the draft comes back as a checklist, you untick what you don't want, and filing lands the survivors as inert backlog cards in the plan's order. Feed it a spec at night, queue the backlog in the morning.
 
 ### Margin notes
 

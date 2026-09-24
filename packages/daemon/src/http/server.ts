@@ -14,6 +14,7 @@ import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
 import { matchProject, readIntent, taggedProject } from "../assist.ts";
 import { addAnnotation, AnnotationError, deleteAnnotation, loadAnnotations, setAnnotationResolved } from "../annotations.ts";
+import { PLAN_CARDS_MAX, splitPlan } from "../plan-splitter.ts";
 import { suggestCommands } from "../project-probe.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
 import { flowsTriggered, loadFlows, runsOnBacklogCard } from "../flows.ts";
@@ -178,6 +179,45 @@ export function createApp(deps: AppDeps): Hono {
 		const project = getProject(db, c.req.param("id"));
 		if (!project) throw new HttpError(404, "Project not found");
 		return c.json(orchestrator.understandProject(project.id), 202);
+	});
+
+	// Plan to backlog: an agent cuts a plan — pasted text, or an existing card's plan.md — into
+	// proposed backlog cards. Nothing files itself: the draft comes back, the person picks, then files.
+	app.post("/api/projects/:id/plan-to-backlog", async (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const body = (await c.req.json()) as Record<string, unknown>;
+		let plan = typeof body.plan === "string" ? body.plan : "";
+		if (plan.trim() === "" && typeof body.cardId === "string") {
+			const card = getCard(db, body.cardId);
+			if (!card || card.projectId !== project.id) throw new HttpError(404, "Card not found on this project");
+			const planFile = join(paths.cardDir(config, card.id), "plan.md");
+			if (!existsSync(planFile)) throw new HttpError(400, "That card has no plan.md yet — pick a planned card or paste the plan");
+			plan = readFileSync(planFile, "utf8");
+		}
+		if (plan.trim() === "") throw new HttpError(400, 'Send the plan text, or a "cardId" whose plan.md should be cut');
+		try {
+			return c.json({ cards: await splitPlan({ config, driver, projectName: project.name, plan }) });
+		} catch (error) {
+			throw new HttpError(400, error instanceof Error ? error.message : String(error));
+		}
+	});
+
+	// Files the picked draft as inert backlog cards, in the plan's order.
+	app.post("/api/projects/:id/plan-to-backlog/file", async (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const body = (await c.req.json()) as { cards?: unknown };
+		const list = Array.isArray(body.cards) ? body.cards : [];
+		const cleaned = list.flatMap((entry) => {
+			const card = entry as Partial<{ title: unknown; brief: unknown }>;
+			const title = typeof card.title === "string" && card.title.trim() ? card.title.trim().slice(0, 120) : null;
+			const brief = typeof card.brief === "string" ? card.brief.slice(0, 4000) : "";
+			return title ? [{ title, brief }] : [];
+		});
+		if (cleaned.length === 0) throw new HttpError(400, 'Send the picked cards as [{"title", "brief"}]');
+		if (cleaned.length > PLAN_CARDS_MAX) throw new HttpError(400, `At most ${PLAN_CARDS_MAX} cards can be filed at once`);
+		return c.json({ cards: cleaned.map((card) => createCard(project.id, card.title, card.brief)) }, 201);
 	});
 
 	app.patch("/api/projects/:id", async (c) => {

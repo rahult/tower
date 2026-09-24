@@ -81,6 +81,12 @@ export interface CardDiff {
 	untracked: string[];
 }
 
+/** One proposed backlog card, cut from a plan by the work-breakdown agent. */
+export interface PlanCard {
+	title: string;
+	brief: string;
+}
+
 /** What the agent drafted for a project's commands; any field may be null when it is not applicable. */
 export interface CommandSuggestions {
 	verify: string | null;
@@ -157,6 +163,8 @@ export const api = {
 	flows: () => request<{ flows: FlowInfo[]; defaults: string[] }>("GET", "/api/flows"),
 	dirList: (path?: string) => request<DirListing>("GET", `/api/fs/dirs${path ? `?path=${encodeURIComponent(path)}` : ""}`),
 	suggestCommands: (projectId: string) => request<CommandSuggestions>("POST", `/api/projects/${projectId}/suggest-commands`),
+	planToBacklog: (projectId: string, body: { plan?: string; cardId?: string }) => request<{ cards: PlanCard[] }>("POST", `/api/projects/${projectId}/plan-to-backlog`, body),
+	filePlanCards: (projectId: string, cards: PlanCard[]) => request<{ cards: Card[] }>("POST", `/api/projects/${projectId}/plan-to-backlog/file`, { cards }),
 	usage: () => request<Usage>("GET", "/api/usage"),
 	adhoc: (cardId: string, body: Record<string, string | undefined>) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/adhoc`, body),
 	addAnnotation: (cardId: string, body: { artifact: string; quote: string; note: string }) =>

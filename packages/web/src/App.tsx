@@ -18,6 +18,7 @@ import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
 import { AddProject } from "./projects/AddProject.tsx";
 import { NewFromIdea } from "./projects/NewFromIdea.tsx";
+import { PlanToBacklog } from "./projects/PlanToBacklog.tsx";
 import { ProjectSettings } from "./projects/ProjectSettings.tsx";
 import { Projects } from "./projects/Projects.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
@@ -54,6 +55,7 @@ export function App() {
 	const [addingWork, setAddingWork] = useState<null | { projectId?: string }>(null);
 	const [addingProject, setAddingProject] = useState(false);
 	const [newIdea, setNewIdea] = useState(false);
+	const [planningBacklog, setPlanningBacklog] = useState<Project | null>(null);
 	// The project editor: opened from a card on the Projects wall, or right after adding a project,
 	// when the agent's command draft is what the reader came for.
 	const [editing, setEditing] = useState<{ project: Project; autoSuggest?: boolean } | null>(null);
@@ -319,7 +321,7 @@ export function App() {
 							/>
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
-						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onOpenProject={(project) => setEditing({ project })} />}
+						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenProject={(project) => setEditing({ project })} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 					</div>
 					{inspector}
@@ -352,6 +354,14 @@ export function App() {
 						setNewIdea(false);
 						openCard(card.id);
 					}}
+				/>
+			)}
+			{planningBacklog && (
+				<PlanToBacklog
+					project={planningBacklog}
+					cards={cards.filter((card) => card.projectId === planningBacklog.id)}
+					onClose={() => setPlanningBacklog(null)}
+					onFiled={() => setPlanningBacklog(null)}
 				/>
 			)}
 			{editing && (

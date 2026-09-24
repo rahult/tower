@@ -12,6 +12,7 @@ interface ProjectsProps {
 	onAddWork: (projectId?: string) => void;
 	onAddProject: () => void;
 	onNewIdea: () => void;
+	onPlanToBacklog: (project: Project) => void;
 	/** Clicking a card opens the project's editor. */
 	onOpenProject: (project: Project) => void;
 }
@@ -20,7 +21,7 @@ interface ProjectsProps {
  * The project space: a wall of cards — one per project, scannable at a glance — with adding a project
  * always one click away. Clicking a card opens its editor, where the agent drafts the commands.
  */
-export function Projects({ projects, cards, usage, onAddWork, onAddProject, onNewIdea, onOpenProject }: ProjectsProps) {
+export function Projects({ projects, cards, usage, onAddWork, onAddProject, onNewIdea, onPlanToBacklog, onOpenProject }: ProjectsProps) {
 	const spend = new Map((usage?.byProject ?? []).map((row) => [row.key, row]));
 	return (
 		<section className="view active" aria-label="Projects">
@@ -67,6 +68,7 @@ export function Projects({ projects, cards, usage, onAddWork, onAddProject, onNe
 									spend={spend.get(project.id)}
 									onOpen={() => onOpenProject(project)}
 									onAddWork={() => onAddWork(project.id)}
+									onPlanToBacklog={() => onPlanToBacklog(project)}
 								/>
 							))}
 						</ul>
@@ -83,12 +85,14 @@ function ProjectCard({
 	spend,
 	onOpen,
 	onAddWork,
+	onPlanToBacklog,
 }: {
 	project: Project;
 	cards: Card[];
 	spend: { runs: number; tokens: number; costUsd: number } | undefined;
 	onOpen: () => void;
 	onAddWork: () => void;
+	onPlanToBacklog: () => void;
 }) {
 	const running = cards.filter(isLive).length;
 	const waiting = cards.filter((card) => needsYou(card) || card.status === "abandoned").length;
@@ -179,6 +183,18 @@ function ProjectCard({
 				>
 					<Icon name="plus" />
 					Add card
+				</button>
+				<button
+					type="button"
+					className="btn sm"
+					title="Cut a plan into backlog cards"
+					onClick={(event) => {
+						event.stopPropagation();
+						onPlanToBacklog();
+					}}
+				>
+					<Icon name="spark" />
+					Plan to backlog
 				</button>
 				<span className="ml-auto flex items-center gap-1 text-[13px] font-semibold text-primary">
 					Settings

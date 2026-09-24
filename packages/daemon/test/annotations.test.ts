@@ -63,15 +63,15 @@ describe("margin notes", () => {
 
 		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
 		const gate = detail.gates.find((g: { status: string }) => g.status === "rejected");
-		expect(gate.feedback).toContain("margin notes");
-		expect(gate.feedback).toContain(NOTE.note);
+		expect(gate?.feedback).toContain("margin notes");
+		expect(gate?.feedback).toContain(NOTE.note);
 
 		// The re-plan sees the note twice: as its feedback, and as a margin-notes block.
 		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
 		const replans = h.driver.handles.filter((handle) => handle.sessionId.includes("-plan-"));
 		expect(replans).toHaveLength(2);
-		expect(replans[1].prompts[0]).toContain("Margin notes");
-		expect(replans[1].prompts[0]).toContain(NOTE.note);
+		expect(replans[1]?.prompts[0]).toContain("Margin notes");
+		expect(replans[1]?.prompts[0]).toContain(NOTE.note);
 	});
 
 	it("open notes reach the builder; resolving drops them from the prompt but keeps the record", async () => {

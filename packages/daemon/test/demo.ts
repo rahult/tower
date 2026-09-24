@@ -195,6 +195,29 @@ const driver = new FakeSessionDriver((spec) => {
 				],
 			},
 		];
+	// The work-breakdown session behind "Plan to backlog": a canned cut of whatever plan it is given.
+	if (spec.sessionId.startsWith("plan-split"))
+		return [
+			{
+				events: [
+					{
+						type: "message",
+						message: {
+							role: "assistant",
+							text: JSON.stringify({
+								cards: [
+									{ title: "Foundations: schema and shared types", brief: "The tables, migrations and shared types every later card stands on. Verify: migrations run on a fresh database and the typecheck passes." },
+									{ title: "Build the capture flow", brief: "Capture an entry from the composer with boundary validation; duplicates answer 409. Verify: the acceptance spec for a duplicate capture passes." },
+									{ title: "Build the weekly summary", brief: "A weekly summary view over captured entries, grouped by day. Verify: the summary matches the seeded entries for a fixed week." },
+								],
+							}),
+							thinking: "",
+							toolCalls: [],
+						},
+					},
+				],
+			},
+		];
 	// The crew card's members first: their ids carry no stage token, so they must not fall through to reviews.
 	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
 	if (spec.sessionId.includes("-ws-")) return [streamBuilderTurn()];
