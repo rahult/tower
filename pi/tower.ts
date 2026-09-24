@@ -2,15 +2,18 @@
  * Tower's pi extension: drive the Tower daemon from inside any pi session.
  *
  *   /tower                 start the daemon if needed and open the board
+ *   /tower start           bring the daemon up, without opening a browser
+ *   /tower open            open the board in the browser (starts the daemon if needed)
+ *   /tower stop            stop the daemon (running sessions become resumable)
+ *   /tower restart         stop and start again — how you pick up an updated install
  *   /tower add <title>     add a card for this repository to the backlog
  *   /tower run <title>     add a card and start it (planning begins when a slot is free)
  *   /tower status          what is running and what is waiting for you
  *   /tower settings        show which model runs each stage
  *   /tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low
  *                          set them (":thinking" is optional; "stage=default" clears one)
- *   /tower update         fast-forward this install to origin, rebuild the board, say if a restart is needed
- *   /tower rebuild-ui      build the board UI (after pulling updates); reload the tab to see it
- *   /tower stop            stop the daemon (running sessions become resumable)
+ *   /tower update          fast-forward this install to origin, rebuild the board, say if a restart is needed
+ *   /tower rebuild-ui      build the board UI (after editing it); reload the tab to see it
  *
  * The daemon is a separate long-running process, so it keeps working after this pi session ends. It inherits
  * this session's environment, which is how provider API keys reach the pi sessions it spawns.
@@ -28,7 +31,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOME = process.env.TOWER_HOME ?? join(homedir(), ".tower");
 const PORT = process.env.TOWER_PORT ?? "4700";
 const BASE = `http://127.0.0.1:${PORT}`;
-const SUBCOMMANDS = ["open", "add", "run", "status", "settings", "update", "rebuild-ui", "stop"];
+const SUBCOMMANDS = ["start", "open", "stop", "restart", "add", "run", "status", "settings", "update", "rebuild-ui"];
 
 interface Card {
 	id: string;
@@ -119,7 +122,7 @@ async function addCard(args: string, ctx: ExtensionContext, start: boolean): Pro
 }
 
 async function status(ctx: ExtensionContext): Promise<void> {
-	if (!(await isUp())) return ctx.ui.notify("Tower is not running. /tower starts it.", "info");
+	if (!(await isUp())) return ctx.ui.notify("Tower is not running. /tower start brings it up.", "info");
 	const { cards, projects } = await api<Board>("GET", "/api/board");
 	const name = (card: Card) => projects.find((project) => project.id === card.projectId)?.name ?? "?";
 	const running = cards.filter((card) => ["running", "verifying", "queued"].includes(card.status));
@@ -160,11 +163,26 @@ async function settings(args: string[], ctx: ExtensionContext): Promise<void> {
 	ctx.ui.notify([`Tower models${args.length > 0 ? " saved" : ""} (${current.file}):`, ...lines, "Change with: /tower settings planning=provider/model[:thinking] building=…"].join("\n"), "info");
 }
 
-async function stop(ctx: ExtensionContext): Promise<void> {
+/** SIGTERMs the daemon and waits for it to let go; false when it was not running. */
+async function stopDaemon(): Promise<boolean> {
 	const pidFile = join(HOME, "daemon.pid");
-	if (!(await isUp()) || !existsSync(pidFile)) return ctx.ui.notify("Tower is not running.", "info");
+	if (!(await isUp()) || !existsSync(pidFile)) return false;
 	process.kill(Number(readFileSync(pidFile, "utf8")), "SIGTERM");
+	for (let i = 0; i < 40 && (await isUp()); i++) await new Promise((resolve) => setTimeout(resolve, 250));
+	if (await isUp()) throw new Error("Tower did not stop within 10s (sessions may still be closing) — try again in a moment.");
+	return true;
+}
+
+async function stop(ctx: ExtensionContext): Promise<void> {
+	if (!(await stopDaemon())) return ctx.ui.notify("Tower is not running.", "info");
 	ctx.ui.notify("Tower: stopping. Sessions that were running can be resumed from the board next time.", "info");
+}
+
+/** The way to pick up an updated install: the daemon runs its boot-time code until it is restarted. */
+async function restart(ctx: ExtensionContext): Promise<void> {
+	const wasRunning = await stopDaemon();
+	await ensureRunning(ctx);
+	ctx.ui.notify(wasRunning ? "Tower: restarted — daemon code, prompts and flows are read fresh." : "Tower: was not running; started it.", "info");
 }
 
 /**
@@ -210,7 +228,7 @@ async function update(ctx: ExtensionContext): Promise<void> {
 	ctx.ui.notify(
 		[
 			`Tower: updated ${before.slice(0, 7)} → ${after.slice(0, 7)} (${commits} ${commits === 1 ? "commit" : "commits"}). UI rebuilt — reload the board tab (${BASE}).`,
-			...(needsRestart ? ["The daemon, prompts or flows changed: /tower stop, then /tower, to pick them up. (A stage that fails meanwhile recovers on Retry.)"] : []),
+			...(needsRestart ? ["The daemon, prompts or flows changed: /tower restart picks them up. (A stage that fails meanwhile recovers on Retry.)"] : []),
 		].join("\n"),
 		needsRestart ? "warning" : "info",
 	);
@@ -218,7 +236,7 @@ async function update(ctx: ExtensionContext): Promise<void> {
 
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("tower", {
-		description: "Tower control board: /tower [open | add <title> | run <title> | status | settings | update | rebuild-ui | stop]",
+		description: "Tower control board: /tower [start | open | stop | restart | add <title> | run <title> | status | settings | update | rebuild-ui]",
 		getArgumentCompletions: (prefix: string) => {
 			if (prefix.includes(" ")) return null;
 			const matches = SUBCOMMANDS.filter((name) => name.startsWith(prefix)).map((name) => ({ value: name, label: name }));
@@ -231,12 +249,16 @@ export default function (pi: ExtensionAPI) {
 					await ensureRunning(ctx);
 					openInBrowser(BASE);
 					ctx.ui.notify(`Tower is running: ${BASE}`, "info");
+				} else if (subcommand === "start") {
+					await ensureRunning(ctx);
+					ctx.ui.notify(`Tower is running: ${BASE}`, "info");
 				} else if (subcommand === "add" || subcommand === "run") await addCard(rest.join(" "), ctx, subcommand === "run");
 				else if (subcommand === "status") await status(ctx);
 				else if (subcommand === "settings") await settings(rest, ctx);
 				else if (subcommand === "update") await update(ctx);
 				else if (subcommand === "rebuild-ui") await rebuildUi(ctx);
 				else if (subcommand === "stop") await stop(ctx);
+				else if (subcommand === "restart") await restart(ctx);
 				else ctx.ui.notify(`Unknown: /tower ${subcommand}. Try: ${SUBCOMMANDS.join(", ")}`, "warning");
 			} catch (error) {
 				ctx.ui.notify(`Tower: ${error instanceof Error ? error.message : String(error)}`, "error");

@@ -41,7 +41,7 @@ Pull the new version, then restart the daemon — the restart is the update, and
 pi install git:github.com/rahult/tower   # refreshes the installed clone
 ```
 
-then `/tower stop` and `/tower` from any pi session.
+then `/tower restart` from any pi session.
 
 - Sessions caught mid-run come back as **interrupted**: **Resume** continues them in the same pi session with their history intact, and queued cards simply start. Open pull requests keep being watched.
 - Database changes are small additive migrations, applied at startup and announced in the daemon log; projects, cards and runs are kept.
@@ -60,12 +60,15 @@ The first run builds the board UI (a few seconds), starts the daemon in the back
 | Command | What it does |
 |---|---|
 | `/tower` | Start the daemon if needed and open the board |
+| `/tower start` | Start the daemon if needed, without opening a browser |
+| `/tower open` | Open the board in the browser (starts the daemon if needed) |
+| `/tower stop` | Stop the daemon. Sessions that were running can be resumed from the board next time |
+| `/tower restart` | Stop and start again — how you pick up an updated install |
 | `/tower add <title>` | Add a card for the current repository to its backlog. The repository becomes a project the first time |
 | `/tower run <title>` | Add a card and start it: planning begins when a slot is free |
 | `/tower status` | What is running, and what is waiting for you |
 | `/tower settings` | Show which model runs each stage |
 | `/tower settings planning=zai/glm-5.3 building=zai/glm-5.3-flash:low` | Set them. `:thinking` is optional; `stage=default` clears one |
-| `/tower stop` | Stop the daemon. Sessions that were running can be resumed from the board next time |
 
 A first card, end to end:
 
