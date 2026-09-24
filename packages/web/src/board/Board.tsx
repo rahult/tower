@@ -322,7 +322,7 @@ function Mini({ card, projectName, startedAt, selected, withProject, onOpen }: {
 						? "Merged"
 						: status;
 	return (
-		<button type="button" className={`mini ${suffix}${selected ? " selected" : ""}`} onClick={onOpen} data-id={card.id} aria-label={`Open ${card.title}`}>
+		<button type="button" className={`mini ${suffix}${live ? " live" : ""}${selected ? " selected" : ""}`} onClick={onOpen} data-id={card.id} aria-label={`Open ${card.title}`}>
 			<span className="bar" aria-hidden />
 		<span className="in">
 			<span className="t line-clamp-2">{card.title}</span>
