@@ -1,0 +1,21 @@
+{
+  "name": "acceptance-red",
+  "title": "Acceptance harness (red)",
+  "description": "Turns the plan's test targets into failing acceptance specs, then proves they are red: a build's job is to turn them green.",
+  "when": [
+    "after-plan"
+  ],
+  "steps": [
+    {
+      "name": "write-specs",
+      "prompt": "acceptance-harness.md",
+      "model": "building",
+      "access": "write"
+    },
+    {
+      "name": "red-gate",
+      "run": "npm run accept -- --expect-red",
+      "timeoutSec": 600
+    }
+  ]
+}

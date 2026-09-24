@@ -30,6 +30,7 @@ import { runSetup } from "./git/setup.ts";
 import { branchNameFor, ensureWorktree, type Worktree } from "./git/worktree-manager.ts";
 import { buildPiArgs } from "./pi/argv.ts";
 import type { LiveRun, RunManager } from "./run/run-manager.ts";
+import { readModelMeta } from "./system-model.ts";
 
 const RESUME = `You were interrupted by a restart of the orchestrator; nothing else changed. Check the state of your work, then continue the task from where you left off. Your original instructions still apply, including writing ${STAGE_RESULT_FILE} when you are done.`;
 
@@ -369,6 +370,8 @@ export class StageRunner {
 			partials["invariant-protocol"] = (project.invariantSimulation ?? config.invariantSimulation) ? this.invariantBlock(stage, join(cardDir, "reviews", "invariant-simulation.md"), baseCommit, read) : "";
 			partials["parallel-work"] = this.parallelWorkBlock(stage, project);
 			partials["research"] = this.researchBlock(stage, cardDir);
+			partials["system-model"] = this.systemModelBlock(stage, project);
+			partials["acceptance"] = this.acceptanceBlock(stage, project, worktreePath);
 			return renderPrompt(
 				read(STAGE_SPECS[stage].promptFile),
 				{
@@ -419,6 +422,45 @@ export class StageRunner {
 			return `# Invariant checklist\n\nA simulation has modeled this change; its report is at \`${simulationReport}\`. Read it first. Verify every invariant in its **Test targets** section, and confirm each finding it marked blocking has actually been addressed. In the test report, give a verdict per invariant — **held**, **violated** (with the evidence) or **not observable** — before your overall verdict.`;
 		}
 		return `# Invariant checklist\n\nNo simulation has been run for this card, so derive the checklist yourself and test against it: apply the method below to the change (\`git diff ${baseCommit}\` and \`git log ${baseCommit}..HEAD\`) and to the plan. In the test report, give a verdict per invariant — **held**, **violated** (with the evidence) or **not observable** — before your overall verdict.\n\n${method}`;
+	}
+
+	/**
+	 * Points the planner at the project's system model when one has been built: the read-only
+	 * understanding pass that mapped domains, actors, state and invariants as the code stands.
+	 */
+	private systemModelBlock(stage: AgentStage, project: Project): string {
+		if (stage !== "planning") return "";
+		const modelPath = paths.systemModel(this.deps.config, project.id);
+		if (!existsSync(modelPath)) return "";
+		const meta = readModelMeta(this.deps.config, project.id);
+		const stamp = meta ? `, built ${new Date(meta.builtAt).toISOString().slice(0, 10)} at commit ${meta.commit.slice(0, 10)}` : "";
+		return `# System model\n\nThis project has a system model at \`${modelPath}\`${stamp} — a read-only pass that mapped the system's domains, actors, state and invariants as the code stands. Read it before planning. Treat its invariants as standing constraints your plan must respect, and say where this work touches or changes the model. It may be stale where the code has moved on since it was written; the codebase wins.`;
+	}
+
+	/**
+	 * The acceptance-first contract, present only where the project turned acceptance gates on: the
+	 * planner must end its plan with concrete test targets; the builder inherits those targets as
+	 * already-written failing specs and may not touch them.
+	 */
+	private acceptanceBlock(stage: AgentStage, project: Project, worktreePath: string): string {
+		if (!(project.acceptanceGates ?? this.deps.config.acceptanceGates)) return "";
+		if (stage === "planning") {
+			return [
+				"# Acceptance first",
+				"",
+				"This project is built test-first. End the plan with a `## Test targets` section: one numbered line per behavior the work must exhibit, each observable through the running application (its API or its UI), not through internals. Derive them from your invariants — every invariant that matters becomes at least one target. Targets must be concrete enough to test: “creating the same todo twice yields one todo”, not “handles duplicates well”.",
+				"",
+				"After the plan passes, an agent turns these targets into failing acceptance specs (the red gate); a build only moves on once every spec passes (the green gate).",
+			].join("\n");
+		}
+		if (stage === "building") {
+			return [
+				"# Acceptance specs are the contract",
+				"",
+				`The directory \`${join(worktreePath, "acceptance", "specs")}\` holds acceptance specs derived from the plan's test targets; \`npm run accept\` runs them. They are the behavioral definition of done: make every spec pass without editing, deleting or weakening a spec. If a spec is genuinely wrong — it contradicts the plan, not your implementation — report \`blocked\` with the spec's name instead of changing it.`,
+			].join("\n");
+		}
+		return "";
 	}
 
 	/**

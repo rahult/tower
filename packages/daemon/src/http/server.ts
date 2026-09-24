@@ -16,6 +16,7 @@ import { matchProject, readIntent, taggedProject } from "../assist.ts";
 import { suggestCommands } from "../project-probe.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
 import { flowsTriggered, loadFlows, runsOnBacklogCard } from "../flows.ts";
+import { listArchetypes, scaffoldFromArchetype, targetDir } from "../greenfield.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { listRemotes } from "../pr/gh.ts";
@@ -25,6 +26,7 @@ import type { RunManager } from "../run/run-manager.ts";
 import type { SessionDriver } from "../pi/session-driver.ts";
 import { describeModels, knownModels, parseModels, SettingsError, settingsFile, writeModels } from "../settings.ts";
 import type { StageRunner } from "../stage-runner.ts";
+import { modelState } from "../system-model.ts";
 import { serveWeb } from "./static.ts";
 
 export interface AppDeps {
@@ -78,7 +80,7 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db) }));
 
-	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, maxCrew: config.maxCrew, feedbackRepo: config.feedbackRepo });
+	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, understandBeforePlan: config.understandBeforePlan, acceptanceGates: config.acceptanceGates, maxCrew: config.maxCrew, feedbackRepo: config.feedbackRepo });
 
 	app.get("/api/settings", (c) => c.json(settingsView()));
 
@@ -139,6 +141,8 @@ export function createApp(deps: AppDeps): Hono {
 			reviewFlows: null,
 			invariantSimulation: null,
 			subagents: null,
+			understandBeforePlan: null,
+			acceptanceGates: null,
 			hasOrigin: (await listRemotes(repoPath)).includes("origin"),
 			createdAt: Date.now(),
 		};
@@ -153,6 +157,25 @@ export function createApp(deps: AppDeps): Hono {
 		const project = getProject(db, c.req.param("id"));
 		if (!project) throw new HttpError(404, "Project not found");
 		return c.json(await suggestCommands({ config, driver, repoPath: project.repoPath }));
+	});
+
+	// The archetypes a project can be scaffolded from when it starts as an idea rather than a checkout.
+	app.get("/api/archetypes", (c) => c.json({ archetypes: listArchetypes(config) }));
+
+	// How the project's system model relates to the code as it stands.
+	app.get("/api/projects/:id/model", async (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const { state, meta } = await modelState(config, project.id, project.repoPath, project.defaultBranch);
+		return c.json({ state, commit: meta?.commit ?? null, builtAt: meta?.builtAt ?? null });
+	});
+
+	// Understand the system: the read-only pass runs on its own card, and its report becomes the
+	// project's system model — what every planner reads before planning work on this codebase.
+	app.post("/api/projects/:id/understand", (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		return c.json(orchestrator.understandProject(project.id), 202);
 	});
 
 	app.patch("/api/projects/:id", async (c) => {
@@ -182,6 +205,16 @@ export function createApp(deps: AppDeps): Hono {
 			// null goes back to Tower's default.
 			if (body.subagents !== null && typeof body.subagents !== "boolean") throw new HttpError(400, '"subagents" must be a boolean, or null for the default');
 			settings.subagents = body.subagents as boolean | null;
+		}
+		if (body.understandBeforePlan !== undefined) {
+			// null goes back to Tower's default.
+			if (body.understandBeforePlan !== null && typeof body.understandBeforePlan !== "boolean") throw new HttpError(400, '"understandBeforePlan" must be a boolean, or null for the default');
+			settings.understandBeforePlan = body.understandBeforePlan as boolean | null;
+		}
+		if (body.acceptanceGates !== undefined) {
+			// null goes back to Tower's default.
+			if (body.acceptanceGates !== null && typeof body.acceptanceGates !== "boolean") throw new HttpError(400, '"acceptanceGates" must be a boolean, or null for the default');
+			settings.acceptanceGates = body.acceptanceGates as boolean | null;
 		}
 		if (body.concurrencyLimit !== undefined) {
 			const limit = Number(body.concurrencyLimit);
@@ -232,12 +265,60 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(card, 201);
 	});
 
+	// One factory for both doors into greenfield work: the Projects page's form and the ask box's
+	// "create a todo app". The archetype is the engineering baseline — layout, toolchain, test harness,
+	// commands — so the first card plans the app itself, and the idea goes straight to planning.
+	const scaffoldProject = async (name: string, archetype: string): Promise<Project> => {
+		if (!listArchetypes(config).some((candidate) => candidate.name === archetype)) throw new HttpError(400, `There is no archetype called "${archetype}"`);
+		const dir = targetDir(config, name);
+		const manifest = await scaffoldFromArchetype({ config, archetype, dir });
+		const project: Project = {
+			id: shortId(),
+			name,
+			repoPath: dir,
+			defaultBranch: "main",
+			setupCommand: manifest.setup ?? null,
+			verifyCommand: manifest.verify ?? null,
+			testCommand: manifest.test ?? null,
+			previewCommand: manifest.previewCommand ?? null,
+			previewUrl: manifest.previewUrl ?? null,
+			trustProjectPi: false,
+			extensions: [],
+			concurrencyLimit: 1,
+			stageConfig: {},
+			reviewFlows: null,
+			invariantSimulation: null,
+			subagents: null,
+			// Nothing exists yet, so there is no system to understand first; a manifest that carries the
+			// acceptance contract is born test-first.
+			understandBeforePlan: false,
+			acceptanceGates: manifest.acceptance === true ? true : null,
+			hasOrigin: false,
+			createdAt: Date.now(),
+		};
+		insertProject(db, project);
+		bus.publish({ topic: "board", type: "project_upserted", data: project });
+		return project;
+	};
+
+	// A project born from an idea.
+	app.post("/api/projects/from-idea", async (c) => {
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const name = requireString(body, "name");
+		const idea = requireString(body, "idea");
+		const archetype = typeof body.archetype === "string" && body.archetype.trim() ? body.archetype.trim() : "web-app";
+		const project = await scaffoldProject(name, archetype);
+		const card = createCard(project.id, typeof body.title === "string" && body.title.trim() ? body.title.trim() : `Build ${name}`, idea);
+		await orchestrator.enqueueCard(card.id);
+		return c.json({ project, card: getCard(db, card.id) ?? card }, 201);
+	});
+
 	// The command box's free-form ask: one cheap session reads the line (an @name tags the project) and
-	// Tower does the acting, so the most a stray sentence can ever do is file or start one card.
+	// Tower does the acting, so the most a stray sentence can ever do is file or start one card — or,
+	// when the line describes an application to build from scratch, scaffold the project for it.
 	app.post("/api/assist", async (c) => {
 		const text = requireString((await c.req.json()) as Record<string, unknown>, "text");
 		const projects = listProjects(db).map(({ id, name }) => ({ id, name }));
-		if (projects.length === 0) throw new HttpError(400, "Add a project to the board before asking Tower to act");
 		const tag = taggedProject(text, projects);
 
 		let verdict = null;
@@ -252,6 +333,25 @@ export function createApp(deps: AppDeps): Hono {
 			return c.json({ ok: false, reply: `Tower left that alone — it did not read as work to file or start. Name the work, e.g. “add retry with backoff @${projects[0]?.name}”.` });
 		}
 
+		if (verdict?.action === "new_project") {
+			const name = verdict.title.replace(/^build\s+/i, "").trim().slice(0, 60) || "New project";
+			const archetypes = listArchetypes(config);
+			const archetype = archetypes.some((candidate) => candidate.name === "web-app") ? "web-app" : archetypes[0]?.name;
+			if (!archetype) throw new HttpError(400, "No archetypes are installed, so there is nothing to scaffold from");
+			const project = await scaffoldProject(name, archetype);
+			const card = createCard(project.id, verdict.title || `Build ${name}`, verdict.brief);
+			await orchestrator.enqueueCard(card.id);
+			const final = getCard(db, card.id) ?? card;
+			return c.json({
+				ok: true,
+				action: "new_project",
+				card: { id: final.id, title: final.title, stage: final.stage, status: final.status },
+				projectId: project.id,
+				reply: `Scaffolding “${name}” from the ${archetype} archetype — planning the idea now.`,
+			});
+		}
+
+		if (projects.length === 0) throw new HttpError(400, "Add a project to the board before asking Tower to act");
 		const project = (verdict && matchProject(verdict.project, projects)) ?? tag ?? (projects.length === 1 ? projects[0] : null);
 		if (!project) {
 			// Nowhere certain to put it: ask, rather than guess across many projects.
@@ -264,7 +364,7 @@ export function createApp(deps: AppDeps): Hono {
 		let action = "add_card";
 		if (verdict?.action === "start_card") {
 			action = "start_card";
-			orchestrator.dispatch(card.id, { type: "enqueue" });
+			await orchestrator.enqueueCard(card.id);
 		} else if (verdict?.action === "research_card") {
 			// Explore before committing: the card is filed and the deep-research flow runs on it, no lifecycle started.
 			action = "research_card";
@@ -304,7 +404,7 @@ export function createApp(deps: AppDeps): Hono {
 	app.post("/api/cards/:id/preview", (c) => c.json(bench.startPreview(cardOr404(c.req.param("id")).id), 202));
 	app.delete("/api/cards/:id/preview", (c) => c.json(bench.stopPreview(cardOr404(c.req.param("id")).id)));
 
-	app.post("/api/cards/:id/enqueue", (c) => c.json(orchestrator.dispatch(cardOr404(c.req.param("id")).id, { type: "enqueue" }), 202));
+	app.post("/api/cards/:id/enqueue", async (c) => c.json(await orchestrator.enqueueCard(cardOr404(c.req.param("id")).id), 202));
 
 	// Anyone running this Tower can say what is wrong or missing; it lands on the feedback repo as an
 	// issue, and intake turns it into a backlog card only a person's approval can start.

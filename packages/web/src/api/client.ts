@@ -47,6 +47,8 @@ export interface Settings {
 	knownModels: string[];
 	invariantSimulation: boolean;
 	subagents: boolean;
+	understandBeforePlan: boolean;
+	acceptanceGates: boolean;
 	maxCrew: number;
 	feedbackRepo: string;
 }
@@ -108,12 +110,31 @@ export interface FiledFeedback {
 
 export type FeedbackKind = "bug" | "feature" | "feedback";
 
-export interface AssistOutcome {
+export type AssistOutcome = {
 	ok: boolean;
-	action?: "add_card" | "start_card";
+	action?: "add_card" | "start_card" | "research_card" | "new_project";
 	card?: Pick<Card, "id" | "title" | "stage" | "status">;
 	projectId?: string;
 	reply: string;
+};
+
+/** An archetype: the named engineering baseline a project can be scaffolded from. */
+export interface Archetype {
+	name: string;
+	title: string;
+	description: string;
+}
+
+export interface FromIdeaResult {
+	project: Project;
+	card: Card;
+}
+
+/** How a project's system model relates to the code as it stands. */
+export interface ProjectModel {
+	state: "missing" | "fresh" | "stale";
+	commit: string | null;
+	builtAt: number | null;
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -142,8 +163,12 @@ export const api = {
 	settings: () => request<Settings>("GET", "/api/settings"),
 	saveSettings: (models: Record<string, { model: string; thinking: string } | null>) => request<Settings>("PUT", "/api/settings", { models }),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
+	archetypes: () => request<{ archetypes: Archetype[] }>("GET", "/api/archetypes"),
+	fromIdea: (body: { name: string; idea: string; archetype: string }) => request<FromIdeaResult>("POST", "/api/projects/from-idea", body),
+	projectModel: (id: string) => request<ProjectModel>("GET", `/api/projects/${id}/model`),
+	understand: (id: string) => request<Card>("POST", `/api/projects/${id}/understand`),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
-	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
+	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	assist: (text: string) => request<AssistOutcome>("POST", "/api/assist", { text }),
 	fileFeedback: async (body: { kind: FeedbackKind; title: string; details: string; includeDiagnostics: boolean }): Promise<FiledFeedback> => {

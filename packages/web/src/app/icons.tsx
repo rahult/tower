@@ -32,12 +32,13 @@ export function IconSprite() {
 				<symbol id="i-density-compact" viewBox="0 0 24 24"><path d="M4 5h16M4 9.5h16M4 14h16M4 18.5h16" /></symbol>
 				<symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6" /></symbol>
 				<symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6" /></symbol>
+				<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" /></symbol>
 			</defs>
 		</svg>
 	);
 }
 
-export type IconName = "tower" | "search" | "plus" | "bell" | "sun" | "moon" | "x" | "check" | "back" | "play" | "branch" | "pr" | "issue" | "ext" | "send" | "retry" | "board" | "folder" | "chart" | "focus" | "density" | "density-compact" | "chev-l" | "chev-r";
+export type IconName = "tower" | "search" | "plus" | "bell" | "sun" | "moon" | "x" | "check" | "back" | "play" | "branch" | "pr" | "issue" | "ext" | "send" | "retry" | "board" | "folder" | "chart" | "focus" | "density" | "density-compact" | "chev-l" | "chev-r" | "spark";
 
 /** A stroke icon from the shared sprite; `className` defaults to the 16px `.icon` size. */
 export function Icon({ name, className = "icon" }: { name: IconName; className?: string }): JSX.Element {

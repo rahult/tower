@@ -1,12 +1,13 @@
 # Tower roadmap — the harness a developer and a researcher both want
 
-What Tower is today: a board that turns units of work into cards, plans them with a strong
-model, builds them (optionally with a parallel crew in own worktrees), verifies with a
-deterministic command, reviews with adversarial flows, and finishes as a pull request or a
-local merge. The pillars below are ordered by how much leverage they add per unit of build
-cost. Items marked **[shipped]** landed; the rest is the committed backlog.
+What Tower is today: a board that turns units of work into cards (or ideas into scaffolded
+projects), plans them with a strong model grounded in a per-project system model, builds them
+(optionally with a parallel crew in own worktrees), verifies with deterministic commands and
+acceptance gates, reviews with adversarial flows, and finishes as a pull request or a local
+merge. The pillars below are ordered by how much leverage they add per unit of build cost.
+Items marked **[shipped]** landed; the rest is the committed backlog.
 
-## The three pillars
+## The four pillars
 
 1. **Agents you design yourself — deterministic or agentic, run when required.**
    Verifiable software needs gates whose verdicts don't depend on a model's opinion, and
@@ -18,6 +19,10 @@ cost. Items marked **[shipped]** landed; the rest is the committed backlog.
 3. **Quality close to a human expert.** Staged verification: deterministic checks, then
    adversarial review, then human gates at the moments that matter — with evidence attached
    to every verdict.
+4. **The harness carries the practices, so the person only carries the idea.** Good software
+   comes from method — model the system, derive invariants, test first, verify what matters —
+   and method can be encoded: in archetypes that scaffold new projects, in a system model that
+   explains existing ones, and in gates that make the discipline non-optional.
 
 ## P0 — Composable agents: deterministic steps + lifecycle triggers [shipped 2026-09-24]
 
@@ -59,7 +64,38 @@ flows ran only on demand or as post-test reviews.
 - **Ask box**: `⌘K` lines that read as exploration ("research how to…", "what's the best…")
   become a `research_card` — the card is filed and the deep-research flow starts on it.
 
-## P2 — Verification depth (next)
+## P2 — From an idea, and into existing systems [shipped 2026-09-24]
+
+The OpenRig-inspired slice: a harness where "create a todo app" produces senior-grade work,
+and where existing repositories are understood before they are changed.
+
+- **Archetypes**: `archetypes/web-app/` is a versioned engineering baseline — Vite + React
+  frontend, zero-dependency Node (`node:http` + `node:sqlite`) backend, vitest, an acceptance
+  runner, and a conventions README. The scaffold owns the practices so the first card plans
+  the app, not the toolchain. `GET /api/archetypes` lists what is installed.
+- **From idea to project**: `POST /api/projects/from-idea` (and a "New from idea" dialog on
+  the Projects wall) scaffolds the archetype into `<home>/repos/<slug>`, registers the project
+  with the manifest's commands, files the idea as the first card, and starts planning. The ask
+  box classifies build-from-scratch lines (`"create a todo app"`) as `new_project` — it works
+  on an empty board. From-idea projects are born with acceptance gates on when the archetype
+  declares `"acceptance": true`.
+- **The system model (brownfield)**: the `understand-system` flow runs a read-only pass over
+  a checkout and writes the project's model — domains, actors, state, invariants as built
+  with code sources, risks. `POST /api/projects/:id/understand` runs it on an inert carrier
+  card and promotes the report to `<home>/projects/<id>/system-model.md`, stamped with the
+  commit it describes; the editor shows fresh/stale/missing and a rebuild button. The
+  `understandBeforePlan` toggle (project or `TOWER_UNDERSTAND_BEFORE_PLAN`) rebuilds a
+  missing or stale model **before planning** — a new lifecycle hook phase, rerun by retry —
+  and the planner reads the model in its prompt. The codebase wins where the model is stale.
+- **Acceptance gates (TDD, enforced)**: the `acceptanceGates` toggle (project or
+  `TOWER_ACCEPTANCE_GATES`) turns the lifecycle test-first. The planner must end its plan
+  with `## Test targets`; the `acceptance-red` after-plan flow turns them into failing specs
+  and a deterministic gate proves they are red (`npm run accept -- --expect-red` — a spec
+  that already passes fails the gate); the builder inherits the specs as a contract it may
+  not weaken; the `acceptance-green` after-build gate only lets a build move on when every
+  spec passes. An empty harness never counts as a pass.
+
+## P3 — Verification depth (next)
 
 - **Promote invariant simulation to an after-build hook**: the modeling protocol already
   ships in planning/testing; with P0 a project can copy `invariant-simulation.flow.json`
@@ -73,7 +109,7 @@ flows ran only on demand or as post-test reviews.
 - **Flaky-test memory**: a run of the same failing signature N times files a card with the
   history attached instead of rebuilding blindly.
 
-## P3 — Research harness depth
+## P4 — Research harness depth
 
 - **Deep research on the board, not just the card**: a Research lane where a question
   doesn't need a project yet; promoting a brief to a card picks the project then.
@@ -84,14 +120,14 @@ flows ran only on demand or as post-test reviews.
 - **Scheduled deterministic agents**: `when: ["schedule"]` + an interval — nightly drift
   checks, dependency audits, cost reports as first-class flows.
 
-## P4 — Work shaping
+## P5 — Work shaping
 
 - **Stacked cards**: a card whose base is another card's branch (design note in
   `~/.zcode` project memory; plumbing exists — `ensureWorktree` takes a base branch).
 - **Card dependencies**: explicit "after card X" scheduling beyond stacking.
 - **Archive/delete**: board hygiene without database surgery.
 
-## P5 — Product surface
+## P6 — Product surface
 
 - **Usage accounting for assist sessions** (today card-less sessions are invisible to
   Usage).

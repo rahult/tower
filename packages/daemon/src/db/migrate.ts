@@ -123,6 +123,12 @@ const MIGRATIONS: string[] = [
 	ALTER TABLE cards ADD COLUMN issue_number INTEGER;
 	ALTER TABLE cards ADD COLUMN issue_author TEXT;
 	`,
+	`
+	-- Understand the system before planning (per-project system model), and acceptance gates that turn a
+	-- plan's test targets into failing tests before building and passing ones after. NULL means Tower's default.
+	ALTER TABLE projects ADD COLUMN understand_before_plan INTEGER;
+	ALTER TABLE projects ADD COLUMN acceptance_gates INTEGER;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

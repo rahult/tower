@@ -8,6 +8,8 @@ export interface PaletteActions {
 	startCard: (cardId: string) => void;
 	addWork: () => void;
 	addProject: () => void;
+	/** Scaffold a project from an idea: the archetype is the baseline, the idea becomes the first card. */
+	newIdea: () => void;
 	/** The free-form ask: one line of natural language, an @name tagging the project. */
 	askTower: (text: string) => void;
 	sendFeedback: () => void;
@@ -38,6 +40,7 @@ export function Palette({ cards, projectNames, projects, actions, onClose }: { c
 	const items = useMemo(() => {
 		const commands: Item[] = [
 			{ group: "Commands", label: "Add work…", hint: "n", run: actions.addWork },
+			{ group: "Commands", label: "New from idea…", hint: "scaffold a project and plan it", run: actions.newIdea },
 			{ group: "Commands", label: "Add a project…", hint: "pick a repository directory", run: actions.addProject },
 			{ group: "Commands", label: "Send feedback…", hint: "bug, idea, praise", run: actions.sendFeedback },
 			{ group: "Commands", label: "Model settings…", hint: "which model runs each stage", run: actions.openModels },

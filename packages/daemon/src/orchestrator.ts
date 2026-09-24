@@ -10,6 +10,7 @@ import {
 	type FailureDecision,
 	type GateKind,
 	pickNext,
+	type Project,
 	type ReadyCard,
 	requiredGates,
 	type SchedulerState,
@@ -19,19 +20,20 @@ import {
 } from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
-import { getCard, getCardByIssue, insertCard, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard } from "./db/repo-cards.ts";
+import { getCard, getCardByIssue, insertCard, listCards, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard } from "./db/repo-cards.ts";
 import { decideGate, getGate, insertGate } from "./db/repo-gates.ts";
 import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import { issueBrief } from "./feedback.ts";
-import { flowsTriggered, type FlowTrigger, loadFlows } from "./flows.ts";
+import { flowsTriggered, type Flow, type FlowTrigger, loadFlows } from "./flows.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
 import { type Issue, closeIssue, commentOnIssue, createPullRequest, listIssues, listRemotes, originSlug, pushBranch, viewPullRequest } from "./pr/gh.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
+import { modelState, promoteSystemModel } from "./system-model.ts";
 import { runVerify } from "./verifier.ts";
 
 export interface OrchestratorDeps {
@@ -47,6 +49,11 @@ export interface OrchestratorDeps {
 export class ConflictError extends Error {}
 
 const verifyOutputFile = (attempt: number) => `verify-output-${attempt}.txt`;
+
+/** The flow that builds a project's system model; the before-plan hook runs it by name, then promotes its report. */
+const UNDERSTAND_FLOW = "understand-system";
+/** The shipped acceptance gates: they run only where the project turned acceptance gates on. */
+const ACCEPTANCE_FLOWS = new Set(["acceptance-red", "acceptance-green"]);
 
 /** The only caller of core.transition() and the only executor of its effects. */
 export class Orchestrator {
@@ -85,6 +92,91 @@ export class Orchestrator {
 		return this.dispatch(cardId, { type: "resume", wasVerifying: lastRunForCard(this.deps.db, cardId)?.kind === "verify" });
 	}
 
+	/** The enqueue the board and the ask box use: it gathers whether the project wants its system model rebuilt before planning. */
+	async enqueueCard(cardId: string): Promise<Card> {
+		const understandFirst = await this.understandFirstFor(cardId);
+		return this.dispatch(cardId, understandFirst ? { type: "enqueue", understandFirst: true } : { type: "enqueue" });
+	}
+
+	/** Whether enqueue should run the understanding pass first: the project opted in, and the model is missing or the code has moved past it. */
+	private async understandFirstFor(cardId: string): Promise<boolean> {
+		const card = getCard(this.deps.db, cardId);
+		const project = card && getProject(this.deps.db, card.projectId);
+		if (!project || !(project.understandBeforePlan ?? this.deps.config.understandBeforePlan)) return false;
+		try {
+			const { state } = await modelState(this.deps.config, project.id, project.repoPath, project.defaultBranch);
+			return state !== "fresh";
+		} catch {
+			return false;
+		}
+	}
+
+	/**
+	 * Builds the project's system model on demand: an inert backlog card carries the understanding run
+	 * (its transcript is the audit trail), and when the run passes, its report becomes the project's
+	 * system model — the one every planner reads until the code moves past it.
+	 */
+	understandProject(projectId: string): Card {
+		const project = getProject(this.deps.db, projectId);
+		if (!project) throw new Error(`Project not found: ${projectId}`);
+		const title = `System model — ${project.name}`;
+		if (listCards(this.deps.db).some((candidate) => candidate.projectId === projectId && candidate.title === title && this.isBusy(candidate.id))) {
+			throw new ConflictError("An understanding run is already in flight for this project");
+		}
+		const card = this.fileCard(projectId, title, "Build the project's system model: domains, actors, state, invariants as built. This card carries the understanding run; the model it produces is saved on the project and read by every planner afterwards.");
+		const work = this.deps.flows
+			.runFlows(card.id, [UNDERSTAND_FLOW])
+			.then(async (outcome) => {
+				if (outcome.kind === "settled" && outcome.result === "pass") {
+					try {
+						await this.promoteUnderstanding(card.id);
+					} catch (error) {
+						console.error(`understanding ${project.name}: could not save the model —`, error instanceof Error ? error.message : error);
+					}
+				} else if (outcome.kind === "failed") {
+					console.error(`understanding ${project.name}:`, outcome.error);
+				} else if (outcome.kind === "settled") {
+					console.error(`understanding ${project.name}: the run did not pass (${outcome.summary})`);
+				}
+				this.deps.bus.publish({ topic: "board", type: "card_upserted", data: getCard(this.deps.db, card.id) });
+			})
+			.catch((error) => console.error(`understanding ${project.name} failed:`, error instanceof Error ? error.message : error))
+			.finally(() => this.pending.delete(work));
+		this.pending.add(work);
+		return card;
+	}
+
+	/** Files a card straight onto the backlog: inert until a person or a policy starts it. */
+	private fileCard(projectId: string, title: string, brief: string): Card {
+		const now = Date.now();
+		const card: Card = {
+			id: randomUUID().replaceAll("-", "").slice(0, 8),
+			projectId,
+			title,
+			brief,
+			stage: "backlog",
+			status: "idle",
+			priority: 0,
+			position: now,
+			branchName: null,
+			worktreePath: null,
+			baseCommit: null,
+			attempt: 0,
+			stageConfig: {},
+			prUrl: null,
+			prState: null,
+			needsAttentionReason: null,
+			issueUrl: null,
+			issueNumber: null,
+			issueAuthor: null,
+			createdAt: now,
+			updatedAt: now,
+		};
+		insertCard(this.deps.db, card);
+		this.deps.bus.publish({ topic: "board", type: "card_upserted", data: card });
+		return card;
+	}
+
 	/** Boot-time recovery: whatever the previous process left in flight is now interrupted; the queue simply continues. */
 	recover(): void {
 		const { db } = this.deps;
@@ -117,12 +209,17 @@ export class Orchestrator {
 				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, afterPlanFlows: false, afterBuildFlows: false, onFailure: { action: "needs_attention", reason: "" } },
 			});
 		}
-		// Stuck on a failed hook flow: the fix is a rebuild with the gate's output, not another test run.
+		// Stuck on a failed hook flow: the fix is a rebuild with the gate's output, not another test run —
+		// except a failed before-plan understanding, which reruns itself: planning has nothing to go on without it.
 		if (card && !feedback && card.status === "needs_attention") {
 			const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled");
 			if (last?.kind === "flow_step" && last.resultStatus !== "pass" && (last.stage === "planning" || last.stage === "testing")) {
 				const summary = last.resultSummary ?? "";
-				const gate = last.stage === "testing" ? { gateFeedback: `The after-build flows did not pass and must pass before testing:\n\n${summary}` } : { feedback: `The after-plan flows did not pass:\n\n${summary}` };
+				const gate = last.id.includes(UNDERSTAND_FLOW)
+					? { beforePlan: true }
+					: last.stage === "testing"
+						? { gateFeedback: `The after-build flows did not pass and must pass before testing:\n\n${summary}` }
+						: { feedback: `The after-plan flows did not pass:\n\n${summary}` };
 				return this.dispatch(cardId, { type: "retry", ...gate, hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
 			}
 		}
@@ -185,8 +282,8 @@ export class Orchestrator {
 		else {
 			// Hooks only matter where they can run: an after-plan set for a passing plan, after-build for a passing build.
 			const card = getCard(this.deps.db, cardId);
-			const afterPlanFlows = outcome.result === "pass" && card?.stage === "planning" && this.triggeredFlows("after-plan").length > 0;
-			const afterBuildFlows = outcome.result === "pass" && card?.stage === "building" && this.triggeredFlows("after-build").length > 0;
+			const afterPlanFlows = outcome.result === "pass" && card?.stage === "planning" && this.triggeredFlows("after-plan", card.projectId).length > 0;
+			const afterBuildFlows = outcome.result === "pass" && card?.stage === "building" && this.triggeredFlows("after-build", card.projectId).length > 0;
 			this.dispatch(cardId, {
 				type: "run_settled",
 				result: outcome.result,
@@ -223,9 +320,18 @@ export class Orchestrator {
 		return this.triggeredFlows("after-tests");
 	}
 
-	/** The flows that run at a lifecycle moment, whatever their source directory. */
-	private triggeredFlows(trigger: FlowTrigger): string[] {
-		return flowsTriggered(loadFlows(this.deps.config), trigger).map((flow) => flow.name);
+	/** The flows that run at a lifecycle moment, whatever their source directory. Acceptance gates run only where opted in. */
+	private triggeredFlows(trigger: FlowTrigger, projectId?: string): string[] {
+		const project = projectId ? getProject(this.deps.db, projectId) : null;
+		return flowsTriggered(loadFlows(this.deps.config), trigger)
+			.filter((flow) => this.flowAllowed(flow, project))
+			.map((flow) => flow.name);
+	}
+
+	/** Everything runs wherever its trigger asks, except the shipped acceptance gates, which a project must opt into. */
+	private flowAllowed(flow: Flow, project: Project | null): boolean {
+		if (!ACCEPTANCE_FLOWS.has(flow.name)) return true;
+		return (project?.acceptanceGates ?? this.deps.config.acceptanceGates) === true;
 	}
 
 	private verifyCommandFor(cardId: string): string | null {
@@ -341,33 +447,67 @@ export class Orchestrator {
 	}
 
 	/**
-	 * Runs a lifecycle hook: the after-plan or after-build flows. Unlike reviews, a hook that does not pass
-	 * stops the card — deterministic gates exist to be satisfied, not weighed.
+	 * Runs a lifecycle hook. After-plan and after-build flows guard the plan and the build; the before-plan
+	 * hook guards planning itself — it builds the project's system model, promotes it, and only then may
+	 * planning start. Unlike reviews, a hook that does not pass stops the card — deterministic gates exist
+	 * to be satisfied, not weighed.
 	 */
-	private async hookFlows(cardId: string, phase: "after_plan" | "after_build"): Promise<void> {
+	private async hookFlows(cardId: string, phase: "before_plan" | "after_plan" | "after_build"): Promise<void> {
 		this.launching.delete(cardId);
 		this.dispatch(cardId, { type: "hook_started" });
-		const outcome = await this.deps.flows.runFlows(cardId, this.triggeredFlows(phase === "after_plan" ? "after-plan" : "after-build"));
+		const names = phase === "before_plan" ? [UNDERSTAND_FLOW] : this.triggeredFlows(phase === "after_plan" ? "after-plan" : "after-build", getCard(this.deps.db, cardId)?.projectId);
+		const outcome = await this.deps.flows.runFlows(cardId, names);
 		if (this.stopping) return;
-		if (outcome.kind === "aborted") this.dispatch(cardId, { type: "run_aborted" });
-		else if (outcome.kind === "failed") this.dispatch(cardId, { type: "run_failed", error: outcome.error });
-		else {
-			const passed = outcome.result === "pass";
-			this.dispatch(cardId, {
-				type: "hook_finished",
-				passed,
-				reason: passed ? "" : `The ${phase === "after_plan" ? "after-plan" : "after-build"} flows did not pass:\n\n${outcome.summary}`,
-				context: {
-					requiredGates: this.gatesFor(cardId),
-					hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
-					hasQuestions: false,
-					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
-					afterPlanFlows: false,
-					afterBuildFlows: false,
-					onFailure: this.failureDecision(cardId, outcome.summary, null),
-				},
-			});
+		if (outcome.kind === "aborted") return void this.dispatch(cardId, { type: "run_aborted" });
+		if (outcome.kind === "failed") return void this.dispatch(cardId, { type: "run_failed", error: outcome.error });
+		let passed = outcome.result === "pass";
+		let reason: string;
+		if (phase === "before_plan") {
+			if (!passed) {
+				reason = `The before-plan understanding did not pass:\n\n${outcome.summary}`;
+			} else {
+				// The model must actually land before planning may use it; a failed promotion fails the hook.
+				try {
+					await this.promoteUnderstanding(cardId);
+					reason = "";
+				} catch (error) {
+					passed = false;
+					reason = `The before-plan understanding finished but its model could not be saved: ${error instanceof Error ? error.message : String(error)}`;
+				}
+			}
+		} else {
+			reason = passed ? "" : `The ${phase === "after_plan" ? "after-plan" : "after-build"} flows did not pass:\n\n${outcome.summary}`;
 		}
+		this.dispatch(cardId, {
+			type: "hook_finished",
+			passed,
+			reason,
+			...(phase === "before_plan" ? { phase: "before_plan" as const } : {}),
+			context: {
+				requiredGates: this.gatesFor(cardId),
+				hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
+				hasQuestions: false,
+				hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
+				afterPlanFlows: false,
+				afterBuildFlows: false,
+				onFailure: this.failureDecision(cardId, outcome.summary, null),
+			},
+		});
+	}
+
+	/** Copies the understanding run's report to the project's system model, stamped with the commit it describes. */
+	private async promoteUnderstanding(cardId: string): Promise<void> {
+		const card = getCard(this.deps.db, cardId) as Card;
+		const project = getProject(this.deps.db, card.projectId);
+		if (!project) throw new Error("The card's project is gone");
+		await promoteSystemModel({
+			config: this.deps.config,
+			projectId: project.id,
+			repoPath: project.repoPath,
+			defaultBranch: project.defaultBranch,
+			cardId,
+			reportPath: join(paths.cardDir(this.deps.config, cardId), "reviews", `${UNDERSTAND_FLOW}.md`),
+		});
 	}
 
 	/** Runs a flow, skill, agent or prompt the person asked for. The card's place in its lifecycle does not change. */

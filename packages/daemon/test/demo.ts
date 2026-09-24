@@ -100,6 +100,50 @@ function researchTurn(label: string): FakeTurn {
 	};
 }
 
+/** A scripted understanding pass: the project's system model, the way the real flow writes it. */
+const understandTurn: FakeTurn = {
+	events: [{ type: "message", message: { role: "assistant", text: "System model written.", thinking: "", toolCalls: [] } }],
+	effect: ({ spec, prompt }) => {
+		const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+		if (report)
+			writeFileSync(
+				report,
+				[
+					"# System model",
+					"",
+					"## Purpose and shape",
+					"",
+					"Remembero is a notes application: a single Node service (`server/`) and a React single-page frontend (`web/`).",
+					"",
+					"## Domains",
+					"",
+					"- **Capture** — creating entries (`server/routes/capture.ts`); validation at the boundary.",
+					"- **Storage** — the SQLite store (`server/store.ts`), WAL mode, one file.",
+					"- **Rendering** — the list and composer (`web/src/App.tsx`).",
+					"",
+					"## Actors",
+					"",
+					"- The person, through the web UI and the API.",
+					"- The sync job, every 5 minutes (`server/jobs/sync.ts`) — merges remote changes.",
+					"",
+					"## State and transitions",
+					"",
+					"- An entry: `draft → captured → (merged)`, with `deleted` as a tombstone, never a row removal.",
+					"",
+					"## Invariants as built",
+					"",
+					"- **INV-1** — a captured entry is never lost: writes are WAL-committed before the response (`server/store.ts:48`).",
+					"- **INV-2** — a deleted entry reappears only by explicit restore: the tombstone is checked on every sync merge (`server/jobs/sync.ts:31`).",
+					"",
+					"## Risks and quirks",
+					"",
+					"- The sync job holds no lock; two overlapping runs double-merge (harmless today, fatal if merges gain side effects).",
+				].join("\n"),
+			);
+		writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "System model ready." }));
+	},
+};
+
 const busy: FakeTurn = {
 	hang: true,
 	delayMs: 400,
@@ -158,6 +202,35 @@ const driver = new FakeSessionDriver((spec) => {
 	// The deep-research flow's two steps, so exploring-before-committing is scriptable on the demo board.
 	if (spec.sessionId.includes("deep-research-survey")) return [researchTurn("Survey notes")];
 	if (spec.sessionId.includes("deep-research-synthesize")) return [researchTurn("Research brief")];
+	// The understanding pass that builds a project's system model.
+	if (spec.sessionId.includes("understand-system")) return [understandTurn];
+	// The acceptance harness on a from-idea card: it writes a REAL failing spec, so the real runner
+	// passes the red gate (the behavior does not exist yet) — and the green gate refuses the fake
+	// builder's "done", because /api/habits still answers 404. The gates work; that is the demo.
+	if (spec.sessionId.includes("acceptance-red-write-specs"))
+		return [
+			{
+				events: [{ type: "message", message: { role: "assistant", text: "Acceptance spec written.", thinking: "", toolCalls: [] } }],
+				effect: ({ spec }) => {
+					mkdirSync(join(spec.cwd, "acceptance", "specs"), { recursive: true });
+					writeFileSync(
+						join(spec.cwd, "acceptance", "specs", "list-habits.mjs"),
+						[
+							"export const name = \"a new tracker starts with an empty habit list\";",
+							"",
+							"export async function run({ baseUrl }) {",
+							"  const response = await fetch(`${baseUrl}/api/habits`);",
+							"  if (response.status !== 200) throw new Error(`expected 200 for the habit list, got ${response.status}`);",
+							"  const habits = await response.json();",
+							"  if (!Array.isArray(habits)) throw new Error(\"the habit list is not a list\");",
+							"}",
+							"",
+						].join("\n"),
+					);
+					writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "1 acceptance spec written, red." }));
+				},
+			},
+		];
 	const stage = spec.sessionId.includes("-plan-") ? "plan" : spec.sessionId.includes("-build-") ? "build" : spec.sessionId.includes("-test-") ? "test" : "review";
 	// One reviewer finds something blocking, so the feedback gate has something to show.
 	if (stage === "review") return [reviewTurn(spec.sessionId.includes("adversarial") ? "fail" : "pass")];
@@ -282,6 +355,13 @@ await api("POST", "/api/projects", { repoPath: towerPath });
 	const board = await api("GET", "/api/board");
 	const research = board.cards.find((card: { title: string }) => card.title.startsWith("Research local-first"));
 	if (research) await api("POST", `/api/cards/${research.id}/adhoc`, { flow: "deep-research" });
+}
+// Remembero is understood at boot: the editor shows a fresh system model, and the board carries the
+// inert card whose transcript produced it.
+{
+	const board = await api("GET", "/api/board");
+	const remembero = board.projects.find((project: { name: string }) => project.name === "remembero");
+	if (remembero) await api("POST", `/api/projects/${remembero.id}/understand`);
 }
 
 console.log(`demo board on ${daemon.url} (data in ${root}). Ctrl+C to stop.`);

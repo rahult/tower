@@ -16,6 +16,7 @@ A control tower for [pi](https://pi.dev) coding-agent sessions. Queue work for m
 - **Reviews before you look.** Once tests pass, review flows run in fresh sessions that never saw the builder's work: an adversarial review that tries to break the change, and a SOLID design review. Their findings are waiting at the feedback gate.
 - **Pull requests, watched.** Approve the work and Tower pushes the branch and opens the pull request with `gh`. Failing CI goes to a builder with the failing checks (twice at most), a merge finishes the card and removes its worktree. A repository with no remote simply finishes with the branch ready to merge.
 - **Run anything on a card.** A review flow, any pi skill, one of your `~/.pi/agent/agents` roles, or a plain prompt with the model you choose.
+- **From an idea, or into an existing system.** "New from idea" scaffolds a project from an archetype — the engineering baseline — and the idea becomes the first card, planned immediately. Existing repositories get a **system model**: a read-only pass that maps domains, actors, state and invariants as built, which every planner reads before planning. Acceptance gates make projects test-first: the plan's test targets become failing specs before building, and a build moves on only when they pass.
 - **Live and steerable.** Every session streams to the board. Steer it mid-run, abort it, read its diff. Every session a card has had stays reachable from the rail above its transcript.
 - **Survives restarts.** The queue is persisted; sessions interrupted by a restart resume in the same pi session.
 
@@ -113,6 +114,9 @@ Environment variables, read when the daemon starts:
 | `TOWER_MAX_BUILD_ATTEMPTS` | `3` | Builds per card before a failing test stops the loop |
 | `TOWER_SUBAGENTS` | on | Whether plans may fan out to scouts and parallel stream builders. `0` turns it off everywhere |
 | `TOWER_MAX_CREW` | `3` | How many of a card's scouts or stream builders run at once |
+| `TOWER_UNDERSTAND_BEFORE_PLAN` | off | Rebuild a project's system model before planning when it is missing or stale. `1` turns it on everywhere |
+| `TOWER_ACCEPTANCE_GATES` | off | Enforce the acceptance-first contract (test targets → red specs → green build) everywhere. `1` turns it on |
+| `TOWER_ARCHETYPES_DIR` | `<repo>/archetypes` | Where the from-idea scaffolding looks for archetype templates |
 | `TOWER_REVIEW_FLOWS` | `adversarial-review,solid-review` | Review flows a project runs unless its Settings say otherwise. Empty turns them off |
 | `TOWER_MAX_CI_FIX_ATTEMPTS` | `2` | Times a failing pull request is repaired before the card asks for you |
 | `TOWER_PR_POLL_MS` | `120000` | How often open pull requests are checked |
@@ -175,6 +179,19 @@ A flow is a JSON file: shipped ones are in `flows/`, yours go in `~/.tower/flows
 Not every line of work starts with a task; some start with a question. The shipped `deep-research` flow runs in two steps — a **survey** that maps the question and fetches evidence over the network (docs, the GitHub API, package registries, RFCs — via `curl`), and a **synthesize** step that writes a cited brief: options with trade-offs, a recommendation, what it means for *this* repository, and the open questions. The brief lands in the card's `reviews/` folder.
 
 Research belongs before the lifecycle: the flow is read-only, so it runs on a **backlog card with no worktree**, straight in the project checkout — start it from the card's Run tab, or type an exploring line into the ⌘K box ("research local-first sync @remembero") and the intent reader files the card and starts the research. When a brief exists, the planner is pointed at it, so the research flows into the plan without a copy-paste. Flows that run commands or write code still need a worktree and are refused on backlog cards.
+
+### From an idea, and into an existing system
+
+Two doors, one harness. **New from idea** (Projects wall, or the ⌘K box: "create a todo app") scaffolds a fresh project from an **archetype** — `archetypes/web-app/` ships a Vite + React frontend, a zero-dependency Node + `node:sqlite` backend, vitest and an acceptance runner, with the house conventions in its README. The scaffold owns the toolchain and the practices, so the first card plans the *app*; the plan gate is where the person steers. Archetypes declare their commands in `archetype.json`, and `"acceptance": true` marks the ones that carry the acceptance contract.
+
+**Existing repositories** are understood before they are changed. *Understand this system* (project settings) runs a read-only pass over the checkout and saves the project's **system model** — domains, actors, state, invariants as built, each grounded in a file and line, plus the risks. It is stamped with the commit it describes, so it goes **stale** as the code moves on. Turn on **Understand before plan** and any card whose model is missing or stale rebuilds it before planning starts; the planner always reads the latest model and is told the codebase wins where the two disagree.
+
+**Acceptance gates** (per project; from-idea projects inherit them from the archetype) enforce test-first as gates, not suggestions:
+
+1. The planner ends its plan with `## Test targets` — behaviors observable through the running app.
+2. After the plan passes, the `acceptance-red` flow writes those targets as specs and proves them **red** (`npm run accept -- --expect-red`). A spec that already passes fails the gate: behavior before its build is a lie.
+3. The builder inherits the specs as a contract it must not edit, delete or weaken.
+4. After the build, `acceptance-green` runs the specs; a build moves on only when every one of them passes. No specs at all fails both gates — an empty harness never looks like a pass.
 
 ### Sub-agent crews
 

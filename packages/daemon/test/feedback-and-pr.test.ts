@@ -128,7 +128,7 @@ describe("review flows and the feedback gate", () => {
 		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
 		expect((await h.api("PATCH", `/api/projects/${project.id}`, { reviewFlows: ["no-such-flow"] })).status).toBe(400);
 		expect((await h.api("PATCH", `/api/projects/${project.id}`, { reviewFlows: ["solid-review"] })).body.reviewFlows).toEqual(["solid-review"]);
-		expect((await h.api("GET", "/api/flows")).body.flows.map((flow: { name: string }) => flow.name)).toEqual(["adversarial-review", "deep-research", "invariant-simulation", "solid-review"]);
+		expect((await h.api("GET", "/api/flows")).body.flows.map((flow: { name: string }) => flow.name)).toEqual(["acceptance-green", "acceptance-red", "adversarial-review", "deep-research", "invariant-simulation", "solid-review", "understand-system"]);
 	});
 });
 

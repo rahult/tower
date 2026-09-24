@@ -18,7 +18,11 @@ Produce an implementation plan. A different, cheaper model will implement it in 
 
 {{> research}}
 
+{{> system-model}}
+
 {{> invariant-protocol}}
+
+{{> acceptance}}
 
 {{> parallel-work}}
 

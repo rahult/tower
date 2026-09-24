@@ -11,6 +11,7 @@ interface ProjectsProps {
 	usage: Usage | undefined;
 	onAddWork: (projectId?: string) => void;
 	onAddProject: () => void;
+	onNewIdea: () => void;
 	/** Clicking a card opens the project's editor. */
 	onOpenProject: (project: Project) => void;
 }
@@ -19,30 +20,42 @@ interface ProjectsProps {
  * The project space: a wall of cards — one per project, scannable at a glance — with adding a project
  * always one click away. Clicking a card opens its editor, where the agent drafts the commands.
  */
-export function Projects({ projects, cards, usage, onAddWork, onAddProject, onOpenProject }: ProjectsProps) {
+export function Projects({ projects, cards, usage, onAddWork, onAddProject, onNewIdea, onOpenProject }: ProjectsProps) {
 	const spend = new Map((usage?.byProject ?? []).map((row) => [row.key, row]));
 	return (
 		<section className="view active" aria-label="Projects">
 			<div className="page">
 				<div className="page-in">
 					<div className="flex flex-wrap items-start gap-x-6 gap-y-3">
-						<div className="min-w-0 flex-1">
+						<div className="flex min-w-0 flex-1">
 							<h1>Projects</h1>
-							<p className="lead">A project is a git repository on this machine. Click one to edit how its builds are judged; add one and the agent drafts its commands.</p>
+							<p className="lead">A project is a git repository on this machine — or an idea scaffolded from an archetype. Click one to edit how its builds are judged.</p>
 						</div>
-						<button type="button" className="btn primary mt-1.5" onClick={onAddProject}>
-							<Icon name="plus" />
-							Add a project
-						</button>
+						<div className="mt-1.5 flex shrink-0 gap-2">
+							<button type="button" className="btn primary" onClick={onNewIdea} title="Scaffold a project from an idea">
+								<Icon name="spark" />
+								New from idea
+							</button>
+							<button type="button" className="btn" onClick={onAddProject}>
+								<Icon name="plus" />
+								Add a project
+							</button>
+						</div>
 					</div>
 					{projects.length === 0 ? (
 						<div className="empty">
 							<strong>No projects yet</strong>
-							<span>A project is a git repository on this machine; its cards get their own worktrees.</span>
-							<button type="button" className="btn primary" onClick={onAddProject}>
-								<Icon name="plus" />
-								Add a project
-							</button>
+							<span>Start from an idea — Tower scaffolds the repository and plans the first card — or add a repository that already exists.</span>
+							<div className="flex justify-center gap-2">
+								<button type="button" className="btn primary" onClick={onNewIdea}>
+									<Icon name="spark" />
+									New from idea
+								</button>
+								<button type="button" className="btn" onClick={onAddProject}>
+									<Icon name="plus" />
+									Add a project
+								</button>
+							</div>
 						</div>
 					) : (
 						<ul className="grid grid-cols-[repeat(auto-fill,minmax(21rem,1fr))] gap-3">

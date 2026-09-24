@@ -1,0 +1,16 @@
+{
+  "name": "understand-system",
+  "title": "Understand this system",
+  "description": "Reads the repository as it stands and writes the project's system model: domains, actors, state, invariants as built, risks. The planner reads it before planning.",
+  "when": [
+    "manual"
+  ],
+  "steps": [
+    {
+      "name": "model",
+      "prompt": "understand-system.md",
+      "model": "planning",
+      "access": "read-only"
+    }
+  ]
+}

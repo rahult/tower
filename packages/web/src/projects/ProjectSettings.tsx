@@ -1,5 +1,5 @@
 import type { Project } from "@tower/core";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../api/client.ts";
 import { formatTokens } from "../app/bits.tsx";
@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -27,13 +27,38 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const daemonSettings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
 	const [invariantSimulation, setInvariantSimulation] = useState<boolean | null>(project.invariantSimulation);
 	const [subagents, setSubagents] = useState<boolean | null>(project.subagents);
+	const [understandBeforePlan, setUnderstandBeforePlan] = useState<boolean | null>(project.understandBeforePlan);
+	const [acceptanceGates, setAcceptanceGates] = useState<boolean | null>(project.acceptanceGates);
+	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, concurrencyLimit, reviewFlows, invariantSimulation, subagents }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
+			void queryClient.invalidateQueries({ queryKey: ["board"] });
 			onDone?.();
 		},
 	});
+
+	// The system model: what a planner reads about this codebase before planning. Fresh, stale, or not
+	// built yet — and a button to (re)build it, whose run lives on its own card.
+	const model = useQuery({ queryKey: ["project-model", project.id], queryFn: () => api.projectModel(project.id), refetchInterval: 15_000 });
+	const understand = useMutation({
+		mutationFn: () => api.understand(project.id),
+		onSuccess: (card) => {
+			toast("Understanding the system — the run has its own card and the model lands here when it passes.");
+			void queryClient.invalidateQueries({ queryKey: ["board"] });
+			void card;
+		},
+		onError: (error: Error) => toast(error.message),
+	});
+	const modelText =
+		model.data === undefined
+			? "Checking…"
+			: model.data.state === "missing"
+				? "None yet — a planner reads only the code in front of it."
+				: model.data.state === "fresh"
+					? `Fresh${model.data.builtAt ? `, built ${new Date(model.data.builtAt).toLocaleDateString()} at ${model.data.commit?.slice(0, 10)}` : ""}.`
+					: `Stale — the code has moved past ${model.data.commit?.slice(0, 10)} since it was built.`;
 
 	// The agent reads the repository and drafts the commands. Only blank fields are filled, so a
 	// considered verify command is never overwritten by a draft.
@@ -195,6 +220,59 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 						className={field}
 					>
 						<option value="default">Tower default{daemonSettings.data ? ` (${daemonSettings.data.subagents ? "on" : "off"})` : ""}</option>
+						<option value="on">On for this project</option>
+						<option value="off">Off for this project</option>
+					</select>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">System model</div>
+					<div className="d">A read-only pass maps this codebase — domains, actors, state, invariants as built — so every planner starts from understanding, not guesswork.</div>
+				</div>
+				<div className="v">
+					<p className="!mt-0 text-[14px]">{modelText}</p>
+					<button type="button" className="btn sm" disabled={understand.isPending} onClick={() => understand.mutate()}>
+						<Icon name="focus" />
+						{understand.isPending ? "Understanding…" : model.data?.state === "missing" ? "Build the model" : "Rebuild the model"}
+					</button>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">
+						<label htmlFor={`understand-${project.id}`}>Understand before plan</label>
+					</div>
+					<div className="d">When a card starts planning and the system model is missing or stale, Tower rebuilds it first — the plan is grounded in the system as it is now.</div>
+				</div>
+				<div className="v">
+					<select
+						id={`understand-${project.id}`}
+						value={understandBeforePlan === null ? "default" : understandBeforePlan ? "on" : "off"}
+						onChange={(event) => setUnderstandBeforePlan(event.target.value === "default" ? null : event.target.value === "on")}
+						className={field}
+					>
+						<option value="default">Tower default{daemonSettings.data ? ` (${daemonSettings.data.understandBeforePlan ? "on" : "off"})` : ""}</option>
+						<option value="on">On for this project</option>
+						<option value="off">Off for this project</option>
+					</select>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">
+						<label htmlFor={`acceptance-${project.id}`}>Acceptance gates</label>
+					</div>
+					<div className="d">Test-first, enforced: the plan ends with test targets, an agent turns them into failing specs before building, and a build only moves on when every spec passes. The repository needs an acceptance runner (the web-app archetype ships one).</div>
+				</div>
+				<div className="v">
+					<select
+						id={`acceptance-${project.id}`}
+						value={acceptanceGates === null ? "default" : acceptanceGates ? "on" : "off"}
+						onChange={(event) => setAcceptanceGates(event.target.value === "default" ? null : event.target.value === "on")}
+						className={field}
+					>
+						<option value="default">Tower default{daemonSettings.data ? ` (${daemonSettings.data.acceptanceGates ? "on" : "off"})` : ""}</option>
 						<option value="on">On for this project</option>
 						<option value="off">Off for this project</option>
 					</select>

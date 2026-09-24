@@ -1,0 +1,10 @@
+{
+  "title": "Web app",
+  "description": "React + Vite frontend, zero-dependency Node HTTP + SQLite backend, vitest, acceptance runner. The baseline for a full-stack application built test-first.",
+  "acceptance": true,
+  "setup": "npm install",
+  "verify": "npm run verify",
+  "test": "npm test",
+  "previewCommand": "npm run dev",
+  "previewUrl": "http://localhost:5173"
+}

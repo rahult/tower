@@ -47,6 +47,10 @@ export interface Project {
 	invariantSimulation: boolean | null;
 	/** Parallel sub-agents: scouts and stream crews fanned out from the plan. null = Tower's default. */
 	subagents: boolean | null;
+	/** Before planning, (re)build the project's system model when it is missing or stale. null = Tower's default. */
+	understandBeforePlan: boolean | null;
+	/** Plans must name test targets that become failing acceptance tests before building and passing ones after. null = Tower's default. */
+	acceptanceGates: boolean | null;
 	/** Probed from the repository: with an `origin` remote cards finish as pull requests, without one Tower merges locally. null = not probed yet. */
 	hasOrigin: boolean | null;
 	createdAt: number;

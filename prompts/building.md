@@ -15,6 +15,8 @@ Implement the plan at the absolute path `{{planPath}}`. Read it first; it was wr
 
 {{> invariant-protocol}}
 
+{{> acceptance}}
+
 {{feedbackSection}}
 
 {{> stage-result-contract}}

@@ -1,0 +1,5 @@
+{
+  "title": "Mini",
+  "description": "A minimal fixture archetype used by the daemon tests: no dependencies, nothing to install.",
+  "verify": "cat README.md"
+}

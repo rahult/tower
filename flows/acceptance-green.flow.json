@@ -1,0 +1,15 @@
+{
+  "name": "acceptance-green",
+  "title": "Acceptance gate (green)",
+  "description": "Runs the acceptance specs against the built work: every spec must pass before testing begins.",
+  "when": [
+    "after-build"
+  ],
+  "steps": [
+    {
+      "name": "green-gate",
+      "run": "npm run accept",
+      "timeoutSec": 600
+    }
+  ]
+}

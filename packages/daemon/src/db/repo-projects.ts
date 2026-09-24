@@ -19,9 +19,11 @@ function toProject(row: Row): Project {
 		concurrencyLimit: row.concurrency_limit as number,
 		stageConfig: JSON.parse(row.stage_config_json as string),
 		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
-	invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
-	subagents: row.subagents == null ? null : row.subagents === 1,
-	hasOrigin: row.has_origin == null ? null : row.has_origin === 1,
+		invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
+		subagents: row.subagents == null ? null : row.subagents === 1,
+		understandBeforePlan: row.understand_before_plan == null ? null : row.understand_before_plan === 1,
+		acceptanceGates: row.acceptance_gates == null ? null : row.acceptance_gates === 1,
+		hasOrigin: row.has_origin == null ? null : row.has_origin === 1,
 	createdAt: row.created_at as number,
 };
 }
@@ -29,8 +31,8 @@ function toProject(row: Row): Project {
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
 		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, trust_project_pi,
-			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, has_origin, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -47,6 +49,8 @@ export function insertProject(db: Db, project: Project): void {
 		JSON.stringify(project.stageConfig),
 		project.invariantSimulation == null ? null : project.invariantSimulation ? 1 : 0,
 		project.subagents == null ? null : project.subagents ? 1 : 0,
+		project.understandBeforePlan == null ? null : project.understandBeforePlan ? 1 : 0,
+		project.acceptanceGates == null ? null : project.acceptanceGates ? 1 : 0,
 		project.hasOrigin == null ? null : project.hasOrigin ? 1 : 0,
 		project.createdAt,
 	);
@@ -66,15 +70,20 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", concurrencyLimit: "concurrency_limit" } as const;
 
+/** Toggles stored as nullable booleans, in their own columns. */
+const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates" } as const;
+
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, invariantSimulation, subagents, ...plain } = settings;
+	const { reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, ...plain } = settings;
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
-	if (invariantSimulation !== undefined) db.prepare("UPDATE projects SET invariant_simulation = ? WHERE id = ?").run(invariantSimulation == null ? null : invariantSimulation ? 1 : 0, id);
-	if (subagents !== undefined) db.prepare("UPDATE projects SET subagents = ? WHERE id = ?").run(subagents == null ? null : subagents ? 1 : 0, id);
+	for (const [key, column] of Object.entries(TOGGLE_COLUMNS)) {
+		const value = settings[key as keyof typeof TOGGLE_COLUMNS] as boolean | null | undefined;
+		if (value !== undefined) db.prepare(`UPDATE projects SET ${column} = ? WHERE id = ?`).run(value == null ? null : value ? 1 : 0, id);
+	}
 	const keys = Object.keys(plain) as Array<keyof typeof SETTING_COLUMNS>;
 	if (keys.length > 0) {
 		const sets = keys.map((key) => `${SETTING_COLUMNS[key]} = ?`).join(", ");

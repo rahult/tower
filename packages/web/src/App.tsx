@@ -17,6 +17,7 @@ import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
 import { AddProject } from "./projects/AddProject.tsx";
+import { NewFromIdea } from "./projects/NewFromIdea.tsx";
 import { ProjectSettings } from "./projects/ProjectSettings.tsx";
 import { Projects } from "./projects/Projects.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
@@ -52,6 +53,7 @@ export function App() {
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [addingWork, setAddingWork] = useState<null | { projectId?: string }>(null);
 	const [addingProject, setAddingProject] = useState(false);
+	const [newIdea, setNewIdea] = useState(false);
 	// The project editor: opened from a card on the Projects wall, or right after adding a project,
 	// when the agent's command draft is what the reader came for.
 	const [editing, setEditing] = useState<{ project: Project; autoSuggest?: boolean } | null>(null);
@@ -180,14 +182,16 @@ export function App() {
 		[projectFilter],
 	);
 	const openAddProject = useCallback(() => setAddingProject(true), []);
+	const openNewIdea = useCallback(() => setNewIdea(true), []);
 
 	const paletteActions = useMemo(
 		() => ({
 			goToView: (view: View) => navigate({ view, cardId: null }),
 			openCard,
 			startCard,
-			addWork: () => openAddWork(),
-			addProject: openAddProject,
+				addWork: () => openAddWork(),
+				addProject: openAddProject,
+				newIdea: openNewIdea,
 			askTower,
 			sendFeedback: () => setFeedbackOpen(true),
 			openModels: () => setModelsOpen(true),
@@ -197,7 +201,7 @@ export function App() {
 			filterProject,
 			densityCompact: density === "compact",
 		}),
-		[navigate, openCard, startCard, askTower, setTheme, toggleNotify, toggleDensity, filterProject, density, openAddWork, openAddProject],
+		[navigate, openCard, startCard, askTower, setTheme, toggleNotify, toggleDensity, filterProject, density, openAddWork, openAddProject, openNewIdea],
 	);
 	useShortcuts(
 		useMemo(
@@ -315,7 +319,7 @@ export function App() {
 							/>
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
-						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onOpenProject={(project) => setEditing({ project })} />}
+						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onOpenProject={(project) => setEditing({ project })} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 					</div>
 					{inspector}
@@ -338,6 +342,15 @@ export function App() {
 					onAdded={(project) => {
 						setAddingProject(false);
 						setEditing({ project, autoSuggest: true });
+					}}
+				/>
+			)}
+			{newIdea && (
+				<NewFromIdea
+					onClose={() => setNewIdea(false)}
+					onCreated={(_project, card) => {
+						setNewIdea(false);
+						openCard(card.id);
 					}}
 				/>
 			)}
