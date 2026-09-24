@@ -5,9 +5,9 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="theme-color" content="#f4f5f7" />
 		<title>Tower: stop writing code. Start landing it.</title>
-		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: planning, building, testing, review, merge. The agents write; you land. Every decision that is yours arrives as one amber row — one click each." />
+		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: research, planning, building, testing, review, merge. The agents write; you land. Every decision that is yours arrives as one amber row — one click each." />
 		<meta property="og:title" content="Tower: stop writing code. Start landing it." />
-		<meta property="og:description" content="The whole software life cycle, run by coding agents from one board. A strong model plans, a cheap one builds, your tests judge — and every decision that is yours lands on one amber row, one click each." />
+		<meta property="og:description" content="The whole software life cycle, run by coding agents from one board. Research maps the unknowns, a strong model plans, a cheap one builds, your gates and tests judge — and every decision that is yours lands on one amber row, one click each." />
 		<meta property="og:image" content="https://tower.rahultrikha.com/assets/tower.png" />
 		<meta property="og:url" content="https://tower.rahultrikha.com/" />
 		<meta name="twitter:card" content="summary_large_image" />
@@ -76,9 +76,9 @@
 					<circle class="blip-green" cx="452" cy="398" r="3" />
 				</svg>
 				<p class="lede">
-					Tower runs <a href="https://pi.dev">pi</a> coding-agent sessions across all your projects from one board — the whole life cycle, backlog to merged. A strong model
-					plans, a cheap one builds, your test suite judges, and reviewers who never saw the work try to break it. The agents fly; you work the tower: every decision that is
-					yours lands on one amber row, one click each.
+					Tower runs <a href="https://pi.dev">pi</a> coding-agent sessions across all your projects from one board — the whole life cycle, question to merged. Research maps the
+					unknowns before a plan exists, a strong model plans, a cheap one builds, gates you write in a sentence decide what is worth testing, and reviewers who never saw the work
+					try to break it. The agents fly; you work the tower: every decision that is yours lands on one amber row, one click each.
 				</p>
 				<div class="install">
 					<code id="install-command">pi install git:github.com/rahult/tower</code>
@@ -166,10 +166,10 @@
 					<dt>The spike, before the plan</dt>
 					<dd>A deep-research flow maps an unfamiliar question with sources fetched over the network and writes a cited brief — options, trade-offs, what it means for this repository. It runs on a backlog card, and the planner reads the brief.</dd>
 				</div>
-					<div>
-						<dt>Watching CI</dt>
-						<dd>Tower watches the pull request it opened. Failing CI goes back to a builder on its own; a merge settles the card.</dd>
-					</div>
+				<div>
+					<dt>Watching CI</dt>
+					<dd>Tower watches the pull request it opened. Failing CI goes back to a builder on its own; a merge settles the card.</dd>
+				</div>
 					<div>
 						<dt>The standup</dt>
 						<dd>The stream is the status: Needs you, In flight, Queued, Landed today — with tokens and cost counted in the strip above.</dd>
@@ -183,19 +183,33 @@
 				<figcaption>Review findings wait with the diff, severity and file. Approve and Tower merges — locally when the repository has no remote, by pull request when it has one.</figcaption>
 			</figure>
 
+			<figure class="shot wide" data-reveal>
+				<span class="fig">Fig.03 — The brief</span>
+				<img src="assets/research.png" width="1600" height="1000" alt="A backlog card's inspector, Files tab, showing a research brief rendered as Markdown: a TL;DR comparing a CRDT, event-sourced sync and last-write-wins for a notes app, and a Sources list. The card still rests in the backlog — no worktree, nothing started." loading="lazy" />
+				<figcaption>Research happens before the lifecycle, on the backlog card itself: a survey fetched the evidence, a synthesizer wrote the cited brief, and both wait in the card's files for the planner — and for you.</figcaption>
+			</figure>
+
 			<section id="how" class="wrap prose">
 				<p class="eyebrow">Flight plan</p>
 				<h2>How a card moves</h2>
-				<p>Tell Tower what you want done. From there the card drives itself through seven stages and stops twice, both times for you.</p>
-				<ol class="route" data-reveal-group>
-					<li>
-						<h3>A strong model plans</h3>
-						<p>
-							The planner explores your repository and writes <code>plan.md</code>. Before it writes a step it models the work — the domains it touches, the actors, the properties
-							that must hold — and leaves those invariants in the plan as test targets. It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a
-							wrong plan is the costliest mistake a cheap builder can inherit.
-						</p>
-					</li>
+			<p>Tell Tower what you want done. From there the card drives itself through seven stages and stops twice, both times for you.</p>
+			<ol class="route" data-reveal-group>
+				<li>
+					<h3>Unknown ground gets researched first</h3>
+					<p>
+						Not every card starts with a task; some start with a question. An exploring line in the command box — <em>research local-first sync @notes</em> — files the card and
+						runs the deep-research flow on it, right where it rests in the backlog: a survey fetches evidence over the network (docs, repositories, package registries), and a
+						synthesizer writes a cited brief — options with trade-offs, a recommendation, what it means for this codebase. Nothing starts until you say so.
+					</p>
+				</li>
+				<li>
+					<h3>A strong model plans</h3>
+					<p>
+						The planner explores your repository and writes <code>plan.md</code>. A research brief on the card is read first — its recommendation is context, not command. Before
+						it writes a step it models the work — the domains it touches, the actors, the properties that must hold — and leaves those invariants in the plan as test targets. It
+						changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a wrong plan is the costliest mistake a cheap builder can inherit.
+					</p>
+				</li>
 					<li>
 						<h3>You approve, in one click</h3>
 						<p>The card turns amber in Needs you. Read the plan; approve it, or send it back with a note. If the planner hit a decision that is yours, it asks first — with suggested answers you can click.</p>
@@ -208,13 +222,15 @@
 							parallel, each stream is built by its own agent in its own worktree, and an integrator merges the branches before your tests run.
 						</p>
 					</li>
-					<li>
-						<h3>Your tests decide</h3>
-						<p>
-							Tower runs the project's verify command, for example <code>pnpm test &amp;&amp; pnpm typecheck</code>, and reads its exit code. A failure goes to a fresh builder together
-							with the output. After three builds the loop stops and the card asks for you.
-						</p>
-					</li>
+				<li>
+					<h3>Gates and tests decide, not opinions</h3>
+					<p>
+						Before testing runs, the gates you declared run: flows attach shell commands to the plan, the build or the tests — <code>pnpm lint</code>, a size budget, a security
+						skill — mixed freely with agent steps. A gate that fails stops the card with its own output, and a retry hands that output to a fresh builder; no model decides whether
+						your checks passed. Then Tower runs the project's verify command, for example <code>pnpm test &amp;&amp; pnpm typecheck</code>, and reads its exit code. A failure
+						goes to a fresh builder together with the output. After three builds the loop stops and the card asks for you.
+					</p>
+				</li>
 					<li>
 						<h3>Reviewers who never saw the work</h3>
 						<p>
@@ -234,13 +250,19 @@
 			</section>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.03 — The crew rail</span>
+				<span class="fig">Fig.04 — The crew rail</span>
 				<img src="assets/session.png" width="1600" height="1000" alt="A running card in the docked inspector, Session tab. A rail lists the card's sessions: planning, crew, scout auth shape, builder api, builder docs, integrator, your checks, adversarial review, solid review, invariant simulation. The transcript shows the builder's reasoning, a file read and a test command running, with a steer box at the bottom. The stream beside it shows the amber Needs you rows and the running card with its sweep." loading="lazy" />
 				<figcaption>Every session streams to the board — and a card that was built by a crew keeps the whole crew in its rail: scouts, stream builders, integrator. Steer a live run mid-flight, or read the diff under Changes.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.04 — Modeling, on demand</span>
+				<span class="fig">Fig.05 — The gate</span>
+				<img src="assets/gates.png" width="1600" height="1000" alt="A card's Session tab with its run rail: planning, building, change audit, testing, adversarial review, solid review. The change-audit run is selected: the summary shows the shell command git log -1 --stat --oneline piped to tail -4, a green pass chip, and the words Recorded, exit 0 — informational, it never fails the flow, with the command's output streaming below." loading="lazy" />
+				<figcaption>Gates you write in a sentence run inside the lifecycle, between the build and the tests. This one records the shape of every build; a lint or size gate would stop the card and send its own output back to the builder.</figcaption>
+			</figure>
+
+			<figure class="shot wide" data-reveal>
+				<span class="fig">Fig.06 — Modeling, on demand</span>
 				<img src="assets/invariants.png" width="1600" height="1000" alt="An invariant simulation selected in a card's session rail. The verdict line reads pass, Nothing blocking, with the model and token count above." loading="lazy" />
 				<figcaption>Any resting card can run an invariant simulation — domains, actors, scenarios — and report what would break before your tests do.</figcaption>
 			</figure>
@@ -261,10 +283,14 @@
 						<dt>No remote? It still lands</dt>
 						<dd>A repository without an origin never sees a pull request: approved work merges straight into the default branch, guarded against a dirty checkout, and the card settles as merged locally.</dd>
 					</div>
-					<div>
-						<dt>Parallel, when the plan allows it</dt>
-						<dd>A plan that splits into independent streams is built by a crew of sub-agents: scouts research the open questions first, each stream gets its own agent and worktree, and an integrator merges the branches so testing still judges one change. Most plans shouldn't split; the planner decides, per project toggle.</dd>
-					</div>
+				<div>
+					<dt>Parallel, when the plan allows it</dt>
+					<dd>A plan that splits into independent streams is built by a crew of sub-agents: scouts research the open questions first, each stream gets its own agent and worktree, and an integrator merges the branches so testing still judges one change. Most plans shouldn't split; the planner decides, per project toggle.</dd>
+				</div>
+				<div>
+					<dt>Flows, not plugins</dt>
+					<dd>Your agents are JSON files in <code>~/.tower/flows/</code>: a step can be a prompt file, a pi skill, one of your agent roles — or a shell command whose exit code is the verdict. Declare <code>when</code> — manual, after the plan, after the build, after tests — and the lifecycle runs them there.</dd>
+				</div>
 					<div>
 						<dt>A fresh session per stage</dt>
 						<dd>Stages hand off through files such as <code>plan.md</code>, never through a shared conversation. The builder starts with a clean context, and a reviewer never inherits the author's reasoning.</dd>
@@ -293,19 +319,19 @@
 			</section>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.05 — The command box</span>
+				<span class="fig">Fig.07 — The command box</span>
 				<img src="assets/palette.png" width="1600" height="1000" alt="The command palette open over the stream. One search box reaches commands, themes, views, project filters and cards, with keyboard hints along the bottom: arrows move, enter runs, j/k cards, a approve, n add." loading="lazy" />
 				<figcaption>The command box reaches everything — add work, jump to a card, filter, theme, density — and the board writes its keys where you can see them.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.06 — The matrix</span>
+				<span class="fig">Fig.08 — The matrix</span>
 				<img src="assets/board.png" width="1600" height="1000" alt="The Board view: a matrix with a column per stage from Backlog to Pull request and a row per project. Amber mini cards fill where work needs you, running cards carry a blue bar, and each lane reads main · merges locally." loading="lazy" />
 				<figcaption>Prefer the whole picture? The matrix keeps a column per stage and a row per project, with foldable columns and done folded away until you want it.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.07 — The ledger</span>
+				<span class="fig">Fig.09 — The ledger</span>
 				<img src="assets/usage.png" width="1600" height="1000" alt="The Usage view: stat cards for tokens and sessions today and all time, a by-day bar, and tables breaking spend down by project, model and costliest card." loading="lazy" />
 				<figcaption>Where the money goes, counted to the cent: by day, by project, by model, by card.</figcaption>
 			</figure>

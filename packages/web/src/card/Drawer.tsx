@@ -282,12 +282,18 @@ function RunSummary({ run }: { run: StageRun }) {
 	const tokens = run.tokens ? `${run.tokens.total.toLocaleString()} tokens` : null;
 	// Subscription models report $0, so tokens lead and dollars only show when there is a real figure.
 	const cost = run.costUsd ? formatMoney(run.costUsd) : null;
+	// A deterministic flow step records its command as the "model"; "thinking off" after a shell pipeline reads as noise.
+	const commandStep = run.kind === "flow_step" && (run.args[0] === "pass" || run.args[0] === "note");
 	return (
 		<div className="shrink-0 border-b border-rule bg-sheet px-4 py-2 text-[13px] text-slate">
 			<p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
 				{run.kind === "verify" || run.kind === "test" ? (
 					<span>
 						{run.kind === "verify" ? "Verify command" : "Test command"} <span className="font-mono text-ink">{run.model}</span>
+					</span>
+				) : commandStep ? (
+					<span>
+						Step command <span className="font-mono text-ink">{run.model}</span>
 					</span>
 				) : run.model === "crew" ? (
 					<span>one building attempt, run by a crew of sub-agents</span>
