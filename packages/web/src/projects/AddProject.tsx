@@ -41,7 +41,7 @@ export function AddProject({ onAdded, onClose }: { onAdded: (project: Project) =
 		mutationFn: () => api.addProject(path.trim()),
 		onSuccess: (project) => {
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
-			toast(`Added ${project.name}. Tell it what to do next.`);
+			toast(`Added ${project.name} — the agent is drafting its commands.`);
 			onAdded(project);
 		},
 	});

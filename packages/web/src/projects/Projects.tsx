@@ -1,6 +1,7 @@
 import type { Card, Project } from "@tower/core";
 import type { Usage } from "../api/client.ts";
 import { isLive, needsYou } from "../board/status.ts";
+import { formatTokens } from "../app/bits.tsx";
 import { Icon } from "../app/icons.tsx";
 import { ProjectSettings } from "./ProjectSettings.tsx";
 
@@ -10,34 +11,52 @@ interface ProjectsProps {
 	usage: Usage | undefined;
 	onAddWork: (projectId?: string) => void;
 	onAddProject: () => void;
+	/** Clicking a card opens the project's editor. */
+	onOpenProject: (project: Project) => void;
 }
 
-/** Every project as a sheet: what it is, how it judges work, and the levers that change that. */
-export function Projects({ projects, cards, usage, onAddWork, onAddProject }: ProjectsProps) {
+/**
+ * The project space: a wall of cards — one per project, scannable at a glance — with adding a project
+ * always one click away. Clicking a card opens its editor, where the agent drafts the commands.
+ */
+export function Projects({ projects, cards, usage, onAddWork, onAddProject, onOpenProject }: ProjectsProps) {
 	const spend = new Map((usage?.byProject ?? []).map((row) => [row.key, row]));
 	return (
 		<section className="view active" aria-label="Projects">
 			<div className="page">
 				<div className="page-in">
-					<div>
-						<h1>Projects</h1>
-						<p className="lead">
-							A repository becomes a project the first time you add a card for it. Each project decides how its builds are judged and how many cards run at once.
-						</p>
-					</div>
-					{projects.length === 0 ? (
-						<div className="empty">
-						<strong>No projects yet</strong>
-						<span>A project is a git repository on this machine; its cards get their own worktrees.</span>
-						<button type="button" className="btn primary" onClick={onAddProject}>
+					<div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+						<div className="min-w-0 flex-1">
+							<h1>Projects</h1>
+							<p className="lead">A project is a git repository on this machine. Click one to edit how its builds are judged; add one and the agent drafts its commands.</p>
+						</div>
+						<button type="button" className="btn primary mt-1.5" onClick={onAddProject}>
 							<Icon name="plus" />
 							Add a project
 						</button>
 					</div>
+					{projects.length === 0 ? (
+						<div className="empty">
+							<strong>No projects yet</strong>
+							<span>A project is a git repository on this machine; its cards get their own worktrees.</span>
+							<button type="button" className="btn primary" onClick={onAddProject}>
+								<Icon name="plus" />
+								Add a project
+							</button>
+						</div>
 					) : (
-						projects.map((project) => (
-							<ProjectSheet key={project.id} project={project} cards={cards.filter((card) => card.projectId === project.id)} spend={spend.get(project.id)} onAddWork={() => onAddWork(project.id)} />
-						))
+						<ul className="grid grid-cols-[repeat(auto-fill,minmax(21rem,1fr))] gap-3">
+							{projects.map((project) => (
+								<ProjectCard
+									key={project.id}
+									project={project}
+									cards={cards.filter((card) => card.projectId === project.id)}
+									spend={spend.get(project.id)}
+									onOpen={() => onOpenProject(project)}
+									onAddWork={() => onAddWork(project.id)}
+								/>
+							))}
+						</ul>
 					)}
 				</div>
 			</div>
@@ -45,27 +64,46 @@ export function Projects({ projects, cards, usage, onAddWork, onAddProject }: Pr
 	);
 }
 
-function ProjectSheet({
+function ProjectCard({
 	project,
 	cards,
 	spend,
+	onOpen,
 	onAddWork,
 }: {
 	project: Project;
 	cards: Card[];
 	spend: { runs: number; tokens: number; costUsd: number } | undefined;
+	onOpen: () => void;
 	onAddWork: () => void;
 }) {
 	const running = cards.filter(isLive).length;
 	const waiting = cards.filter((card) => needsYou(card) || card.status === "abandoned").length;
+	const open = cards.filter((card) => card.stage !== "done").length;
+	const reviewCount = project.reviewFlows?.length;
 	return (
-		<section className="sheet" aria-labelledby={`ph-${project.id}`}>
-			<div className="sheet-head">
-				<h2 id={`ph-${project.id}`}>{project.name}</h2>
-				<span className="meta mono hide-sm" title={project.repoPath}>
-					{project.repoPath}
-				</span>
-				<span className="spacer" />
+		<li
+			role="button"
+			tabIndex={0}
+			aria-label={`Open ${project.name}`}
+			onClick={onOpen}
+			onKeyDown={(event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					onOpen();
+				}
+			}}
+			className="flex cursor-pointer flex-col rounded-lg border border-rule bg-sheet p-4 transition-colors hover:border-rule-strong focus-visible:border-primary"
+		>
+			<div className="flex items-baseline gap-2">
+				<h2 className="min-w-0 truncate text-[17px] font-semibold">{project.name}</h2>
+				<span className="ml-auto shrink-0 font-mono text-[12px] text-slate">{project.defaultBranch}</span>
+			</div>
+			<p className="mt-0.5 truncate font-mono text-[12px] text-slate" title={project.repoPath}>
+				{project.repoPath}
+			</p>
+
+			<div className="mt-2.5 flex flex-wrap items-center gap-1.5">
 				{waiting > 0 && (
 					<span className="chip needs" title={`${waiting} cards need you`}>
 						{waiting} need you
@@ -77,13 +115,63 @@ function ProjectSheet({
 						{running} running
 					</span>
 				)}
-				<span className="chip mono">{project.defaultBranch}</span>
-				<button type="button" className="btn sm" onClick={onAddWork}>
+				<span className="chip">{open} open</span>
+				{cards.length === 0 && <span className="chip">No cards yet</span>}
+			</div>
+
+			<dl className="mt-3 grid gap-1 border-t border-rule pt-3 text-[13px]">
+				<div className="flex items-baseline gap-2">
+					<dt className="w-14 shrink-0 text-slate">Verify</dt>
+					<dd className="min-w-0 flex-1 truncate text-right">
+						{project.verifyCommand ? (
+							<code className="font-mono text-[12px]" title={project.verifyCommand}>
+								{project.verifyCommand}
+							</code>
+						) : (
+							<span className="text-caution-text">not set</span>
+						)}
+					</dd>
+				</div>
+				{project.setupCommand && (
+					<div className="flex items-baseline gap-2">
+						<dt className="w-14 shrink-0 text-slate">Setup</dt>
+						<dd className="min-w-0 flex-1 truncate text-right font-mono text-[12px]" title={project.setupCommand}>
+							{project.setupCommand}
+						</dd>
+					</div>
+				)}
+				<div className="flex items-baseline gap-2">
+					<dt className="w-14 shrink-0 text-slate">Reviews</dt>
+					<dd className="min-w-0 flex-1 truncate text-right">{reviewCount === null || reviewCount === undefined ? "Tower's default set" : reviewCount === 0 ? "none" : `${reviewCount} flow${reviewCount === 1 ? "" : "s"}`}</dd>
+				</div>
+				{spend !== undefined && (
+					<div className="flex items-baseline gap-2">
+						<dt className="w-14 shrink-0 text-slate">Spent</dt>
+						<dd className="min-w-0 flex-1 truncate text-right tnum">
+							{formatTokens(spend.tokens)}
+							{spend.costUsd > 0 && ` · $${spend.costUsd.toFixed(2)}`}
+						</dd>
+					</div>
+				)}
+			</dl>
+
+			<div className="mt-3 flex items-center gap-2 border-t border-rule pt-3">
+				<button
+					type="button"
+					className="btn sm"
+					onClick={(event) => {
+						event.stopPropagation();
+						onAddWork();
+					}}
+				>
 					<Icon name="plus" />
 					Add card
 				</button>
+				<span className="ml-auto flex items-center gap-1 text-[13px] font-semibold text-primary">
+					Settings
+					<Icon name="chev-r" className="icon" />
+				</span>
 			</div>
-			<ProjectSettings project={project} showSpend={spend} />
-		</section>
+		</li>
 	);
 }

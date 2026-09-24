@@ -78,6 +78,15 @@ export interface CardDiff {
 	untracked: string[];
 }
 
+/** What the agent drafted for a project's commands; any field may be null when it is not applicable. */
+export interface CommandSuggestions {
+	verify: string | null;
+	test: string | null;
+	setup: string | null;
+	previewCommand: string | null;
+	previewUrl: string | null;
+}
+
 /** One directory in the add-project picker, flagged when it looks like a git repository. */
 export interface DirEntry {
 	name: string;
@@ -125,6 +134,7 @@ export const api = {
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
 	flows: () => request<{ flows: FlowInfo[]; defaults: string[] }>("GET", "/api/flows"),
 	dirList: (path?: string) => request<DirListing>("GET", `/api/fs/dirs${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+	suggestCommands: (projectId: string) => request<CommandSuggestions>("POST", `/api/projects/${projectId}/suggest-commands`),
 	usage: () => request<Usage>("GET", "/api/usage"),
 	adhoc: (cardId: string, body: Record<string, string | undefined>) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/adhoc`, body),
 	checkPr: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/check-pr`),

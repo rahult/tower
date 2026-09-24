@@ -1,8 +1,9 @@
 import type { Project } from "@tower/core";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../api/client.ts";
 import { formatTokens } from "../app/bits.tsx";
+import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
@@ -10,10 +11,10 @@ type Settings = { setupCommand: string; verifyCommand: string; testCommand: stri
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
- * commands, review flows, invariant simulation and the concurrency cap. Lives inline on the project's
- * sheet; `onDone` collapses it again where it opens in place (a board lane).
+ * commands, review flows, invariant simulation and the concurrency cap. `autoSuggest` sends the agent
+ * in the moment the form opens — the flow right after a project was added.
  */
-export function ProjectSettings({ project, onDone, showSpend }: { project: Project; onDone?: () => void; showSpend?: { runs: number; tokens: number; costUsd: number } }) {
+export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { project: Project; onDone?: () => void; showSpend?: { runs: number; tokens: number; costUsd: number }; autoSuggest?: boolean }) {
 	const [setupCommand, setSetupCommand] = useState(project.setupCommand ?? "");
 	const [verifyCommand, setVerifyCommand] = useState(project.verifyCommand ?? "");
 	const [testCommand, setTestCommand] = useState(project.testCommand ?? "");
@@ -33,6 +34,39 @@ export function ProjectSettings({ project, onDone, showSpend }: { project: Proje
 			onDone?.();
 		},
 	});
+
+	// The agent reads the repository and drafts the commands. Only blank fields are filled, so a
+	// considered verify command is never overwritten by a draft.
+	const [draftNote, setDraftNote] = useState<string | null>(null);
+	const probe = useMutation({
+		mutationFn: () => api.suggestCommands(project.id),
+		onSuccess: (draft) => {
+			let filled = 0;
+			const take = (current: string, suggestion: string | null, set: (v: string) => void) => {
+				if (suggestion && !current.trim()) {
+					set(suggestion);
+					filled += 1;
+				}
+			};
+			take(verifyCommand, draft.verify, setVerifyCommand);
+			take(testCommand, draft.test, setTestCommand);
+			take(setupCommand, draft.setup, setSetupCommand);
+			take(previewCommand, draft.previewCommand, setPreviewCommand);
+			take(previewUrl, draft.previewUrl, setPreviewUrl);
+			setDraftNote(filled > 0 ? `The agent drafted ${filled} ${filled === 1 ? "command" : "commands"} — review and save.` : "The agent had nothing to add — the commands are already set.");
+		},
+	});
+	const probePending = probe.isPending;
+	const probeHere = () => {
+		setDraftNote(null);
+		probe.mutate();
+	};
+	useEffect(() => {
+		if (autoSuggest) probe.mutate();
+		// Once: the draft belongs to this opening of the form, not to every re-render.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
 	return (
 		<form
 			onSubmit={(event: FormEvent) => {
@@ -40,6 +74,21 @@ export function ProjectSettings({ project, onDone, showSpend }: { project: Proje
 				save.mutate();
 			}}
 		>
+			<div className="setting">
+				<div>
+					<div className="k">Commands</div>
+					<div className="d">An agent can read the repository and draft these for you — verify, test, setup, preview. Review the draft, then save.</div>
+				</div>
+				<div className="v">
+					<button type="button" className="btn" disabled={probePending} onClick={probeHere}>
+						<Icon name="retry" />
+						{probePending ? "Inspecting the repository…" : "Pre-fill with agent"}
+					</button>
+					{probePending && <span className="hint">A cheap session is reading {project.name}'s files — usually a few seconds.</span>}
+					{draftNote && <span className="hint">{draftNote}</span>}
+					{probe.error && <span className="error">{probe.error.message}</span>}
+				</div>
+			</div>
 			<div className="setting">
 				<div>
 					<div className="k">

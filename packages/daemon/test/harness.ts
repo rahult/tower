@@ -283,6 +283,8 @@ export function reviewTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
 /** Scripts each session by its stage, so re-plans, rebuilds and tests each behave like the right agent. */
 export function byStage(overrides: { build?: () => FakeTurn } = {}): FakeScript {
 	return (spec) => {
+		if (spec.sessionId.startsWith("suggest"))
+			return [{ events: [{ type: "message", message: { role: "assistant", text: JSON.stringify({ verify: "pnpm test", test: "pnpm test --run", setup: "pnpm install --prefer-offline", previewCommand: null, previewUrl: null }), thinking: "", toolCalls: [] } }] }];
 		if (spec.sessionId.includes("-plan-")) return [planningTurn()];
 		if (spec.sessionId.includes("-build-") || spec.sessionId.includes("-cifix-")) return [overrides.build?.() ?? buildingTurn()];
 		if (spec.sessionId.includes("-test-")) return [testerTurn()];

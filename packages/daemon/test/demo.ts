@@ -115,6 +115,24 @@ const busy: FakeTurn = {
 
 // The card's title decides how its sessions behave.
 const driver = new FakeSessionDriver((spec) => {
+	// The command probe: the fake agent "inspects" the repo and hands back a canned set of commands,
+	// enough to show the editor filling itself in on the demo board.
+	if (spec.sessionId.startsWith("suggest"))
+		return [
+			{
+				events: [
+					{
+						type: "message",
+						message: {
+							role: "assistant",
+							text: JSON.stringify({ verify: "pnpm test && pnpm typecheck", test: "pnpm test --run", setup: "pnpm install --prefer-offline", previewCommand: "pnpm dev", previewUrl: "http://localhost:5173" }),
+							thinking: "",
+							toolCalls: [],
+						},
+					},
+				],
+			},
+		];
 	// The ask box's intent reader: the fake agent cannot read the typed line, so it files a canned
 	// verdict on the tower lane — enough to show the loop from keystroke to card.
 	if (spec.sessionId.includes("assist"))

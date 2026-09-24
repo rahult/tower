@@ -1,3 +1,4 @@
+import type { Project } from "@tower/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api/client.ts";
@@ -16,6 +17,7 @@ import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
 import { AddProject } from "./projects/AddProject.tsx";
+import { ProjectSettings } from "./projects/ProjectSettings.tsx";
 import { Projects } from "./projects/Projects.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
 import { Usage } from "./usage/Usage.tsx";
@@ -50,6 +52,9 @@ export function App() {
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [addingWork, setAddingWork] = useState<null | { projectId?: string }>(null);
 	const [addingProject, setAddingProject] = useState(false);
+	// The project editor: opened from a card on the Projects wall, or right after adding a project,
+	// when the agent's command draft is what the reader came for.
+	const [editing, setEditing] = useState<{ project: Project; autoSuggest?: boolean } | null>(null);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [modelsOpen, setModelsOpen] = useState(false);
 	const [theme, cycleTheme, setTheme] = useTheme();
@@ -310,7 +315,7 @@ export function App() {
 							/>
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
-						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} />}
+						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onOpenProject={(project) => setEditing({ project })} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 					</div>
 					{inspector}
@@ -332,9 +337,14 @@ export function App() {
 					onClose={() => setAddingProject(false)}
 					onAdded={(project) => {
 						setAddingProject(false);
-						setAddingWork({ projectId: project.id });
+						setEditing({ project, autoSuggest: true });
 					}}
 				/>
+			)}
+			{editing && (
+				<Modal wide title={editing.project.name} onClose={() => setEditing(null)}>
+					<ProjectSettings project={editing.project} autoSuggest={editing.autoSuggest} onDone={() => setEditing(null)} />
+				</Modal>
 			)}
 			{feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
 			{modelsOpen && (

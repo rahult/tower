@@ -13,6 +13,7 @@ import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
 import { matchProject, readIntent, taggedProject } from "../assist.ts";
+import { suggestCommands } from "../project-probe.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
 import { flowsTriggered, loadFlows, runsOnBacklogCard } from "../flows.ts";
 import { cardDiff } from "../git/diff.ts";
@@ -144,6 +145,14 @@ export function createApp(deps: AppDeps): Hono {
 		insertProject(db, project);
 		bus.publish({ topic: "board", type: "project_upserted", data: project });
 		return c.json(project, 201);
+	});
+
+	// An agent reads the repository and drafts the commands Tower needs, so a new project is not a
+	// wall of blank fields. Suggestions are just that: the form shows them and the reader saves.
+	app.post("/api/projects/:id/suggest-commands", async (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		return c.json(await suggestCommands({ config, driver, repoPath: project.repoPath }));
 	});
 
 	app.patch("/api/projects/:id", async (c) => {
