@@ -237,27 +237,56 @@ function TabButton({ id, active, onSelect, tone, children }: { id: string; activ
 	);
 }
 
-/** Every session the card has had, as one row of chips. The newest is picked unless the reader says otherwise. */
+/**
+ * Every session the card has had, as a labelled row of underline tabs — the same tab language as the
+ * inspector's own tabs, so it reads as "click to switch the transcript", not as status chips. The
+ * newest is picked unless the reader says otherwise.
+ */
 function RunsRail({ runs, picked, onPick }: { runs: StageRun[]; picked: string; onPick: (id: string) => void }) {
-	if (runs.length <= 1) return null;
+	// The row scrolls sideways when a card has many sessions; the picked tab must stay in view.
+	useEffect(() => {
+		document.getElementById(`run-tab-${picked}`)?.scrollIntoView({ inline: "nearest", block: "nearest" });
+	}, [picked]);
+	const onArrow = (event: React.KeyboardEvent) => {
+		if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
+		event.preventDefault();
+		const index = runs.findIndex((r) => r.id === picked);
+		const next =
+			event.key === "ArrowRight" ? (index + 1) % runs.length
+			: event.key === "ArrowLeft" ? (index - 1 + runs.length) % runs.length
+			: event.key === "Home" ? 0
+			: runs.length - 1;
+		const run = runs[next];
+		if (!run || run.id === picked) return;
+		onPick(run.id);
+		// Roving focus follows the selection, so the next arrow press continues from the new tab.
+		requestAnimationFrame(() => document.getElementById(`run-tab-${run.id}`)?.focus());
+	};
 	return (
-		<div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-rule bg-wash px-4 py-1.5">
-			{runs.map((r) => {
-				const state = r.status === "running" || r.status === "starting" ? "live" : r.resultStatus === "pass" ? "pass" : r.resultStatus === "fail" ? "fail" : r.status === "aborted" ? "stop" : r.error ? "fail" : "rest";
-				const dot = { live: "bg-primary pulse", pass: "bg-ok", fail: "bg-danger", stop: "bg-rule", rest: "bg-rule" }[state];
-				return (
-					<button
-						key={r.id}
-						type="button"
-						onClick={() => onPick(r.id)}
-						aria-pressed={r.id === picked}
-						className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[12.5px] whitespace-nowrap ${r.id === picked ? "border-primary bg-primary-soft font-semibold" : "border-rule bg-sheet text-slate hover:text-ink"}`}
-					>
-						<span aria-hidden className={`size-1.5 rounded-full ${dot}`} />
-						{runLabel(r)}
-					</button>
-				);
-			})}
+		<div role="tablist" aria-label="Sessions on this card" className="flex shrink-0 items-stretch gap-3 border-b border-rule bg-sheet px-4" onKeyDown={onArrow}>
+			<span className="label flex shrink-0 items-center !text-[11px]">Sessions</span>
+			<div className="flex items-stretch gap-1 overflow-x-auto">
+				{runs.map((r) => {
+					const state = r.status === "running" || r.status === "starting" ? "live" : r.resultStatus === "pass" ? "pass" : r.resultStatus === "fail" ? "fail" : r.status === "aborted" ? "stop" : r.error ? "fail" : "rest";
+					const dot = { live: "bg-primary pulse", pass: "bg-ok", fail: "bg-danger", stop: "bg-rule", rest: "bg-rule" }[state];
+					const active = r.id === picked;
+					return (
+						<button
+							key={r.id}
+							type="button"
+							role="tab"
+							id={`run-tab-${r.id}`}
+							aria-selected={active}
+							tabIndex={active ? 0 : -1}
+							onClick={() => onPick(r.id)}
+							className={`-mb-px flex cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 px-2 pt-2 text-[13px] ${active ? "border-primary text-ink" : "border-transparent text-slate hover:border-rule-strong hover:text-ink"}`}
+						>
+							<span aria-hidden className={`size-1.5 rounded-full ${dot}`} />
+							{runLabel(r)}
+						</button>
+					);
+				})}
+			</div>
 		</div>
 	);
 }
