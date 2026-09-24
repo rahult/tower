@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
-import { api, type Settings } from "../api/client.ts";
+import { api, type ModelCheck, type Settings } from "../api/client.ts";
 import { monoField } from "../ui.ts";
 
 const STAGES = [
@@ -29,6 +29,14 @@ export function ModelSettings({ onDone }: { onDone: () => void }) {
 			onDone();
 		},
 	});
+	// Probe the drafted models with one tiny real session each, so a bad name or an exhausted
+	// account costs seconds here instead of a failed stage later.
+	const [checks, setChecks] = useState<ModelCheck[] | null>(null);
+	const check = useMutation({
+		mutationFn: (models: Draft) => api.checkModels([...new Set(Object.values(models).map((entry) => entry.model.trim()).filter(Boolean))]),
+		onSuccess: (result) => setChecks(result.checks),
+	});
+	const checkFor = (model: string): ModelCheck | undefined => checks?.find((candidate) => candidate.model === model);
 
 	if (settings.error) return <p className="mb-3 rounded-md bg-danger-soft px-3 py-2 text-danger">{settings.error.message}</p>;
 	if (!settings.data || !draft) return <p className="mb-3 text-[14px] text-slate">Loading models…</p>;
@@ -77,6 +85,15 @@ export function ModelSettings({ onDone }: { onDone: () => void }) {
 							))}
 						</select>
 						<p className="text-[13px] text-slate sm:col-start-2 sm:col-end-4">{hint}</p>
+						{(() => {
+							const verdict = checkFor(draft[stage]?.model ?? "");
+							if (!verdict) return null;
+							return verdict.ok ? (
+								<p className="text-[13px] text-ok sm:col-start-2 sm:col-end-4">Answered in {(verdict.ms / 1000).toFixed(1)}s — this model can run the stage.</p>
+							) : (
+								<p className="text-[13px] text-danger sm:col-start-2 sm:col-end-4">Could not answer: {verdict.error}</p>
+							);
+						})()}
 					</div>
 				))}
 			</div>
@@ -84,11 +101,15 @@ export function ModelSettings({ onDone }: { onDone: () => void }) {
 				<button type="submit" disabled={save.isPending} className="btn primary">
 					{save.isPending ? "Saving…" : "Save models"}
 				</button>
+				<button type="button" disabled={check.isPending} onClick={() => { setChecks(null); check.mutate(draft); }} className="btn ghost">
+					{check.isPending ? "Probing models…" : "Check models"}
+				</button>
 				<button type="button" onClick={onDone} className="btn ghost">
 					Cancel
 				</button>
 				{save.error && <span className="text-[14px] text-danger">{save.error.message}</span>}
 			</div>
+			{check.error && <p className="mt-2 text-[13px] text-danger">{check.error.message}</p>}
 		</form>
 	);
 }

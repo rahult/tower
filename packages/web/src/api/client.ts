@@ -54,6 +54,14 @@ export interface Settings {
 	feedbackRepo: string;
 }
 
+/** The verdict of one probed model: a tiny real session, the provider's own words when it fails. */
+export interface ModelCheck {
+	model: string;
+	ok: boolean;
+	error: string | null;
+	ms: number;
+}
+
 export interface FlowInfo {
 	name: string;
 	title: string;
@@ -176,6 +184,7 @@ export const api = {
 	answerUi: (runId: string, requestId: string, answer: Record<string, unknown>) => request<{ ok: true }>("POST", `/api/runs/${runId}/ui/${requestId}`, answer),
 	settings: () => request<Settings>("GET", "/api/settings"),
 	saveSettings: (models: Record<string, { model: string; thinking: string } | null>) => request<Settings>("PUT", "/api/settings", { models }),
+	checkModels: (models: string[]) => request<{ checks: ModelCheck[] }>("POST", "/api/settings/check-models", { models }),
 	addProject: (repoPath: string) => request<Project>("POST", "/api/projects", { repoPath }),
 	archetypes: () => request<{ archetypes: Archetype[] }>("GET", "/api/archetypes"),
 	fromIdea: (body: { name: string; idea: string; archetype: string }) => request<FromIdeaResult>("POST", "/api/projects/from-idea", body),

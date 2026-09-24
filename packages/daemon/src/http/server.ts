@@ -24,6 +24,7 @@ import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktre
 import { listRemotes } from "../pr/gh.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
+import { checkModels } from "../preflight.ts";
 import type { RunManager } from "../run/run-manager.ts";
 import type { SessionDriver } from "../pi/session-driver.ts";
 import { describeModels, knownModels, parseModels, SettingsError, settingsFile, writeModels } from "../settings.ts";
@@ -106,6 +107,16 @@ export function createApp(deps: AppDeps): Hono {
 		}
 		dirs.sort((a, b) => a.name.localeCompare(b.name));
 		return c.json({ path: target, parent: resolve(target, ".."), dirs });
+	});
+
+	// Probe stage models before real work hangs on them: one tiny session each, the provider's own
+	// words back when one cannot answer (no key, exhausted quota, unknown model).
+	app.post("/api/settings/check-models", async (c) => {
+		const body = (await c.req.json().catch(() => ({}))) as { models?: unknown; timeoutMs?: unknown };
+		const models = Array.isArray(body.models) ? body.models.filter((model): model is string => typeof model === "string") : [];
+		if (models.length === 0) throw new HttpError(400, 'Send the "models" to check');
+		const timeoutMs = typeof body.timeoutMs === "number" && body.timeoutMs > 0 ? body.timeoutMs : undefined;
+		return c.json({ checks: await checkModels({ config, driver, models, timeoutMs }) });
 	});
 
 	app.put("/api/settings", async (c) => {
