@@ -15,6 +15,7 @@ import { ToastHost, toast } from "./app/toasts.tsx";
 import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
+import { AddProject } from "./projects/AddProject.tsx";
 import { Projects } from "./projects/Projects.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
 import { Usage } from "./usage/Usage.tsx";
@@ -48,6 +49,7 @@ export function App() {
 
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	const [addingWork, setAddingWork] = useState<null | { projectId?: string }>(null);
+	const [addingProject, setAddingProject] = useState(false);
 	const [feedbackOpen, setFeedbackOpen] = useState(false);
 	const [modelsOpen, setModelsOpen] = useState(false);
 	const [theme, cycleTheme, setTheme] = useTheme();
@@ -167,12 +169,20 @@ export function App() {
 		void decide().catch(() => toast("Could not approve that card — is the daemon up?"));
 	}, [route.cardId, queryClient]);
 
+	// Add work presets to the active project filter when nothing more specific was asked for.
+	const openAddWork = useCallback(
+		(projectId?: string) => setAddingWork({ projectId: projectId ?? (projectFilter !== "all" ? projectFilter : undefined) }),
+		[projectFilter],
+	);
+	const openAddProject = useCallback(() => setAddingProject(true), []);
+
 	const paletteActions = useMemo(
 		() => ({
 			goToView: (view: View) => navigate({ view, cardId: null }),
 			openCard,
 			startCard,
-			addWork: () => setAddingWork({}),
+			addWork: () => openAddWork(),
+			addProject: openAddProject,
 			askTower,
 			sendFeedback: () => setFeedbackOpen(true),
 			openModels: () => setModelsOpen(true),
@@ -182,18 +192,18 @@ export function App() {
 			filterProject,
 			densityCompact: density === "compact",
 		}),
-		[navigate, openCard, startCard, askTower, setTheme, toggleNotify, toggleDensity, filterProject, density],
+		[navigate, openCard, startCard, askTower, setTheme, toggleNotify, toggleDensity, filterProject, density, openAddWork, openAddProject],
 	);
 	useShortcuts(
 		useMemo(
 			() => ({
 				palette: () => setPaletteOpen((open) => !open),
 				view: (index: number) => navigate({ view: VIEW_ORDER[index] ?? "focus", cardId: null }),
-				add: () => setAddingWork({}),
+				add: () => openAddWork(),
 				move: moveCard,
 				approve: approveSelected,
 			}),
-			[navigate, moveCard, approveSelected],
+			[navigate, moveCard, approveSelected, openAddWork],
 		),
 	);
 
@@ -253,7 +263,7 @@ export function App() {
 					<ConnectionBadge connection={board.error ? "reconnecting" : connection} />
 				</div>
 				<div className="actions">
-					<button type="button" id="btn-add" onClick={() => setAddingWork({})} className="btn primary" title="Add work (n)">
+					<button type="button" id="btn-add" onClick={() => openAddWork()} className="btn primary" title="Add work (n)">
 						<Icon name="plus" />
 						<span className="txt">Add work</span>
 						<span className="kbd">n</span>
@@ -294,12 +304,13 @@ export function App() {
 								filter={projectFilter}
 								onFilter={filterProject}
 								onOpen={openCard}
-								onAddWork={(projectId) => setAddingWork({ projectId })}
+								onAddWork={(projectId) => openAddWork(projectId)}
+								onAddProject={() => setAddingProject(true)}
 								onOpenModels={() => setModelsOpen(true)}
 							/>
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
-						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => setAddingWork({ projectId })} />}
+						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 					</div>
 					{inspector}
@@ -307,7 +318,24 @@ export function App() {
 			</div>
 
 			{paletteOpen && <Palette cards={cards} projectNames={names} projects={projects.map((project) => ({ id: project.id, name: project.name }))} actions={paletteActions} onClose={() => setPaletteOpen(false)} />}
-			{addingWork && <QuickAdd projects={projects} presetProjectId={addingWork.projectId} onClose={() => setAddingWork(null)} onOpenCard={openCard} />}
+			{addingWork && (
+				<QuickAdd
+					projects={projects}
+					presetProjectId={addingWork.projectId}
+					onClose={() => setAddingWork(null)}
+					onOpenCard={openCard}
+					onAddProject={() => setAddingProject(true)}
+				/>
+			)}
+			{addingProject && (
+				<AddProject
+					onClose={() => setAddingProject(false)}
+					onAdded={(project) => {
+						setAddingProject(false);
+						setAddingWork({ projectId: project.id });
+					}}
+				/>
+			)}
 			{feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
 			{modelsOpen && (
 				<Modal title="Models" onClose={() => setModelsOpen(false)} wide>

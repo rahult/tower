@@ -6,7 +6,6 @@ import { describeCard, isLive, needsYou, STAGE_LABEL } from "../board/status.ts"
 import { ConfirmButton, ErrorNote, shortModel, useElapsed, usePastDelay } from "../app/bits.tsx";
 import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
-import { NewProjectForm } from "../app/quickadd.tsx";
 import { button, field } from "../ui.ts";
 
 interface FocusProps {
@@ -19,6 +18,7 @@ interface FocusProps {
 	onFilter: (projectId: string | null) => void;
 	onOpen: (cardId: string) => void;
 	onAddWork: (projectId?: string) => void;
+	onAddProject: () => void;
 	onOpenModels: () => void;
 }
 
@@ -27,7 +27,7 @@ interface FocusProps {
  * reader is needed: the decisions that block an agent first, then work in flight, then everything
  * waiting, then what finished. A tray that is empty does not render.
  */
-export function Focus({ projects, cards, activeRuns, selectedCardId, filter, onFilter, onOpen, onAddWork, onOpenModels }: FocusProps) {
+export function Focus({ projects, cards, activeRuns, selectedCardId, filter, onFilter, onOpen, onAddWork, onAddProject, onOpenModels }: FocusProps) {
 	const pickFilter = (id: string) => onFilter(id === "all" ? null : id);
 	const scope = (list: Card[]) => (filter === "all" ? list : list.filter((card) => card.projectId === filter));
 
@@ -60,7 +60,7 @@ export function Focus({ projects, cards, activeRuns, selectedCardId, filter, onF
 					<div className="rail-list" />
 				</aside>
 				<div className="stream" id="stream" tabIndex={-1}>
-					<EmptyBoard />
+					<EmptyBoard onAddProject={onAddProject} />
 				</div>
 			</section>
 		);
@@ -224,7 +224,7 @@ export function Focus({ projects, cards, activeRuns, selectedCardId, filter, onF
 	);
 }
 
-function EmptyBoard() {
+function EmptyBoard({ onAddProject }: { onAddProject: () => void }) {
 	return (
 		<div className="mx-auto flex w-full max-w-[44rem] flex-col items-start gap-5 pt-8">
 			<div>
@@ -234,7 +234,10 @@ function EmptyBoard() {
 					you only when a decision is yours.
 				</p>
 			</div>
-			<NewProjectForm first />
+			<button type="button" className="btn primary" onClick={onAddProject}>
+				<Icon name="plus" />
+				Add a project
+			</button>
 		</div>
 	);
 }

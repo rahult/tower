@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { type Card, InvalidTransition, type Project } from "@tower/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
@@ -79,6 +80,27 @@ export function createApp(deps: AppDeps): Hono {
 	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, maxCrew: config.maxCrew, feedbackRepo: config.feedbackRepo });
 
 	app.get("/api/settings", (c) => c.json(settingsView()));
+
+	// Directory listing for the board's add-project picker. The daemon runs on the user's machine, so
+	// browsing happens with the daemon's own filesystem rights; only directories are returned.
+	app.get("/api/fs/dirs", (c) => {
+		const target = resolve(c.req.query("path")?.trim() || homedir());
+		if (!existsSync(target) || !statSync(target).isDirectory()) throw new HttpError(400, `Not a directory: ${target}`);
+		const dirs: Array<{ name: string; path: string; git: boolean }> = [];
+		for (const entry of readdirSync(target, { withFileTypes: true })) {
+			if (entry.name.startsWith(".")) continue;
+			try {
+				if (entry.isDirectory()) {
+					const path = join(target, entry.name);
+					dirs.push({ name: entry.name, path, git: existsSync(join(path, ".git")) });
+				}
+			} catch {
+				// A directory that cannot be stat'd (permissions) is simply not offered.
+			}
+		}
+		dirs.sort((a, b) => a.name.localeCompare(b.name));
+		return c.json({ path: target, parent: resolve(target, ".."), dirs });
+	});
 
 	app.put("/api/settings", async (c) => {
 		const body = (await c.req.json()) as { models?: unknown };

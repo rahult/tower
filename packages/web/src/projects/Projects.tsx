@@ -3,17 +3,17 @@ import type { Usage } from "../api/client.ts";
 import { isLive, needsYou } from "../board/status.ts";
 import { Icon } from "../app/icons.tsx";
 import { ProjectSettings } from "./ProjectSettings.tsx";
-import { NewProjectForm } from "../app/quickadd.tsx";
 
 interface ProjectsProps {
 	projects: Project[];
 	cards: Card[];
 	usage: Usage | undefined;
 	onAddWork: (projectId?: string) => void;
+	onAddProject: () => void;
 }
 
 /** Every project as a sheet: what it is, how it judges work, and the levers that change that. */
-export function Projects({ projects, cards, usage, onAddWork }: ProjectsProps) {
+export function Projects({ projects, cards, usage, onAddWork, onAddProject }: ProjectsProps) {
 	const spend = new Map((usage?.byProject ?? []).map((row) => [row.key, row]));
 	return (
 		<section className="view active" aria-label="Projects">
@@ -26,7 +26,14 @@ export function Projects({ projects, cards, usage, onAddWork }: ProjectsProps) {
 						</p>
 					</div>
 					{projects.length === 0 ? (
-						<NewProjectForm first />
+						<div className="empty">
+						<strong>No projects yet</strong>
+						<span>A project is a git repository on this machine; its cards get their own worktrees.</span>
+						<button type="button" className="btn primary" onClick={onAddProject}>
+							<Icon name="plus" />
+							Add a project
+						</button>
+					</div>
 					) : (
 						projects.map((project) => (
 							<ProjectSheet key={project.id} project={project} cards={cards.filter((card) => card.projectId === project.id)} spend={spend.get(project.id)} onAddWork={() => onAddWork(project.id)} />

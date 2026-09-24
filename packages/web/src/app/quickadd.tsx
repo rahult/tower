@@ -2,28 +2,32 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import type { Project } from "@tower/core";
 import { api } from "../api/client.ts";
-import { field, monoField } from "../ui.ts";
+import { field } from "../ui.ts";
 import { Modal } from "./bits.tsx";
 
 /**
- * The one place work enters Tower: pick (or add) a project, say what is wanted, then add it to the
- * backlog or start it straight away. Everything else on the board follows from this.
+ * Adding work: pick one of the projects Tower already knows, say what is wanted, then add it to the
+ * backlog or start it straight away. Adding a *project* is its own dialog — `onAddProject` swaps to it
+ * when there is nothing to add work to yet.
  */
-export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard }: { projects: Project[]; presetProjectId?: string; onClose: () => void; onOpenCard: (cardId: string) => void }) {
+export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard, onAddProject }: {
+	projects: Project[];
+	presetProjectId?: string;
+	onClose: () => void;
+	onOpenCard: (cardId: string) => void;
+	onAddProject: () => void;
+}) {
 	const queryClient = useQueryClient();
-	const [projectId, setProjectId] = useState(presetProjectId && projects.some((p) => p.id === presetProjectId) ? presetProjectId : (projects[0]?.id ?? ""));
-	const [newRepo, setNewRepo] = useState(projects.length === 0);
-	const [repoPath, setRepoPath] = useState("");
+	const [projectId, setProjectId] = useState(presetProjectId ?? projects[0]?.id ?? "");
 	const [title, setTitle] = useState("");
 	const [brief, setBrief] = useState("");
 
 	const refresh = () => void queryClient.invalidateQueries({ queryKey: ["board"] });
-	const addProject = useMutation({ mutationFn: () => api.addProject(repoPath.trim()) });
 
-	// One chain, whichever button sent it: maybe create the project, create the card, maybe start it.
+	// One chain, whichever entry made it: create the card, maybe start it straight away.
 	const finish = useMutation({
 		mutationFn: async ({ start }: { start: boolean }) => {
-			const project = newRepo ? await addProject.mutateAsync() : (projects.find((p) => p.id === projectId) as Project);
+			const project = projects.find((p) => p.id === projectId) as Project;
 			const card = await api.addCard(project.id, title.trim(), brief.trim());
 			if (start) await api.enqueue(card.id);
 			return card;
@@ -35,13 +39,33 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard }: { p
 		},
 	});
 
-	const ready = title.trim() !== "" && (newRepo ? repoPath.trim() !== "" : projectId !== "");
-	const run = (start: boolean) => {
-		if (ready && !busy) finish.mutate({ start });
-	};
-	const busy = finish.isPending || addProject.isPending;
-	const failure = finish.error ?? addProject.error;
+	const ready = title.trim() !== "" && projectId !== "";
+	const busy = finish.isPending;
+	const failure = finish.error;
 	const [start, setStart] = useState<"now" | "backlog">("now");
+
+	if (projects.length === 0) {
+		return (
+			<Modal title="Add work" onClose={onClose}>
+				<p className="meta">Tower has no projects yet. A project is a git repository on this machine — add one first, then cards for it.</p>
+				<div className="acts !justify-start">
+					<button type="button" onClick={onClose} className="btn ghost">
+						Cancel
+					</button>
+					<button
+						type="button"
+						className="btn primary"
+						onClick={() => {
+							onClose();
+							onAddProject();
+						}}
+					>
+						Add a project
+					</button>
+				</div>
+			</Modal>
+		);
+	}
 
 	return (
 		<Modal title="Add work" onClose={onClose}>
@@ -55,29 +79,17 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard }: { p
 				}}
 				className="grid gap-4"
 			>
-				{projects.length > 0 && (
-					<div className="field">
-						<label htmlFor="quick-project">Project</label>
-						<select id="quick-project" value={newRepo ? "" : projectId} onChange={(event) => setProjectId(event.target.value)} className={field} disabled={projects.length === 0}>
-							{projects.map((project) => (
-								<option key={project.id} value={project.id}>
-									{project.name} · {project.defaultBranch}
-								</option>
-							))}
-						</select>
-						<label className="flex cursor-pointer items-center gap-2 text-[13px] text-slate">
-							<input type="checkbox" className="size-4 accent-[var(--primary)]" checked={newRepo} onChange={(event) => setNewRepo(event.target.checked)} />
-							New repository — add it by path
-						</label>
-					</div>
-				)}
-				{(newRepo || projects.length === 0) && (
-					<div className="field">
-						<label htmlFor="quick-repo">Repository path</label>
-						<span className="hint">A git repository on this machine. A brand-new one is fine.</span>
-						<input id="quick-repo" value={repoPath} onChange={(event) => setRepoPath(event.target.value)} spellCheck={false} placeholder="/Users/you/code/my-project" className={monoField} />
-					</div>
-				)}
+				<div className="field">
+					<label htmlFor="quick-project">Project</label>
+					<select id="quick-project" value={projectId} onChange={(event) => setProjectId(event.target.value)} className={field}>
+						{projects.map((project) => (
+							<option key={project.id} value={project.id}>
+								{project.name} · {project.defaultBranch}
+							</option>
+						))}
+					</select>
+					<span className="hint">Missing one? Add it from the Projects view or the command box.</span>
+				</div>
 				<div className="field">
 					<label htmlFor="quick-title" className="req">
 						What should change
@@ -121,36 +133,8 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard }: { p
 			</form>
 		</Modal>
 	);
-}
 
-/** The empty-board invitation: the same chain, reduced to a repository path. */
-export function NewProjectForm({ first }: { first?: boolean }) {
-	const queryClient = useQueryClient();
-	const [repoPath, setRepoPath] = useState("");
-	const add = useMutation({
-		mutationFn: () => api.addProject(repoPath.trim()),
-		onSuccess: () => {
-			setRepoPath("");
-			void queryClient.invalidateQueries({ queryKey: ["board"] });
-		},
-	});
-	const submit = (event: FormEvent) => {
-		event.preventDefault();
-		if (repoPath.trim()) add.mutate();
-	};
-	return (
-		<form onSubmit={submit} className="max-w-[44rem] rounded-lg border border-dashed border-rule p-3">
-			<label htmlFor="repo-path" className="mb-1.5 block font-semibold">
-				{first ? "Add your first project" : "Add a project"}
-				<span className="block text-[13px] font-normal text-slate">The path to a git repository on this machine. A brand-new one is fine.</span>
-			</label>
-			<div className="flex gap-2">
-				<input id="repo-path" value={repoPath} onChange={(event) => setRepoPath(event.target.value)} placeholder="/Users/you/code/my-project" className={monoField} />
-				<button type="submit" disabled={!repoPath.trim() || add.isPending} className="btn primary whitespace-nowrap">
-					Add project
-				</button>
-			</div>
-			{add.error && <p className="mt-1.5 text-[14px] text-danger">{add.error.message}</p>}
-		</form>
-	);
+	function run(startMode: boolean) {
+		if (ready && !busy) finish.mutate({ start: startMode });
+	}
 }

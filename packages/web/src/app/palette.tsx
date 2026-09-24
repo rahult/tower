@@ -7,6 +7,7 @@ export interface PaletteActions {
 	openCard: (cardId: string) => void;
 	startCard: (cardId: string) => void;
 	addWork: () => void;
+	addProject: () => void;
 	/** The free-form ask: one line of natural language, an @name tagging the project. */
 	askTower: (text: string) => void;
 	sendFeedback: () => void;
@@ -37,6 +38,7 @@ export function Palette({ cards, projectNames, projects, actions, onClose }: { c
 	const items = useMemo(() => {
 		const commands: Item[] = [
 			{ group: "Commands", label: "Add work…", hint: "n", run: actions.addWork },
+			{ group: "Commands", label: "Add a project…", hint: "pick a repository directory", run: actions.addProject },
 			{ group: "Commands", label: "Send feedback…", hint: "bug, idea, praise", run: actions.sendFeedback },
 			{ group: "Commands", label: "Model settings…", hint: "which model runs each stage", run: actions.openModels },
 			{ group: "Commands", label: "Notify me when a card needs attention", hint: "browser notifications", run: actions.toggleNotify },
