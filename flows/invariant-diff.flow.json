@@ -1,0 +1,7 @@
+{
+	"name": "invariant-diff",
+	"title": "Invariant diff check",
+	"description": "A cheap second pass: the change's diff is checked against the invariants the plan already named — not re-derived. Copy this file into ~/.tower/flows with \"when\": [\"after-build\"] to gate testing on it.",
+	"when": ["manual"],
+	"steps": [{ "name": "check", "prompt": "invariant-diff.md", "model": "test", "thinking": "medium", "access": "read-and-run" }]
+}

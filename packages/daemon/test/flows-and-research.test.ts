@@ -443,3 +443,49 @@ describe("deep research", () => {
 		expect(planner?.prompts[0]).toContain("Research brief");
 	});
 });
+
+describe("invariant diff check", () => {
+	it("judges a built card's diff against the plan's invariants on the cheap tier", async () => {
+		// The scripted check reads its own prompt, writes a violated report, and fails — the way the real
+		// agent would when the diff breaks a plan invariant.
+		let captured: { cwd: string; model: string; prompt: string } | undefined;
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("invariant-diff"))
+				return [
+					{
+						events: [{ type: "message", message: { role: "assistant", text: "Diff checked.", thinking: "", toolCalls: [] } }],
+						effect: ({ spec, prompt }) => {
+							captured = { cwd: spec.cwd, model: spec.model, prompt };
+							const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+							if (report) writeFileSync(report, "# Invariant diff\n\nViolated: 1\n");
+							writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "fail", summary: "Violated: 1" }));
+						},
+					},
+				];
+			return byStage()(spec);
+		}, ENV);
+		const project = await addProject();
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		await approvePlanGate(card.id);
+		const built = (await h.api("GET", `/api/cards/${card.id}`)).body.card;
+		expect(built.worktreePath).toBeTruthy();
+
+		const res = await h.api("POST", `/api/cards/${card.id}/adhoc`, { flow: "invariant-diff" });
+		expect(res.status).toBe(202);
+		await h.daemon.whenIdle();
+
+		expect(captured?.cwd).toBe(built.worktreePath);
+		expect(captured?.model).not.toBe("anthropic/claude-fable-5-1"); // the cheap tier, not the planner's
+		expect(captured?.prompt).toContain("Do not re-derive the model");
+		expect(captured?.prompt).toContain(`cards/${built.id}/plan.md`);
+		expect(captured?.prompt).toContain("..HEAD");
+		expect(captured?.prompt).not.toMatch(/\{\{/);
+		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		expect(detail.artifacts.map((artifact: { name: string }) => artifact.name)).toContain("reviews/invariant-diff.md");
+		// The fail verdict is the run's verdict — as an after-build hook this is what gates testing.
+		const check = detail.runs.find((run: { id: string }) => run.id.startsWith(`c${card.id}-invariant-diff-`));
+		expect(check).toMatchObject({ resultStatus: "fail", resultSummary: "Violated: 1" });
+	});
+});
