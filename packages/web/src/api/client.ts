@@ -36,6 +36,8 @@ export interface CardDetail {
 	artifacts: Artifact[];
 	annotations: Annotation[];
 	bench: { preview: Preview };
+	/** The card's spend and the project's per-card budget, so the drawer can meter while it runs. */
+	spend: { spentUsd: number; budgetUsd: number | null };
 }
 
 export interface StageModel {

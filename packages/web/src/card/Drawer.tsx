@@ -119,6 +119,10 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 	const totals = runs.reduce((sum, r) => ({ tokens: sum.tokens + (r.tokens?.total ?? 0), cost: sum.cost + (r.costUsd ?? 0) }), { tokens: 0, cost: 0 });
 	const sessions = runs.filter((r) => r.kind !== "verify").length;
 	const usage = totals.tokens > 0 ? `${formatTokens(totals.tokens)} tok · ${sessions} ${sessions === 1 ? "session" : "sessions"}${totals.cost > 0 ? ` · ${formatMoney(totals.cost)}` : ""}` : null;
+	// The spend against the project's per-card budget, while the card runs — the gate is too late
+	// to be the first place a person learns what a card costs.
+	const budget = detail.data?.spend.budgetUsd ?? null;
+	const meter = budget ? ` · $${totals.cost.toFixed(2)} of $${budget.toFixed(2)} budget` : null;
 
 	// A decision that resolved while the reader watched another tab leaves no empty pane behind.
 	const chosen: Tab = tab ?? (decision ? "decision" : "session");
@@ -161,7 +165,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 						</span>
 					)}
 					<span className="mono">{card.id}</span>
-					{usage && <span className="mono">{usage}</span>}
+					{usage && <span className="mono">{usage}{meter}</span>}
 				</div>
 				<div className="toolbar">
 					<span className={`chip ${caution ? "needs" : TONE_SUFFIX[tone]}`}>{status}</span>

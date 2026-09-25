@@ -38,6 +38,10 @@ describe("the per-card budget", () => {
 		expect(done).toMatchObject({ stage: "done", status: "idle" });
 		// The approval is remembered: later settles over the line do not re-gate.
 		expect(detail.gates.filter((gate: { kind: string }) => gate.kind === "budget")).toHaveLength(1);
+		// The drawer can meter the spend while the card runs: detail carries spend + budget.
+		const spend = (await h.api("GET", `/api/cards/${card.id}`)).body.spend;
+		expect(spend).toMatchObject({ budgetUsd: 0.0015 });
+		expect(spend.spentUsd).toBeGreaterThan(0);
 	});
 
 	it("declining parks the card with the reason, and raising the budget lets Retry continue", async () => {

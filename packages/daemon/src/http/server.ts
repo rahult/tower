@@ -484,7 +484,11 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/cards/:id", (c) => {
 		const card = cardOr404(c.req.param("id"));
-		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id), annotations: loadAnnotations(paths.cardDir(config, card.id)), bench: { preview: bench.previewFor(card.id) } });
+		// The spend so far, with the project's budget beside it, so the drawer can show the meter
+		// while the card runs — the budget gate is too late to first learn what a card costs.
+		const project = getProject(db, card.projectId);
+		const spentUsd = listRunsForCard(db, card.id).reduce((sum, run) => sum + (run.costUsd ?? 0), 0);
+		return c.json({ card, runs: listRunsForCard(db, card.id), gates: listGatesForCard(db, card.id), artifacts: listArtifacts(config, card.id), annotations: loadAnnotations(paths.cardDir(config, card.id)), bench: { preview: bench.previewFor(card.id) }, spend: { spentUsd, budgetUsd: project?.budgetUsd ?? null } });
 	});
 
 	// Margin notes: a person pins text on the plan, a review, a report — the notes ride back to the
