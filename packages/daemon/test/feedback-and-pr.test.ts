@@ -155,6 +155,26 @@ describe("pull requests", () => {
 		expect(execFileSync("git", ["branch", "--list", done.branchName], { cwd: h.repo, encoding: "utf8" })).toBe("");
 	});
 
+	it("a done card can be deleted from the board, and a live one cannot", async () => {
+		h = await bootHarness(byStage());
+		const { project, card, gate } = await toFeedbackGate(h);
+		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "done" });
+
+		const deleted = await h.api("DELETE", `/api/cards/${card.id}`);
+		expect(deleted.status).toBe(200);
+		expect((await h.api("GET", `/api/cards/${card.id}`)).status).toBe(404);
+		const board = (await h.api("GET", "/api/board")).body;
+		expect(board.cards.find((candidate: { id: string }) => candidate.id === card.id)).toBeUndefined();
+
+		// A card with work in flight refuses: hygiene never touches live work.
+		const live = (await h.api("POST", "/api/cards", { projectId: project.id, title: "Second" })).body;
+		await h.api("POST", `/api/cards/${live.id}/enqueue`);
+		expect((await h.api("DELETE", `/api/cards/${live.id}`)).status).toBe(409);
+		await h.daemon.whenIdle();
+	});
+
 	it("a dirty checkout stops the merge until it is clean, then Retry finishes the card", async () => {
 		h = await bootHarness(byStage());
 		const { card, gate } = await toFeedbackGate(h);

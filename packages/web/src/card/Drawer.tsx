@@ -47,6 +47,13 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 		mutationFn: (cardId: string) => api.abort(cardId),
 		onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board"] }),
 	});
+	const remove = useMutation({
+		mutationFn: (cardId: string) => api.deleteCard(cardId),
+		onSuccess: () => {
+			void queryClient.invalidateQueries({ queryKey: ["board"] });
+			onClose();
+		},
+	});
 
 	const pendingGate = detail.data?.gates.find((gate) => gate.status === "pending") ?? null;
 	// The run that asked is not always the newest one — a crew's blocked builder may sit a few runs back.
@@ -102,6 +109,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 		);
 	if (!detail.data) return null;
 	const { card, artifacts, annotations } = detail.data;
+	const removable = (card.stage === "done" || card.stage === "backlog") && card.status === "idle";
 	const project = projects.find((p) => p.id === card.projectId);
 	const { stage, status, tone } = describeCard(card);
 	const live = run?.id === runs.at(-1)?.id && (isLive(card) || run?.status === "running" || run?.status === "starting");
@@ -172,6 +180,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 					)}
 					<span className="spacer" />
 					{isLive(card) && <ConfirmButton small label="Abort" confirmLabel="Confirm abort?" onConfirm={() => abort.mutate(card.id)} busy={abort.isPending} />}
+					{removable && <ConfirmButton small label="Delete" confirmLabel="Delete from the board?" onConfirm={() => remove.mutate(card.id)} busy={remove.isPending} />}
 				</div>
 				{card.brief && (
 					<details className="text-[14px]">

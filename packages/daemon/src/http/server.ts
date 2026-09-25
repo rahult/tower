@@ -6,7 +6,7 @@ import { type Card, InvalidTransition, type Project } from "@tower/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
-import { getCard, insertCard, listCards } from "../db/repo-cards.ts";
+import { deleteCard, getCard, insertCard, listCards } from "../db/repo-cards.ts";
 import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
 import { listGatesForCard } from "../db/repo-gates.ts";
 import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
@@ -511,6 +511,18 @@ export function createApp(deps: AppDeps): Hono {
 	app.delete("/api/cards/:id/preview", (c) => c.json(bench.stopPreview(cardOr404(c.req.param("id")).id)));
 
 	app.post("/api/cards/:id/enqueue", async (c) => c.json(await orchestrator.enqueueCard(cardOr404(c.req.param("id")).id), 202));
+
+	// Board hygiene: a finished or never-started card can leave the board. Nothing live may be deleted.
+	app.delete("/api/cards/:id", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		if (orchestrator.isBusy(card.id)) throw new HttpError(409, "This card is busy — abort it first.");
+		if (!((card.stage === "done" || card.stage === "backlog") && card.status === "idle")) {
+			throw new HttpError(409, `Only a finished card or a backlog card can be deleted — this one is ${card.stage}/${card.status}.`);
+		}
+		deleteCard(db, card.id);
+		bus.publish({ topic: "board", type: "card_deleted", data: { id: card.id } });
+		return c.json({ ok: true });
+	});
 
 	// Anyone running this Tower can say what is wrong or missing; it lands on the feedback repo as an
 	// issue, and intake turns it into a backlog card only a person's approval can start.

@@ -81,6 +81,15 @@ export function updateCard(db: Db, id: string, patch: CardPatch): Card {
 	return card;
 }
 
+/** Removes a card and everything that hangs off it (runs, gates, events, its queue slot). The card's
+ *  folder on disk keeps its transcripts and reports; hygiene on the board is not rewriting history. */
+export function deleteCard(db: Db, id: string): void {
+	for (const [table, column] of [["stage_runs", "card_id"], ["gates", "card_id"], ["events", "card_id"]] as const) {
+		db.prepare(`DELETE FROM ${table} WHERE ${column} = ?`).run(id);
+	}
+	db.prepare("DELETE FROM cards WHERE id = ?").run(id);
+}
+
 export function listCards(db: Db): Card[] {
 	return (db.prepare("SELECT * FROM cards ORDER BY position, created_at").all() as Row[]).map(toCard);
 }

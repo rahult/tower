@@ -193,6 +193,7 @@ export const api = {
 	projectModel: (id: string) => request<ProjectModel>("GET", `/api/projects/${id}/model`),
 	understand: (id: string) => request<Card>("POST", `/api/projects/${id}/understand`),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
+	deleteCard: (cardId: string) => request<{ ok: true }>("DELETE", `/api/cards/${cardId}`),
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; parallelReviews: boolean | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	assist: (text: string) => request<AssistOutcome>("POST", "/api/assist", { text }),
