@@ -141,6 +141,10 @@ const MIGRATIONS: string[] = [
 	-- The most one card may spend on agent sessions before the pipeline pauses for a person. NULL: unbudgeted.
 	ALTER TABLE projects ADD COLUMN budget_usd REAL;
 	`,
+	`
+	-- Run the after-tests review flows at the same time instead of one after another. NULL: Tower's default (sequential).
+	ALTER TABLE projects ADD COLUMN parallel_reviews INTEGER;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

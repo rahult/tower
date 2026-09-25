@@ -41,6 +41,8 @@ export interface Project {
 	previewCheck: string | null;
 	/** The most one card may spend on agent sessions before the pipeline pauses for a person. null: unbudgeted. */
 	budgetUsd: number | null;
+	/** Run the after-tests review flows at the same time. null = Tower's default (sequential). */
+	parallelReviews: boolean | null;
 	trustProjectPi: boolean;
 	extensions: string[];
 	concurrencyLimit: number;

@@ -16,6 +16,7 @@ function toProject(row: Row): Project {
 		previewUrl: row.preview_url as string | null,
 		previewCheck: row.preview_check as string | null,
 		budgetUsd: row.budget_usd as number | null,
+		parallelReviews: row.parallel_reviews == null ? null : row.parallel_reviews === 1,
 		trustProjectPi: row.trust_project_pi === 1,
 		extensions: JSON.parse(row.extensions_json as string),
 		concurrencyLimit: row.concurrency_limit as number,
@@ -32,9 +33,9 @@ function toProject(row: Row): Project {
 
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
-		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, preview_check, budget_usd, trust_project_pi,
+		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, preview_check, budget_usd, parallel_reviews, trust_project_pi,
 			 extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -47,6 +48,7 @@ export function insertProject(db: Db, project: Project): void {
 		project.previewUrl,
 		project.previewCheck,
 		project.budgetUsd,
+		project.parallelReviews == null ? null : project.parallelReviews ? 1 : 0,
 		project.trustProjectPi ? 1 : 0,
 		JSON.stringify(project.extensions),
 		project.concurrencyLimit,
@@ -74,15 +76,15 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", previewCheck: "preview_check", budgetUsd: "budget_usd", concurrencyLimit: "concurrency_limit" } as const;
 
 /** Toggles stored as nullable booleans, in their own columns. */
-const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates" } as const;
+const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates", parallelReviews: "parallel_reviews" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, ...plain } = settings;
+	const { reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
 	for (const [key, column] of Object.entries(TOGGLE_COLUMNS)) {
 		const value = settings[key as keyof typeof TOGGLE_COLUMNS] as boolean | null | undefined;

@@ -62,12 +62,15 @@ export class RunManager {
 		}
 	}
 
-	/** Opens a transcript for daemon-run work. Holds the card's lease like a session does. */
-	openLog(cardId: string, runId: string): LiveRun {
+	/** Opens a transcript for daemon-run work. Holds the card's lease like a session does; `shared` lets a
+	 *  review fan-out run several commands at once, the way a crew's shared lease covers its members. */
+	openLog(cardId: string, runId: string, options: { shared?: boolean } = {}): LiveRun {
 		const held = this.byCard.get(cardId);
-		if (held && held.size > 0) throw new Error(`Card ${cardId} already has a live run`);
+		if (held && held.size > 0 && !options.shared) throw new Error(`Card ${cardId} already has a live run`);
 		const live: LiveRun = { runId, cardId, handle: null, buffer: this.createBuffer(cardId, runId), detach: () => {} };
-		this.byCard.set(cardId, new Set([runId]));
+		const set = held ?? new Set<string>();
+		set.add(runId);
+		this.byCard.set(cardId, set);
 		this.byRun.set(runId, live);
 		return live;
 	}

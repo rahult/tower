@@ -150,6 +150,7 @@ export function createApp(deps: AppDeps): Hono {
 			previewUrl: null,
 			previewCheck: null,
 			budgetUsd: null,
+			parallelReviews: null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,
@@ -266,6 +267,11 @@ export function createApp(deps: AppDeps): Hono {
 			if (body.understandBeforePlan !== null && typeof body.understandBeforePlan !== "boolean") throw new HttpError(400, '"understandBeforePlan" must be a boolean, or null for the default');
 			settings.understandBeforePlan = body.understandBeforePlan as boolean | null;
 		}
+		if (body.parallelReviews !== undefined) {
+			// null goes back to Tower's default (sequential reviews).
+			if (body.parallelReviews !== null && typeof body.parallelReviews !== "boolean") throw new HttpError(400, '"parallelReviews" must be a boolean, or null for the default');
+			settings.parallelReviews = body.parallelReviews as boolean | null;
+		}
 		if (body.acceptanceGates !== undefined) {
 			// null goes back to Tower's default.
 			if (body.acceptanceGates !== null && typeof body.acceptanceGates !== "boolean") throw new HttpError(400, '"acceptanceGates" must be a boolean, or null for the default');
@@ -350,6 +356,7 @@ export function createApp(deps: AppDeps): Hono {
 			previewUrl: manifest.previewUrl ?? null,
 			previewCheck: manifest.previewCheck ?? null,
 			budgetUsd: null,
+			parallelReviews: null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,

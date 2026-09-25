@@ -211,6 +211,40 @@ describe("plan coach", () => {
 	});
 });
 
+describe("review fan-out", () => {
+	it("a project can run its reviews at the same time", async () => {
+		h = await bootHarness(byStage(), ENV);
+		// Deterministic steps: the slow one holds its "running" row long enough to prove the overlap.
+		homeFlow(h, "slowreview", { name: "slowreview", title: "Slow review", description: "", when: ["after-tests"], steps: [{ name: "go", run: "sleep 0.6" }] });
+		homeFlow(h, "fastreview", { name: "fastreview", title: "Fast review", description: "", when: ["after-tests"], steps: [{ name: "go", run: "true" }] });
+		const project = await addProject();
+		const patched = await h.api("PATCH", `/api/projects/${project.id}`, { reviewFlows: ["slowreview", "fastreview"], parallelReviews: true });
+		console.log("PATCH:", patched.status, JSON.stringify({ reviewFlows: patched.body.reviewFlows, parallelReviews: patched.body.parallelReviews }));
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		const planGate = (await h.api("GET", `/api/cards/${card.id}`)).body.gates.find((gate: { kind: string }) => gate.kind === "plan_approval");
+		await h.api("POST", `/api/cards/${card.id}/gates/${planGate.id}`, { decision: "approve" });
+
+		// The proof of overlap: the fast review settles while the slow one is still on the wall.
+		let overlapped = false;
+		for (let i = 0; i < 60 && !overlapped; i++) {
+			const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+			const steps = detail.runs.filter((run: { kind: string }) => run.kind === "flow_step");
+			overlapped = steps.some((run: { status: string }) => run.status === "settled") && steps.some((run: { status: string }) => run.status === "running");
+			if (!overlapped) await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+		expect(overlapped).toBe(true);
+
+		await h.daemon.whenIdle();
+		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		expect(detail.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
+		const steps = detail.runs.filter((run: { kind: string }) => run.kind === "flow_step");
+		expect(steps).toHaveLength(2);
+		expect(steps.every((run: { resultStatus: string }) => run.resultStatus === "pass")).toBe(true);
+	});
+});
+
 describe("deep research", () => {
 	it("runs on a backlog card in the project checkout, before any work starts", async () => {
 		h = await bootHarness(researchScript(""), ENV);

@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -31,9 +31,10 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [subagents, setSubagents] = useState<boolean | null>(project.subagents);
 	const [understandBeforePlan, setUnderstandBeforePlan] = useState<boolean | null>(project.understandBeforePlan);
 	const [acceptanceGates, setAcceptanceGates] = useState<boolean | null>(project.acceptanceGates);
+	const [parallelReviews, setParallelReviews] = useState<boolean | null>(project.parallelReviews);
 	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
@@ -186,6 +187,20 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 						</label>
 					))}
 					{!flows.data && <span className="hint">Loading the available reviews…</span>}
+					{chosen.length > 1 && (
+						<label className="flex cursor-pointer items-center gap-2 text-[14px]">
+							<input
+								type="checkbox"
+								className="size-4 accent-[var(--primary)]"
+								checked={parallelReviews === true}
+								onChange={(event) => setParallelReviews(event.target.checked ? true : null)}
+							/>
+							<span>
+								Run the reviews at the same time
+								<span className="block text-[13px] text-slate">They never see each other, so order is luck anyway — parallel just gets you the findings sooner.</span>
+							</span>
+						</label>
+					)}
 				</div>
 			</div>
 			<div className="setting">

@@ -68,17 +68,37 @@ export class FlowRunner {
 	async runFlows(cardId: string, names: string[], feedback?: string): Promise<RunOutcome> {
 		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
 		for (const name of names) {
-			const flow = this.flow(name);
-			// A card with no worktree (research on a backlog card) may only run flows that touch no code.
-			const card = getCard(this.deps.db, cardId);
-			if (card && !card.worktreePath && !runsOnBacklogCard(flow)) {
-				throw new Error(`"${name}" runs commands or changes code, so it needs the card's worktree — start the card first.`);
-			}
-			for (const step of flow.steps) {
-				last = step.run !== undefined ? await this.runStep(cardId, flow, step) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback }));
-				if (last.kind !== "settled") return last;
-				if (step.run !== undefined && last.result !== "pass") return last;
-			}
+			const outcome = await this.runOneFlow(cardId, name, feedback);
+			if (outcome.kind !== "settled") return outcome;
+			if (outcome.result !== "pass") return outcome;
+			last = outcome;
+		}
+		return last;
+	}
+
+	/** Runs independent flows at the same time — a review fan-out. Verdicts combine; crashes and aborts win. */
+	async runFlowsConcurrently(cardId: string, names: string[]): Promise<RunOutcome> {
+		const outcomes = await Promise.all(names.map((name) => this.runOneFlow(cardId, name, undefined, true)));
+		const failed = outcomes.find((outcome) => outcome.kind === "failed");
+		if (failed) return failed;
+		const aborted = outcomes.find((outcome) => outcome.kind === "aborted");
+		if (aborted) return aborted;
+		return { kind: "settled", stage: "testing", result: "pass", summary: outcomes.map((outcome) => (outcome.kind === "settled" ? outcome.summary : "")).filter(Boolean).join(" · "), hasQuestions: false };
+	}
+
+	/** One flow, start to finish: its steps in order, its own verdict. */
+	private async runOneFlow(cardId: string, name: string, feedback?: string, shared = false): Promise<RunOutcome> {
+		const flow = this.flow(name);
+		// A card with no worktree (research on a backlog card) may only run flows that touch no code.
+		const card = getCard(this.deps.db, cardId);
+		if (card && !card.worktreePath && !runsOnBacklogCard(flow)) {
+			throw new Error(`"${name}" runs commands or changes code, so it needs the card's worktree — start the card first.`);
+		}
+		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
+		for (const step of flow.steps) {
+			last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback }));
+			if (last.kind !== "settled") return last;
+			if (step.run !== undefined && last.result !== "pass") return last;
 		}
 		return last;
 	}
@@ -92,7 +112,7 @@ export class FlowRunner {
 	 * A deterministic step: a command, no model, the exit code is the verdict. Recorded like any other run
 	 * so the rail and the transcript show it; output streams through the same blocks as the verify command.
 	 */
-	private async runStep(cardId: string, flow: Flow, step: FlowStep): Promise<RunOutcome> {
+	private async runStep(cardId: string, flow: Flow, step: FlowStep, shared = false): Promise<RunOutcome> {
 		const { config, db, runs } = this.deps;
 		const card = getCard(db, cardId) as Card;
 		const project = getProject(db, card.projectId);
@@ -123,7 +143,7 @@ export class FlowRunner {
 		insertRun(db, run);
 		this.publish(run.id);
 
-		const live = runs.openLog(cardId, run.id);
+		const live = runs.openLog(cardId, run.id, { shared });
 		const executed = runCommand({
 			command,
 			cwd: card.worktreePath,

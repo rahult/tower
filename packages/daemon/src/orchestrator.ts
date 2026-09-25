@@ -512,7 +512,13 @@ export class Orchestrator {
 	private async review(cardId: string): Promise<void> {
 		this.launching.delete(cardId);
 		this.dispatch(cardId, { type: "flows_started" });
-		const outcome = await this.deps.flows.runFlows(cardId, this.reviewFlowsFor(cardId));
+		const names = this.reviewFlowsFor(cardId);
+		const project = getProject(this.deps.db, getCard(this.deps.db, cardId)?.projectId ?? "");
+		// Reviews never see each other, so a project that opts in runs them at the same time.
+		const outcome =
+			project?.parallelReviews === true && names.length > 1
+				? await this.deps.flows.runFlowsConcurrently(cardId, names)
+				: await this.deps.flows.runFlows(cardId, names);
 		if (this.stopping) return;
 		if (outcome.kind === "aborted") this.dispatch(cardId, { type: "run_aborted" });
 		else if (outcome.kind === "failed") this.dispatch(cardId, { type: "run_failed", error: outcome.error });
