@@ -34,6 +34,8 @@ export interface Config {
 	maxCiFixAttempts: number;
 	/** How long a blocking question from a pi extension may wait for an answer before it is cancelled. */
 	uiRequestTimeoutMs: number;
+	/** How often the scheduler looks for scheduled flows whose interval has elapsed. */
+	scheduleTickMs: number;
 	/** Built web UI served in production; absent in dev (Vite proxies to the daemon instead). */
 	webDist: string;
 	/** Which model runs each stage, from <home>/config.json. Replaced at runtime when settings are saved. */
@@ -70,6 +72,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		issuesPollMs: Number(env.TOWER_ISSUES_POLL_MS ?? 180_000),
 		maxCiFixAttempts: Number(env.TOWER_MAX_CI_FIX_ATTEMPTS ?? 2),
 		uiRequestTimeoutMs: Number(env.TOWER_UI_REQUEST_TIMEOUT_MS ?? 5 * 60_000),
+		scheduleTickMs: Number(env.TOWER_SCHEDULE_TICK_MS ?? 60_000),
 		webDist: env.TOWER_WEB_DIST ?? join(repoRoot, "packages", "web", "dist"),
 		globalStageConfig: readModels(home),
 		maxConcurrent: Number(env.TOWER_MAX_CONCURRENT ?? 3),

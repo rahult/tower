@@ -35,14 +35,16 @@ export interface FlowStep {
 }
 
 /** When a flow runs. Manual flows appear in the drawer's Run tab; the others are lifecycle hooks. */
-export type FlowTrigger = "manual" | "after-plan" | "after-build" | "after-tests";
-const TRIGGERS = new Set<FlowTrigger>(["manual", "after-plan", "after-build", "after-tests"]);
+export type FlowTrigger = "manual" | "after-plan" | "after-build" | "after-tests" | "schedule";
+const TRIGGERS = new Set<FlowTrigger>(["manual", "after-plan", "after-build", "after-tests", "schedule"]);
 
 export interface Flow {
 	name: string;
 	title: string;
 	description: string;
 	when: FlowTrigger[];
+	/** For scheduled flows: how often to fire, in hours (0 = every tick). Default 24. */
+	intervalHours?: number;
 	steps: FlowStep[];
 }
 
@@ -80,7 +82,10 @@ export function parseFlow(text: string, source: string): Flow {
 		if (step.expect !== undefined && step.expect !== "pass" && step.expect !== "note") throw new Error(`${source}: step "${step.name}" has unknown expect "${step.expect}" (pass or note)`);
 		if (step.timeoutSec !== undefined && (!Number.isFinite(step.timeoutSec) || step.timeoutSec <= 0)) throw new Error(`${source}: step "${step.name}" needs a positive "timeoutSec"`);
 	});
-	return { name: raw.name, title: raw.title ?? raw.name, description: raw.description ?? "", when: [...new Set(when)], steps: raw.steps };
+	if (raw.intervalHours !== undefined && (!Number.isFinite(raw.intervalHours) || raw.intervalHours < 0 || raw.intervalHours > 8760)) {
+		throw new Error(`${source}: "intervalHours" must be a number from 0 (every tick) to 8760 (a year)`);
+	}
+	return { name: raw.name, title: raw.title ?? raw.name, description: raw.description ?? "", when: [...new Set(when)], steps: raw.steps, ...(raw.intervalHours !== undefined ? { intervalHours: raw.intervalHours } : {}) };
 }
 
 /** The flows that run at a lifecycle moment, in file order — deterministic because the names sort them. */

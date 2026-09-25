@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STAGE_RESULT_FILE } from "@tower/core";
 import { afterEach, describe, expect, it } from "vitest";
@@ -208,6 +208,53 @@ describe("plan coach", () => {
 		// The gate itself is untouched: no runs were consumed, the decision is still pending.
 		expect(detail.gates).toHaveLength(1);
 		expect(detail.gates[0]).toMatchObject({ kind: "plan_approval", status: "pending" });
+	});
+});
+
+describe("scheduled flows", () => {
+	it("a flow with the schedule trigger fires on a carrier card when its interval elapses", { timeout: 20_000 }, async () => {
+		h = await bootHarness(byStage(), { ...ENV, TOWER_SCHEDULE_TICK_MS: "80" });
+		homeFlow(h, "nightly-audit", { name: "nightly-audit", title: "Nightly audit", description: "", when: ["schedule"], intervalHours: 1, steps: [{ name: "go", prompt: "nightly-audit.md" }] });
+		// A person's flow carries its prompt file beside it in ~/.tower/flows.
+		writeFileSync(join(h.home, "flows", "nightly-audit.md"), "Audit the repository read-only. Report what has drifted.");
+		const project = await addProject();
+
+		// The boot check plus the first tick fire it; the carrier card carries the run.
+		let carrier = null;
+		for (let i = 0; i < 100 && !carrier; i++) {
+			const board = (await h.api("GET", "/api/board")).body;
+			carrier = board.cards.find((candidate: { title: string }) => candidate.title.startsWith("Scheduled: Nightly audit"));
+			if (!carrier) await new Promise((resolve) => setTimeout(resolve, 60));
+		}
+		expect(carrier).toBeTruthy();
+		await h.daemon.whenIdle();
+
+		// The run row may lag the card by a tick; wait for it to land.
+		let detail = null;
+		for (let i = 0; i < 100; i++) {
+			detail = (await h.api("GET", `/api/cards/${carrier.id}`)).body;
+			if (detail.runs.some((run: { kind: string }) => run.kind === "flow_step")) break;
+			await new Promise((resolve) => setTimeout(resolve, 60));
+		}
+		expect(detail.card).toMatchObject({ stage: "backlog", status: "idle", projectId: project.id });
+		const runs = detail.runs.filter((run: { kind: string }) => run.kind === "flow_step");
+		expect(runs.length).toBeGreaterThanOrEqual(1);
+		// The state is recorded, so later ticks do not fire it again within the interval.
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		const board = (await h.api("GET", "/api/board")).body;
+		const carriers = board.cards.filter((candidate: { title: string }) => candidate.title.startsWith("Scheduled: Nightly audit"));
+		expect(carriers).toHaveLength(1);
+		const stateFile = join(h.home, "projects", project.id, "schedule-state.json");
+		expect(readFileSync(stateFile, "utf8")).toContain("nightly-audit");
+	});
+
+	it("a scheduled flow that needs a worktree is skipped with its reason, not fired", async () => {
+		h = await bootHarness(byStage(), { ...ENV, TOWER_SCHEDULE_TICK_MS: "80" });
+		homeFlow(h, "heavy-check", { name: "heavy-check", title: "Heavy check", description: "", when: ["schedule"], intervalHours: 0, steps: [{ name: "go", run: "true" }] });
+		await addProject();
+		await new Promise((resolve) => setTimeout(resolve, 400));
+		const board = (await h.api("GET", "/api/board")).body;
+		expect(board.cards.find((candidate: { title: string }) => candidate.title.startsWith("Scheduled: Heavy check"))).toBeUndefined();
 	});
 });
 

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type AgentStage, type Card, renderPrompt, resolveStageConfig, type StageRun, STAGE_RESULT_FILE, type ThinkingLevel } from "@tower/core";
 import { type Config, paths } from "./config.ts";
@@ -247,7 +247,13 @@ export class FlowRunner {
 		if (step.skill) return `/skill:${step.skill}${step.task ? ` ${step.task}` : ""}`;
 		if (step.agent) return step.task ?? `Do your job for this task: ${card.title}\n\n${card.brief}`;
 		const cardDir = paths.cardDir(config, card.id);
-		const read = (...parts: string[]) => readFileSync(join(config.promptsDir, ...parts), "utf8");
+		// A prompt file ships with Tower (prompts/flows) or belongs to a person's own flow (home/flows):
+	// a flow in ~/.tower/flows references the .md files beside it.
+	const read = (...parts: string[]) => {
+		const shipped = join(config.promptsDir, ...parts);
+		if (existsSync(shipped)) return readFileSync(shipped, "utf8");
+		return readFileSync(join(config.home, ...parts), "utf8");
+	};
 		// A flow step names a prompt file; an ad hoc request carries the text itself.
 		const template = reportPath ? read("flows", step.prompt as string) : (step.prompt as string);
 		if (!reportPath) return template;

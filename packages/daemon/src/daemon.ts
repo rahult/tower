@@ -68,6 +68,7 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	// Whatever the previous process left in flight is interrupted; queued work carries on.
 	orchestrator.recover();
 	orchestrator.watchPullRequests();
+	orchestrator.watchSchedule();
 	orchestrator.watchIssues();
 
 	const server: ServerType = await new Promise((resolve) => {

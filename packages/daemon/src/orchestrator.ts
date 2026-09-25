@@ -26,7 +26,7 @@ import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import { issueBrief } from "./feedback.ts";
-import { flowsTriggered, type Flow, type FlowTrigger, loadFlows } from "./flows.ts";
+import { flowsTriggered, type Flow, type FlowTrigger, loadFlows, runsOnBacklogCard } from "./flows.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
@@ -68,6 +68,7 @@ export class Orchestrator {
 	private readonly handledCiFailures = new Map<string, string>();
 	private prTimer: NodeJS.Timeout | null = null;
 	private issueTimer: NodeJS.Timeout | null = null;
+	private scheduleTimer: NodeJS.Timeout | null = null;
 	/** Said once per process, not once per poll: the feedback repo has issues but no project tracks it. */
 	private warnedNoIntakeProject = false;
 
@@ -279,6 +280,7 @@ export class Orchestrator {
 		this.stopping = true;
 		if (this.prTimer) clearInterval(this.prTimer);
 		if (this.issueTimer) clearInterval(this.issueTimer);
+		if (this.scheduleTimer) clearInterval(this.scheduleTimer);
 		this.deps.stages.beginShutdown();
 		for (const stop of this.verifyAborts.values()) stop();
 	}
@@ -732,6 +734,64 @@ export class Orchestrator {
 		if (this.deps.config.prPollMs <= 0) return;
 		this.prTimer = setInterval(() => void this.pollPullRequests(), this.deps.config.prPollMs);
 		this.prTimer.unref();
+	}
+
+	/** Starts the scheduler: every tick, each project's scheduled flows whose interval has elapsed fire
+	 *  on a carrier card. A check also runs right after boot, so an elapsed interval is not missed. */
+	watchSchedule(): void {
+		if (this.deps.config.scheduleTickMs <= 0) return;
+		this.scheduleTimer = setInterval(() => void this.runScheduled(), this.deps.config.scheduleTickMs);
+		this.scheduleTimer.unref();
+		void this.runScheduled();
+	}
+
+	/** The project's scheduled flows, in file order. */
+	private scheduledFlowsFor(projectId: string): Flow[] {
+		const project = getProject(this.deps.db, projectId);
+		return flowsTriggered(loadFlows(this.deps.config), "schedule").filter((flow) => this.flowAllowed(flow, project));
+	}
+
+	/** Fires every due scheduled flow on every project. A flow that cannot run without a worktree is
+	 *  skipped with a log line: scheduled checks are read-only audits, not builds. */
+	async runScheduled(): Promise<void> {
+		const { config, db } = this.deps;
+		const now = Date.now();
+		for (const project of listProjects(db)) {
+			const statePath = join(config.home, "projects", project.id, "schedule-state.json");
+			let state: Record<string, number> = {};
+			try {
+				state = existsSync(statePath) ? (JSON.parse(readFileSync(statePath, "utf8")) as Record<string, number>) : {};
+			} catch {
+				state = {};
+			}
+			for (const flow of this.scheduledFlowsFor(project.id)) {
+				const intervalMs = (flow.intervalHours ?? 24) * 3_600_000;
+				const last = state[flow.name] ?? 0;
+				if (now - last < intervalMs) continue;
+				const title = `Scheduled: ${flow.title} — ${project.name}`;
+				if (listCards(db).some((candidate) => candidate.projectId === project.id && candidate.title === title && this.isBusy(candidate.id))) continue;
+				if (!runsOnBacklogCard(flow)) {
+					console.error(`the scheduled flow "${flow.name}" runs commands or writes, which a carrier card cannot — it needs read-only steps`);
+					continue;
+				}
+				const card = this.fileCard(project.id, title, `Fired by the scheduler for the "${flow.name}" flow. The run lands on this card; the flow works read-only in the project checkout.`);
+				state[flow.name] = now;
+				try {
+					mkdirSync(dirname(statePath), { recursive: true });
+					writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+				} catch (error) {
+					console.error(`could not record the schedule state of ${project.name}:`, error instanceof Error ? error.message : error);
+				}
+				const work = this.deps.flows
+					.runFlows(card.id, [flow.name])
+					.then((outcome) => {
+						if (outcome.kind === "failed") console.error(`the scheduled flow "${flow.name}" failed on ${project.name}: ${outcome.error}`);
+					})
+					.catch((error) => console.error(`the scheduled flow "${flow.name}" crashed on ${project.name}:`, error instanceof Error ? error.message : error));
+				this.pending.add(work);
+				work.finally(() => this.pending.delete(work));
+			}
+		}
 	}
 
 	/**
