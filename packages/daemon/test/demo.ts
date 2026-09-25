@@ -218,6 +218,35 @@ const driver = new FakeSessionDriver((spec) => {
 				],
 			},
 		];
+	// The plan-gate coach: a rubric pass that writes its findings beside the decision, like the real flow.
+	if (spec.sessionId.includes("plan-coach"))
+		return [
+			{
+				events: [{ type: "message", message: { role: "assistant", text: "Coach report written.", thinking: "", toolCalls: [] } }],
+				effect: ({ spec, prompt }) => {
+					const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+					if (report)
+						writeFileSync(
+							report,
+							[
+								"# Plan coach",
+								"",
+								"A rubric pass over the draft plan — advice only, the decision stays yours.",
+								"",
+								"## Findings",
+								"",
+								"1. **Behavior — what is out of scope is never said.** The plan names what changes but not what must not; write one line of non-goals so the builder does not improvise.",
+								"2. **Failure modes — the unhappy path is unlisted.** What the caller sees when the store is unreachable is undefined; name the error and its shape.",
+								"",
+								"## Verdict",
+								"",
+								"Ready to build — with the two notes above worth a thought.",
+							].join("\n"),
+						);
+					writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Ready to build — two notes worth a thought." }));
+				},
+			},
+		];
 	// The crew card's members first: their ids carry no stage token, so they must not fall through to reviews.
 	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
 	if (spec.sessionId.includes("-ws-")) return [streamBuilderTurn()];
