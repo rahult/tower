@@ -8,7 +8,7 @@
 // reported as SKIP and never fail the red gate. The green gate always gates every spec.
 // No specs at all fails both gates: an empty harness must never look like a pass.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
@@ -90,7 +90,14 @@ try {
 		const gated = baseCommit === null ? results : results.filter((result) => ownSpecs.has(result.file));
 		const skipped = results.length - gated.length;
 		if (gated.length === 0) {
-			console.error(`\nRED GATE FAILED: this branch changes no acceptance spec, so there is nothing to hold red.${baseCommit ? " The build's specs must be added under acceptance/specs/." : ""}`);
+			// A branch that adds no spec is a failing gate — unless it declares itself behavior-less:
+			// hygiene and refactors have nothing to turn red, and the green gate plus verify gate them.
+			const marker = join(root, "acceptance", "NO-NEW-BEHAVIOR");
+			if (existsSync(marker)) {
+				console.log(`\nRED GATE N/A: no specs are new or changed and ${join("acceptance", "NO-NEW-BEHAVIOR")} declares this branch behavior-less (${readFileSync(marker, "utf8").trim().slice(0, 160)}). The green gate still gates every spec.`);
+				process.exit(0);
+			}
+			console.error(`\nRED GATE FAILED: this branch changes no acceptance spec, so there is nothing to hold red.${baseCommit ? " The build's specs must be added under acceptance/specs/, or a behavior-less branch must declare it in acceptance/NO-NEW-BEHAVIOR." : ""}`);
 			process.exit(1);
 		}
 		const held = gated.filter((result) => result.ok);

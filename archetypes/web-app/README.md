@@ -54,7 +54,9 @@ export async function run({ baseUrl }) {
   `--expect-red`: exit 0 only when **the specs this branch adds or changes** all fail, judged against
   the merge-base with the default branch — pre-existing specs legitimately pass, so the red gate
   reports them as `SKIP` and judges only the branch's own specs. No specs at all, or a branch that
-  adds none, fails both gates.
+  adds none, fails both gates — unless the branch commits `acceptance/NO-NEW-BEHAVIOR` with a
+  one-line justification: a behavior-less card (hygiene, refactor) has nothing to turn red, and is
+  gated by its unit tests, `npm run verify`, and every existing spec at green.
 
 ## House rules
 

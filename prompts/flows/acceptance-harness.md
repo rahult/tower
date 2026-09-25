@@ -14,7 +14,8 @@ guide in `acceptance/specs/README.md` — they define the exact shape you must f
 1. Write one spec per test target from the plan. Each spec exercises the behavior through the running application — its API or UI — never through internals, and asserts precisely what the target says. Cover the invariants: duplicates rejected, retries idempotent, boundaries held.
 2. Run `npm run accept -- --expect-red`. Every spec must fail, for the *right* reason: a missing route or unimplemented behavior, not a syntax error or a spec bug. Fix specs that fail wrongly; never implement product code to make one pass.
 3. Commit only the new specs (and nothing else) with the message `Add acceptance specs for <task>`.
-4. If the plan has no `## Test targets` section, or the repository has no acceptance runner, do not improvise either one: report `blocked` with what is missing.
+4. If the plan declares **no new observable behavior** — a hygiene, config or refactor card whose targets are unit-level or meta-level — do not invent API specs and do not shell out to test commands as specs. Commit a one-line justification at `acceptance/NO-NEW-BEHAVIOR`, write no spec files, and report `pass` with that explanation as the summary; the red gate honors the marker, and the green gate plus `npm run verify` remain the card's bar.
+5. If the plan has no `## Test targets` section, or the repository has no acceptance runner, do not improvise either one: report `blocked` with what is missing.
 
 Then report your result: `pass` with the count of specs written in `summary` when the red gate holds, `fail` otherwise.
 
