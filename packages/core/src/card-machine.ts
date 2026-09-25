@@ -249,7 +249,7 @@ export function transition(card: CardState, event: CardEvent): Transition {
 
 		case "retry":
 			// Re-run the stage the card is stuck or resting in, optionally with guidance.
-			if (stage === "feedback" && (status === "needs_attention" || status === "idle")) return { next: rest("feedback", "queued"), effects: [{ type: "run_flows" }] };
+			if (stage === "feedback" && (status === "needs_attention" || status === "idle" || status === "interrupted")) return { next: rest("feedback", "queued"), effects: [{ type: "run_flows" }] };
 			if (stage === "pull_request" && (status === "needs_attention" || status === "idle")) return openPr();
 			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted" && status !== "awaiting_input")) break;
 			// A failed before-plan understanding reruns itself: planning must not start without its model.

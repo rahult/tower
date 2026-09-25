@@ -241,11 +241,12 @@ export class Orchestrator {
 			return this.replayPastBudget(cardId, { feedback: "continuing now that the budget was raised or cleared" });
 		}
 		// Stuck on a failed hook flow: the fix is a rebuild with the gate's output, not another test run —
-		// except a failed before-plan understanding, which reruns itself: planning has nothing to go on without it.
-			if (card && !feedback && card.status === "needs_attention") {
+		// except a failed before-plan understanding, which reruns itself: planning has nothing to go on
+		// without it. The person's feedback, when they added some, rides along with the gate's output.
+			if (card && card.status === "needs_attention") {
 				const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled");
 				if (last?.kind === "flow_step" && last.resultStatus !== "pass" && (last.stage === "planning" || last.stage === "testing")) {
-					const summary = last.resultSummary ?? "";
+					const summary = `${last.resultSummary ?? ""}${feedback ? `\n\nThe person added:\n${feedback}` : ""}`;
 					const gate = last.id.includes(UNDERSTAND_FLOW)
 						? { beforePlan: true }
 						: last.stage === "testing"
