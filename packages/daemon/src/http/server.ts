@@ -300,6 +300,7 @@ export function createApp(deps: AppDeps): Hono {
 			prUrl: null,
 			prState: null,
 			needsAttentionReason: null,
+			finishNote: null,
 			issueUrl: null,
 			issueNumber: null,
 			issueAuthor: null,

@@ -133,6 +133,10 @@ const MIGRATIONS: string[] = [
 	-- Run after a preview starts, so a URL that is really somebody else's app is reported degraded, not trusted.
 	ALTER TABLE projects ADD COLUMN preview_check TEXT;
 	`,
+	`
+	-- A done card's parting words (merged locally, PR merged) are an outcome, not an attention reason.
+	ALTER TABLE cards ADD COLUMN finish_note TEXT;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

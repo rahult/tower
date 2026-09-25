@@ -143,7 +143,9 @@ describe("pull requests", () => {
 		await h.daemon.whenIdle();
 		const done = (await h.api("GET", `/api/cards/${card.id}`)).body.card;
 		expect(done).toMatchObject({ stage: "done", status: "idle", prUrl: null });
-		expect(done.needsAttentionReason).toContain("Merged into main locally");
+		// The merge is an outcome, not an attention reason: it lands in finishNote with the reason cleared.
+		expect(done.finishNote).toContain("Merged into main locally");
+		expect(done.needsAttentionReason).toBeNull();
 		expect(existsSync(detail.card.worktreePath)).toBe(false);
 		// The work landed on main as a real merge commit, and the card branch left with its worktree.
 		const log = execFileSync("git", ["log", "--oneline", "main"], { cwd: h.repo, encoding: "utf8" });

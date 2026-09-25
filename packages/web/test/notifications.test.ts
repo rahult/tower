@@ -18,6 +18,7 @@ const card = (overrides: Partial<Card>): Card => ({
 	stageConfig: {},
 	prUrl: null,
 	prState: null,
+	finishNote: null,
 	needsAttentionReason: null,
 	issueUrl: null,
 	issueNumber: null,

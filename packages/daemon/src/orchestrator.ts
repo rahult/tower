@@ -20,7 +20,7 @@ import {
 } from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
-import { getCard, getCardByIssue, insertCard, listCards, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard } from "./db/repo-cards.ts";
+import { getCard, getCardByIssue, insertCard, listCards, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard, type CardPatch } from "./db/repo-cards.ts";
 import { decideGate, getGate, insertGate } from "./db/repo-gates.ts";
 import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
@@ -81,7 +81,15 @@ export class Orchestrator {
 		const card = getCard(db, cardId);
 		if (!card) throw new Error(`Card not found: ${cardId}`);
 		const { next, effects } = transition(card, event);
-		const updated = updateCard(db, cardId, next);
+		// A done card's parting words (merged locally, PR merged) are an outcome, not an attention
+		// reason: they land in finish_note, and leaving done clears them.
+		let patch: CardPatch = next;
+		if (next.stage === "done") {
+			patch = { ...next, finishNote: next.needsAttentionReason ?? card.finishNote, needsAttentionReason: null };
+		} else if (card.finishNote !== null) {
+			patch = { ...next, finishNote: null };
+		}
+		const updated = updateCard(db, cardId, patch);
 		bus.publish({ topic: "board", type: "card_upserted", data: updated });
 		for (const effect of effects) this.execute(cardId, effect);
 		// Any transition can free a slot or add work, so let the scheduler look again.
@@ -167,6 +175,7 @@ export class Orchestrator {
 			prUrl: null,
 			prState: null,
 			needsAttentionReason: null,
+			finishNote: null,
 			issueUrl: null,
 			issueNumber: null,
 			issueAuthor: null,
@@ -704,6 +713,7 @@ export class Orchestrator {
 			prUrl: null,
 			prState: null,
 			needsAttentionReason: null,
+			finishNote: null,
 			issueUrl: issue.url,
 			issueNumber: issue.number,
 			issueAuthor: issue.author,
