@@ -16,6 +16,9 @@ export type FailureDecision =
 
 const TAIL_CHARS = 6000;
 
+/** What the failure looks like to a comparison: whitespace-normalised, so formatting noise cannot fake a change. */
+const signature = (output: string): string => output.replace(/\s+/g, " ").trim();
+
 /**
  * Decides what happens after testing fails.
  *
@@ -24,12 +27,24 @@ const TAIL_CHARS = 6000;
  * stops sooner, but needs a similarity rule and can give up on a flaky test. And how much output do you feed
  * back: all of it (the answer is in there, but it bloats a cheap model's context) or just the tail?
  *
- * TODO(rahul): replace this default (counter only, last 6000 characters) with your own rule.
+ * The default: a counter with a cap, the last 6000 characters of output, and one repetition signal — when this
+ * failure is byte-for-byte the one before it (whitespace-normalised), the builder is told the last fix did not
+ * touch the cause, because an identical failure after a fix is information, not bad luck.
+ *
+ * TODO(rahul): tune the similarity rule if flaky tests ever masquerade as identical failures.
  * Tests in test/retry.test.ts pin only the contract: never retry past the cap, always say why.
  */
 export function decideAfterFailure(ctx: FailureContext): FailureDecision {
 	if (ctx.buildAttempt >= ctx.maxBuildAttempts) {
-		return { action: "needs_attention", reason: `Still failing after ${ctx.buildAttempt} build attempts.` };
+		const identical = ctx.previousOutput !== null && signature(ctx.previousOutput) === signature(ctx.output);
+		return {
+			action: "needs_attention",
+			reason: `Still failing after ${ctx.buildAttempt} build attempts${identical ? " — the last two failed identically, so the current approach is not working" : ""}.`,
+		};
 	}
-	return { action: "retry", feedback: `The checks failed after your last build. Fix the cause, do not weaken the checks.\n\n${ctx.output.slice(-TAIL_CHARS)}` };
+	const identical = ctx.previousOutput !== null && signature(ctx.previousOutput) === signature(ctx.output);
+	const warning = identical
+		? "This failure is exactly the one your last fix claimed to address — the fix did not touch the cause. Change the approach: re-read the failing check, question the plan's assumption behind it, and verify your change actually runs before reporting."
+		: "Fix the cause, do not weaken the checks.";
+	return { action: "retry", feedback: `The checks failed after your last build. ${warning}\n\n${ctx.output.slice(-TAIL_CHARS)}` };
 }

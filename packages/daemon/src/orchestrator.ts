@@ -357,7 +357,7 @@ export class Orchestrator {
 					afterPlanFlows,
 					afterBuildFlows,
 					budget: this.budgetFor(cardId),
-					onFailure: this.failureDecision(cardId, outcome.summary, null),
+					onFailure: this.failureDecision(cardId, outcome.summary, this.previousTestFailure(cardId)),
 				},
 			});
 		}
@@ -421,6 +421,12 @@ export class Orchestrator {
 			card: { title: card.title, brief: card.brief, planningAttempt: card.attempt },
 			plan: { bytes: Buffer.byteLength(plan), lines: plan.split("\n").length },
 		});
+	}
+
+	/** The last testing failure this card recorded (agent tester or verify), for repetition-aware retries. */
+	private previousTestFailure(cardId: string): string | null {
+		const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.stage === "testing" && (run.kind === "verify" || run.kind === "stage") && run.resultStatus === "fail");
+		return last?.resultSummary ?? null;
 	}
 
 	private failureDecision(cardId: string, output: string, previousOutput: string | null): FailureDecision {

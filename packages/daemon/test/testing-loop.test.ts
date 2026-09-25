@@ -69,7 +69,10 @@ describe("testing stage and the fail loop", () => {
 	it("stops at the build-attempt cap and asks for attention", async () => {
 		h = await bootHarness(fixesOnBuild(99));
 		const { card, detail } = await approvePlan(h, { verifyCommand: VERIFY });
-		expect(detail.card).toMatchObject({ stage: "testing", status: "needs_attention", needsAttentionReason: "Still failing after 3 build attempts." });
+		expect(detail.card).toMatchObject({ stage: "testing", status: "needs_attention" });
+		expect(detail.card.needsAttentionReason).toContain("Still failing after 3 build attempts");
+		// The scripted builds fail identically, and the card says so: repetition is information.
+		expect(detail.card.needsAttentionReason).toContain("failed identically");
 		expect(detail.runs.filter((r: { stage: string; kind: string }) => r.stage === "building")).toHaveLength(3);
 		expect(detail.runs.filter((r: { kind: string }) => r.kind === "verify")).toHaveLength(3);
 
