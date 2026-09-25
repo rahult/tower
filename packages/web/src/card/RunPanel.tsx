@@ -101,6 +101,12 @@ export function RunPanel({ cardId, project, hasWorktree, bench, busy, onStarted 
 								</>
 							)}
 						</p>
+						{bench?.running && bench.check && bench.check.status !== "passed" && (
+							<p className={`text-[13px] ${bench.check.status === "failed" ? "text-caution-text" : "text-slate"}`}>
+								{bench.check.status === "running" ? "Checking the preview is really this app…" : "Preview check failed — this URL may not be serving this app."}
+								{bench.check.output && <span className="block truncate font-mono text-[12px]">{bench.check.output.split("\n").at(-1)}</span>}
+							</p>
+						)}
 					</div>
 					{bench?.running ? (
 						<button type="button" disabled={previewBusy} onClick={() => preview.mutate()} className={button.quiet}>

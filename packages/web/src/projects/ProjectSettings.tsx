@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -20,6 +20,7 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [testCommand, setTestCommand] = useState(project.testCommand ?? "");
 	const [previewCommand, setPreviewCommand] = useState(project.previewCommand ?? "");
 	const [previewUrl, setPreviewUrl] = useState(project.previewUrl ?? "");
+	const [previewCheck, setPreviewCheck] = useState(project.previewCheck ?? "");
 	const [concurrencyLimit, setConcurrencyLimit] = useState(project.concurrencyLimit);
 	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
 	const [reviewFlows, setReviewFlows] = useState<string[] | null>(project.reviewFlows);
@@ -31,7 +32,7 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [acceptanceGates, setAcceptanceGates] = useState<boolean | null>(project.acceptanceGates);
 	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
@@ -143,12 +144,13 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 						<label htmlFor={`preview-${project.id}`}>Preview command</label>
 					</div>
 					<div className="d">
-						Starts a dev server in a card's worktree while you click through its branch{previewUrl ? ", answering at the preview URL" : ""}. Set both from a card's Run tab.
+						Starts a dev server in a card's worktree while you click through its branch{previewUrl ? ", answering at the preview URL" : ""}. The check command runs after it starts — exit 0 proves the URL is really serving this app, not whatever else holds the port.
 					</div>
 				</div>
 				<div className="v grid gap-2 sm:grid-cols-2">
 					<input id={`preview-${project.id}`} aria-label="Preview command" value={previewCommand} onChange={(event) => setPreviewCommand(event.target.value)} placeholder="pnpm dev" spellCheck={false} className={monoField} />
 					<input aria-label="Preview URL" value={previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} placeholder="http://localhost:5173" spellCheck={false} className={monoField} />
+					<input aria-label="Preview check command" value={previewCheck} onChange={(event) => setPreviewCheck(event.target.value)} placeholder="node scripts/preview-check.mjs" spellCheck={false} className={`${monoField} sm:col-span-2`} />
 				</div>
 			</div>
 			<div className="setting">

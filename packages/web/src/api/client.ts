@@ -25,6 +25,8 @@ export interface Preview {
 	command: string | null;
 	url: string | null;
 	startedAt: number | null;
+	/** The project's preview check, run after start: proof the URL is really this app. null when no check is configured. */
+	check: { status: "running" | "passed" | "failed"; output: string | null } | null;
 }
 
 export interface CardDetail {
@@ -191,7 +193,7 @@ export const api = {
 	projectModel: (id: string) => request<ProjectModel>("GET", `/api/projects/${id}/model`),
 	understand: (id: string) => request<Card>("POST", `/api/projects/${id}/understand`),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
-	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
+	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string) => request<Card>("POST", "/api/cards", { projectId, title, brief }),
 	assist: (text: string) => request<AssistOutcome>("POST", "/api/assist", { text }),
 	fileFeedback: async (body: { kind: FeedbackKind; title: string; details: string; includeDiagnostics: boolean }): Promise<FiledFeedback> => {

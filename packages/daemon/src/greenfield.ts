@@ -25,6 +25,8 @@ export interface ArchetypeManifest {
 	test?: string;
 	previewCommand?: string;
 	previewUrl?: string;
+	/** Run after a preview starts; exit 0 means the URLs really are serving this app. */
+	previewCheck?: string;
 }
 
 const readManifest = (config: Config, name: string): ArchetypeManifest | null => {

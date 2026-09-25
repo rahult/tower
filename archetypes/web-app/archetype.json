@@ -6,5 +6,6 @@
   "verify": "npm run verify",
   "test": "npm test",
   "previewCommand": "npm run dev",
-  "previewUrl": "http://localhost:5173"
+  "previewUrl": "http://localhost:5173",
+  "previewCheck": "node scripts/preview-check.mjs"
 }

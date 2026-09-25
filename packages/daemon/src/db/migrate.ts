@@ -129,6 +129,10 @@ const MIGRATIONS: string[] = [
 	ALTER TABLE projects ADD COLUMN understand_before_plan INTEGER;
 	ALTER TABLE projects ADD COLUMN acceptance_gates INTEGER;
 	`,
+	`
+	-- Run after a preview starts, so a URL that is really somebody else's app is reported degraded, not trusted.
+	ALTER TABLE projects ADD COLUMN preview_check TEXT;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

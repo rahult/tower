@@ -16,7 +16,7 @@ const MAX_KEPT_OUTPUT = 200_000;
  * transcript in batches so the drawer shows it live. Used by the testing gate and by deterministic
  * flow steps — anywhere Tower itself, not a model, is the judge.
  */
-export function runCommand(options: { command: string; cwd: string; timeoutMs: number; buffer: TranscriptBuffer; events: { started: string; output: string }; label?: string }): { done: Promise<VerifyResult>; abort: () => void } {
+export function runCommand(options: { command: string; cwd: string; timeoutMs: number; buffer?: TranscriptBuffer; events: { started: string; output: string }; label?: string }): { done: Promise<VerifyResult>; abort: () => void } {
 	const { command, cwd, timeoutMs, buffer, events } = options;
 	const label = options.label ?? "command";
 	let aborted = false;
@@ -33,7 +33,7 @@ export function runCommand(options: { command: string; cwd: string; timeoutMs: n
 		}
 	};
 	const flush = () => {
-		if (!pending) return;
+		if (!pending || !buffer) return;
 		buffer.push(events.output, { text: pending });
 		pending = "";
 	};
@@ -50,7 +50,7 @@ export function runCommand(options: { command: string; cwd: string; timeoutMs: n
 		killTree();
 	}, timeoutMs);
 
-	buffer.push(events.started, { command });
+	buffer?.push(events.started, { command });
 	const done = new Promise<VerifyResult>((resolve, reject) => {
 		child.once("error", reject);
 		child.once("close", (exitCode) => {

@@ -148,6 +148,7 @@ export function createApp(deps: AppDeps): Hono {
 			testCommand: null,
 			previewCommand: null,
 			previewUrl: null,
+			previewCheck: null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,
@@ -238,7 +239,7 @@ export function createApp(deps: AppDeps): Hono {
 		const settings: ProjectSettings = {};
 		if (typeof body.name === "string" && body.name.trim()) settings.name = body.name.trim();
 		// An empty string clears a command.
-		for (const key of ["setupCommand", "verifyCommand", "testCommand", "previewCommand", "previewUrl"] as const) {
+		for (const key of ["setupCommand", "verifyCommand", "testCommand", "previewCommand", "previewUrl", "previewCheck"] as const) {
 			if (typeof body[key] === "string") settings[key] = (body[key] as string).trim() || null;
 		}
 		if (body.reviewFlows !== undefined) {
@@ -335,6 +336,7 @@ export function createApp(deps: AppDeps): Hono {
 			testCommand: manifest.test ?? null,
 			previewCommand: manifest.previewCommand ?? null,
 			previewUrl: manifest.previewUrl ?? null,
+			previewCheck: manifest.previewCheck ?? null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,

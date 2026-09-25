@@ -138,3 +138,44 @@ describe("hands-on: previewing a card", () => {
 		expect((await h.api("POST", `/api/cards/${card.id}/test`)).status).toBe(409);
 	});
 });
+
+describe("hands-on: the preview check", () => {
+	/** Polls the card detail until the preview's check settles, then returns it. */
+	async function settledCheck(harness: Harness, cardId: string) {
+		for (let i = 0; i < 200; i++) {
+			const preview = (await harness.api("GET", `/api/cards/${cardId}`)).body.bench.preview;
+			if (preview.running && preview.check && preview.check.status !== "running") return preview;
+			await new Promise((resolve) => setTimeout(resolve, 25));
+		}
+		throw new Error("preview check did not settle");
+	}
+
+	it("runs the project's check after start and reports it passed", async () => {
+		h = await bootHarness(byStage());
+		const cardId = await builtCard(h, { previewCommand: "sleep 60", previewCheck: "echo 'preview is this app'" });
+		const started = await h.api("POST", `/api/cards/${cardId}/preview`);
+		expect(started.body.check).toMatchObject({ status: "running", output: null });
+
+		const preview = await settledCheck(h, cardId);
+		expect(preview.check).toMatchObject({ status: "passed", output: "preview is this app" });
+	});
+
+	it("reports a failing check as degraded, with the check's own words", async () => {
+		h = await bootHarness(byStage());
+		const cardId = await builtCard(h, { previewCommand: "sleep 60", previewCheck: "echo 'another app holds the port' >&2; exit 1" });
+		await h.api("POST", `/api/cards/${cardId}/preview`);
+
+		const preview = await settledCheck(h, cardId);
+		// The preview still runs — it is the person's call what to do — but it no longer looks trusted.
+		expect(preview.check).toMatchObject({ status: "failed" });
+		expect(preview.check.output).toContain("another app holds the port");
+	});
+
+	it("stays null when no check is configured", async () => {
+		h = await bootHarness(byStage());
+		const cardId = await builtCard(h, { previewCommand: "sleep 60" });
+		const started = await h.api("POST", `/api/cards/${cardId}/preview`);
+		expect(started.body.check).toBeNull();
+		expect((await h.api("DELETE", `/api/cards/${cardId}/preview`)).status).toBe(200);
+	});
+});

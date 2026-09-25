@@ -14,6 +14,7 @@ function toProject(row: Row): Project {
 		testCommand: row.test_command as string | null,
 		previewCommand: row.preview_command as string | null,
 		previewUrl: row.preview_url as string | null,
+		previewCheck: row.preview_check as string | null,
 		trustProjectPi: row.trust_project_pi === 1,
 		extensions: JSON.parse(row.extensions_json as string),
 		concurrencyLimit: row.concurrency_limit as number,
@@ -30,9 +31,9 @@ function toProject(row: Row): Project {
 
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
-		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, trust_project_pi,
-			extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, preview_check, trust_project_pi,
+			 extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -43,6 +44,7 @@ export function insertProject(db: Db, project: Project): void {
 		project.testCommand,
 		project.previewCommand,
 		project.previewUrl,
+		project.previewCheck,
 		project.trustProjectPi ? 1 : 0,
 		JSON.stringify(project.extensions),
 		project.concurrencyLimit,
@@ -70,9 +72,9 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates">>;
 
-const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", concurrencyLimit: "concurrency_limit" } as const;
+const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", previewCheck: "preview_check", concurrencyLimit: "concurrency_limit" } as const;
 
 /** Toggles stored as nullable booleans, in their own columns. */
 const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates" } as const;

@@ -37,6 +37,8 @@ export interface Project {
 	previewCommand: string | null;
 	/** Where the preview becomes usable, opened from the card while the preview runs. */
 	previewUrl: string | null;
+	/** Run after the preview starts: exits 0 when the URL is really serving this app. A preview that passes its check is trusted; one that fails is reported degraded instead of silently wrong. */
+	previewCheck: string | null;
 	trustProjectPi: boolean;
 	extensions: string[];
 	concurrencyLimit: number;

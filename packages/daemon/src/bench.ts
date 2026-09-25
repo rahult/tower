@@ -7,8 +7,7 @@ import { getProject } from "./db/repo-projects.ts";
 import { getRun, insertRun, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
 import type { RunManager } from "./run/run-manager.ts";
-import { runVerify } from "./verifier.ts";
-
+import { runCommand, runVerify } from "./verifier.ts";
 export interface BenchDeps {
 	config: Config;
 	db: Db;
@@ -25,15 +24,23 @@ export class BenchError extends Error {
 	}
 }
 
-/** What the UI needs to draw the preview row: the process, where it serves, since when. */
+/** What a preview's check command said, once it has run. No check configured → null. */
+export interface PreviewCheck {
+	status: "running" | "passed" | "failed";
+	/** The check's output, kept when it failed so the reason is one glance away. */
+	output: string | null;
+}
+
+/** What the UI needs to draw the preview row: the process, where it serves, since when, and whether the URL is really this app. */
 export interface PreviewState {
 	running: boolean;
 	command: string | null;
 	url: string | null;
 	startedAt: number | null;
+	check: PreviewCheck | null;
 }
 
-const NO_PREVIEW: PreviewState = { running: false, command: null, url: null, startedAt: null };
+const NO_PREVIEW: PreviewState = { running: false, command: null, url: null, startedAt: null, check: null };
 
 /**
  * Hands-on access to a card's worktree, on the person's say-so: run the project's tests on demand, and keep a
@@ -43,7 +50,7 @@ const NO_PREVIEW: PreviewState = { running: false, command: null, url: null, sta
 export class BenchRunner {
 	private readonly deps: BenchDeps;
 	/** One preview per card: the process group, so stopping kills the whole tree (pnpm → vite → …). */
-	private readonly previews = new Map<string, { child: ChildProcess; project: Project; startedAt: number }>();
+	private readonly previews = new Map<string, { child: ChildProcess; project: Project; startedAt: number; check: PreviewCheck | null; checkAbort?: () => void }>();
 	/** Abort handles for in-flight test runs, so shutdown can stop them without recording a verdict. */
 	private readonly testAborts = new Map<string, () => void>();
 	private stopping = false;
@@ -128,7 +135,7 @@ export class BenchRunner {
 		const child = spawn(project.previewCommand, { cwd: card.worktreePath as string, shell: true, detached: true, stdio: "ignore" });
 		child.unref();
 		const startedAt = Date.now();
-		this.previews.set(cardId, { child, project, startedAt });
+		this.previews.set(cardId, { child, project, startedAt, check: null });
 		child.once("close", () => {
 			if (this.previews.get(cardId)?.child === child) {
 				this.previews.delete(cardId);
@@ -136,7 +143,40 @@ export class BenchRunner {
 			}
 		});
 		this.publish(cardId);
+		if (project.previewCheck && card.worktreePath) this.runCheck(cardId, card.worktreePath, project.previewCheck);
 		return this.previewFor(cardId);
+	}
+
+	/**
+	 * Runs the project's preview check once the preview has had a moment to boot. The command owns any
+	 * waiting (it may poll its own URL); Tower only runs it and records the verdict, so a URL that is
+	 * really somebody else's dev server is reported degraded instead of silently trusted.
+	 */
+	private runCheck(cardId: string, worktreePath: string, command: string): void {
+		const entry = this.previews.get(cardId);
+		if (!entry) return;
+		entry.check = { status: "running", output: null };
+		this.publish(cardId);
+		const { done, abort } = runCommand({ command, cwd: worktreePath, timeoutMs: 60_000, events: { started: "preview_check_started", output: "preview_check_output" }, label: "preview check" });
+		entry.checkAbort = abort;
+		done
+			.then((result) => {
+				const current = this.previews.get(cardId);
+				if (!current || current.check?.status !== "running") return;
+				const output = result.output.trim().length > 0 ? result.output.trim().slice(-2000) : null;
+				current.check = result.passed ? { status: "passed", output } : { status: "failed", output: output ?? `exited with code ${result.exitCode}` };
+				this.publish(cardId);
+			})
+			.catch((error) => {
+				const current = this.previews.get(cardId);
+				if (!current || current.check?.status !== "running") return;
+				current.check = { status: "failed", output: error instanceof Error ? error.message : String(error) };
+				this.publish(cardId);
+			})
+			.finally(() => {
+				const current = this.previews.get(cardId);
+				if (current?.checkAbort === abort) current.checkAbort = undefined;
+			});
 	}
 
 	stopPreview(cardId: string): PreviewState {
@@ -144,6 +184,7 @@ export class BenchRunner {
 		if (!entry) throw new BenchError(409, "No preview is running for this card.");
 		// Delete first so the close event sees a state that is already "stopped".
 		this.previews.delete(cardId);
+		entry.checkAbort?.();
 		try {
 			if (entry.child.pid) process.kill(-entry.child.pid, "SIGKILL");
 		} catch {
@@ -156,7 +197,7 @@ export class BenchRunner {
 	previewFor(cardId: string): PreviewState {
 		const entry = this.previews.get(cardId);
 		if (!entry) return NO_PREVIEW;
-		return { running: true, command: entry.project.previewCommand, url: entry.project.previewUrl, startedAt: entry.startedAt };
+		return { running: true, command: entry.project.previewCommand, url: entry.project.previewUrl, startedAt: entry.startedAt, check: entry.check };
 	}
 
 	/** Kills previews and in-flight test commands without recording how they ended, for shutdown and recovery. */
@@ -166,6 +207,7 @@ export class BenchRunner {
 		for (const cardId of [...this.previews.keys()]) {
 			const entry = this.previews.get(cardId);
 			this.previews.delete(cardId);
+			entry?.checkAbort?.();
 			try {
 				if (entry?.child.pid) process.kill(-entry.child.pid, "SIGKILL");
 			} catch {
