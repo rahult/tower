@@ -244,13 +244,19 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			return { next: rest(stage, "queued"), effects: [{ type: "resume_run", stage }] };
 
 		case "answers_given":
-			if (status !== "awaiting_input" || !isAgentStage(stage)) break;
+			if (status !== "awaiting_input") break;
+			// A review that asked a question gets its answers as a rerun's feedback (reviews are fresh
+			// sessions); a CI-fix builder that asked is sent back to building with them, where a fix
+			// decided by a person actually lands.
+			if (stage === "feedback") return { next: rest("feedback", "queued"), effects: [{ type: "run_flows", feedback: event.message }] };
+			if (stage === "pull_request") return queue("building", event.message);
+			if (!isAgentStage(stage)) break;
 			return { next: rest(stage, "queued"), effects: [{ type: "resume_run", stage, message: event.message }] };
 
 		case "retry":
 			// Re-run the stage the card is stuck or resting in, optionally with guidance.
 			if (stage === "feedback" && (status === "needs_attention" || status === "idle" || status === "interrupted")) return { next: rest("feedback", "queued"), effects: [{ type: "run_flows" }] };
-			if (stage === "pull_request" && (status === "needs_attention" || status === "idle")) return openPr();
+			if (stage === "pull_request" && (status === "needs_attention" || status === "idle" || status === "interrupted")) return openPr();
 			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted" && status !== "awaiting_input")) break;
 			// A failed before-plan understanding reruns itself: planning must not start without its model.
 			if (stage === "planning" && event.beforePlan) return { next: rest("planning", "queued"), effects: [{ type: "run_flows", phase: "before_plan" }] };
