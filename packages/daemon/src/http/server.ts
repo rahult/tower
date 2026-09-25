@@ -298,7 +298,7 @@ export function createApp(deps: AppDeps): Hono {
 	});
 
 	// One factory, so cards made by the form and cards made by the ask look exactly the same.
-	const createCard = (projectId: string, title: string, brief: string, stageConfig: Card["stageConfig"] = {}): Card => {
+	const createCard = (projectId: string, title: string, brief: string, stageConfig: Card["stageConfig"] = {}, baseCardId: string | null = null): Card => {
 		const now = Date.now();
 		const card: Card = {
 			id: shortId(),
@@ -318,6 +318,7 @@ export function createApp(deps: AppDeps): Hono {
 			prState: null,
 			needsAttentionReason: null,
 			finishNote: null,
+			baseCardId,
 			issueUrl: null,
 			issueNumber: null,
 			issueAuthor: null,
@@ -333,7 +334,13 @@ export function createApp(deps: AppDeps): Hono {
 		const body = (await c.req.json()) as Record<string, unknown>;
 		const projectId = requireString(body, "projectId");
 		if (!getProject(db, projectId)) throw new HttpError(404, `Project not found: ${projectId}`);
-		const card = createCard(projectId, requireString(body, "title"), typeof body.brief === "string" ? body.brief : "", typeof body.stageConfig === "object" && body.stageConfig !== null ? (body.stageConfig as Card["stageConfig"]) : {});
+		let baseCardId: string | null = null;
+		if (typeof body.baseCardId === "string" && body.baseCardId.trim()) {
+			const base = getCard(db, body.baseCardId.trim());
+			if (!base || base.projectId !== projectId) throw new HttpError(400, '"baseCardId" must name a card of the same project');
+			baseCardId = base.id;
+		}
+		const card = createCard(projectId, requireString(body, "title"), typeof body.brief === "string" ? body.brief : "", typeof body.stageConfig === "object" && body.stageConfig !== null ? (body.stageConfig as Card["stageConfig"]) : {}, baseCardId);
 		return c.json(card, 201);
 	});
 

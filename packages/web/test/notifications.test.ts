@@ -19,6 +19,7 @@ const card = (overrides: Partial<Card>): Card => ({
 	prUrl: null,
 	prState: null,
 	finishNote: null,
+	baseCardId: null,
 	needsAttentionReason: null,
 	issueUrl: null,
 	issueNumber: null,

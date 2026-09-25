@@ -191,6 +191,11 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 					</details>
 				)}
 				{card.needsAttentionReason && card.status !== "awaiting_input" && <p className="text-[14px] font-semibold">{card.needsAttentionReason}</p>}
+				{card.baseCardId && (
+					<p className="text-[13px] text-slate">
+						Stacked on card <span className="font-mono">{card.baseCardId}</span> — this branch started from that card's branch.
+					</p>
+				)}
 				{card.stage === "done" && card.finishNote && (
 					<p className="text-[14px] text-slate">
 						<span className="mr-1.5 inline-block size-2 rounded-full bg-ok align-middle" aria-hidden />

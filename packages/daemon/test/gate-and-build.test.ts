@@ -1,5 +1,7 @@
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeFileSync } from "node:fs";
 import { bootHarness, buildingTurn, byStage, type Harness } from "./harness.ts";
 
 let h: Harness;
@@ -13,6 +15,57 @@ async function planCard(harness: Harness) {
 	const detail = (await harness.api("GET", `/api/cards/${card.id}`)).body;
 	return { card, gate: detail.gates[0] };
 }
+
+describe("stacked cards", () => {
+	it("a card stacked on another starts from that card's branch and sees its work", async () => {
+		h = await bootHarness(byStage());
+		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
+		const base = (await h.api("POST", "/api/cards", { projectId: project.id, title: "Foundation" })).body;
+		await h.api("POST", `/api/cards/${base.id}/enqueue`);
+		await h.daemon.whenIdle();
+		const baseGate = (await h.api("GET", `/api/cards/${base.id}`)).body.gates[0];
+		await h.api("POST", `/api/cards/${base.id}/gates/${baseGate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+		// The base is built: its branch carries feature.txt, unmerged.
+		const baseBranch = (await h.api("GET", `/api/cards/${base.id}`)).body.card.branchName;
+
+		// Stacking refuses a card of another project and accepts one of the same project.
+		const other = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
+		expect((await h.api("POST", "/api/cards", { projectId: other.id, title: "x", baseCardId: base.id })).status).toBe(400);
+		const stacked = (await h.api("POST", "/api/cards", { projectId: project.id, title: "On top", baseCardId: base.id })).body;
+		expect(stacked).toMatchObject({ baseCardId: base.id });
+		await h.api("POST", `/api/cards/${stacked.id}/enqueue`);
+		await h.daemon.whenIdle();
+		const stackGate = (await h.api("GET", `/api/cards/${stacked.id}`)).body.gates[0];
+		await h.api("POST", `/api/cards/${stacked.id}/gates/${stackGate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+
+		// The stacked card's worktree started from the base's branch: the base's file is there.
+		const stackWorktree = (await h.api("GET", `/api/cards/${stacked.id}`)).body.card.worktreePath;
+		expect(readFileSync(join(stackWorktree, "feature.txt"), "utf8")).toContain("built by");
+		const mergeBase = execFileSync("git", ["merge-base", (await h.api("GET", `/api/cards/${stacked.id}`)).body.card.branchName, baseBranch], { cwd: h.repo, encoding: "utf8" }).trim();
+		const baseTip = execFileSync("git", ["rev-parse", baseBranch], { cwd: h.repo, encoding: "utf8" }).trim();
+		expect(mergeBase).toBe(baseTip);
+	});
+
+	it("a stacked card falls back to the default branch when the base's branch is gone", async () => {
+		h = await bootHarness(byStage());
+		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
+		const base = (await h.api("POST", "/api/cards", { projectId: project.id, title: "Gone soon" })).body;
+		await h.api("POST", `/api/cards/${base.id}/enqueue`);
+		await h.daemon.whenIdle();
+		// The base's branch is gone (as after a finish-and-cleanup), but the row is what the stack points at.
+		const goneBranch = (await h.api("GET", `/api/cards/${base.id}`)).body.card.branchName;
+		execFileSync("git", ["worktree", "remove", "--force", (await h.api("GET", `/api/cards/${base.id}`)).body.card.worktreePath], { cwd: h.repo });
+		execFileSync("git", ["branch", "-D", goneBranch], { cwd: h.repo });
+		const stacked = (await h.api("POST", "/api/cards", { projectId: project.id, title: "On top", baseCardId: base.id })).body;
+		await h.api("POST", `/api/cards/${stacked.id}/enqueue`);
+		await h.daemon.whenIdle();
+		// It still planned and built — on the default branch.
+		const worktree = (await h.api("GET", `/api/cards/${stacked.id}`)).body.card.worktreePath;
+		expect(readFileSync(join(worktree, "README.md"), "utf8")).toContain("test repo");
+	});
+});
 
 describe("plan gate and building handoff", () => {
 	it("holds a finished plan at a pending gate until a human decides", async () => {

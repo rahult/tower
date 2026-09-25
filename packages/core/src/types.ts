@@ -81,6 +81,8 @@ export interface Card {
 	needsAttentionReason: string | null;
 	/** How the work ended, for a done card: merged locally, PR merged. An outcome, never an attention reason. */
 	finishNote: string | null;
+	/** Stacked on another card: this card's branch starts from that card's branch, so it builds on unmerged work. */
+	baseCardId: string | null;
 	/** The GitHub issue this card came from, when intake filed it from the feedback repo. */
 	issueUrl: string | null;
 	issueNumber: number | null;

@@ -157,6 +157,11 @@ const MIGRATIONS: string[] = [
 		started_at INTEGER NOT NULL
 	);
 	`,
+	`
+	-- A stacked card branches from another card's branch instead of the default branch, so work can
+	-- build on unmerged work. NULL: branch from the default branch as always.
+	ALTER TABLE cards ADD COLUMN base_card_id TEXT;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

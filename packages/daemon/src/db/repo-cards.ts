@@ -22,6 +22,7 @@ function toCard(row: Row): Card {
 		prState: row.pr_state as string | null,
 		needsAttentionReason: row.needs_attention_reason as string | null,
 		finishNote: row.finish_note as string | null,
+		baseCardId: row.base_card_id as string | null,
 		issueUrl: row.issue_url as string | null,
 		issueNumber: row.issue_number as number | null,
 		issueAuthor: row.issue_author as string | null,
@@ -32,8 +33,8 @@ function toCard(row: Row): Card {
 
 export function insertCard(db: Db, card: Card): void {
 	db.prepare(
-		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at, issue_url, issue_number, issue_author)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at, issue_url, issue_number, issue_author, base_card_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		card.id,
 		card.projectId,
@@ -50,6 +51,7 @@ export function insertCard(db: Db, card: Card): void {
 		card.issueUrl,
 		card.issueNumber,
 		card.issueAuthor,
+		card.baseCardId,
 	);
 }
 
@@ -62,6 +64,7 @@ const COLUMNS = {
 	baseCommit: "base_commit",
 	needsAttentionReason: "needs_attention_reason",
 	finishNote: "finish_note",
+	baseCardId: "base_card_id",
 	prUrl: "pr_url",
 	prState: "pr_state",
 	issueUrl: "issue_url",

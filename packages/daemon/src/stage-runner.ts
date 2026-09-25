@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -104,11 +105,25 @@ export class StageRunner {
 		if (!project) throw new Error(`Project not found: ${card.projectId}`);
 		if (runs.liveRunForCard(cardId)) throw new Error("This card already has a running session");
 
+		// A stacked card branches from its base card's branch, so it builds on unmerged work; when that
+		// branch is gone (the base finished and its branch was deleted), the default branch is the base.
+		let baseBranch = project.defaultBranch;
+		if (card.baseCardId) {
+			const stackOn = getCard(db, card.baseCardId)?.branchName;
+			if (stackOn) {
+				try {
+					execFileSync("git", ["rev-parse", "--verify", stackOn], { cwd: project.repoPath, stdio: "pipe" });
+					baseBranch = stackOn;
+				} catch {
+					// the base's branch is gone (finished and cleaned up); the default branch is the base
+				}
+			}
+		}
 		const worktree = await ensureWorktree({
 			repoPath: project.repoPath,
 			path: card.worktreePath ?? paths.worktree(config, project.id, card.id),
 			branchName: card.branchName ?? branchNameFor(card.id, card.title),
-			baseBranch: project.defaultBranch,
+			baseBranch,
 		});
 		// A fresh worktree has no node_modules, venv or build cache; the project says how to make it usable.
 		if (worktree.created && project.setupCommand) await runSetup(project.setupCommand, worktree.path);
