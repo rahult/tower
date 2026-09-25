@@ -7,7 +7,7 @@ guide in `acceptance/specs/README.md` — they define the exact shape you must f
 
 - One file per target in `acceptance/specs/`, named after the behavior (`create-todo.mjs`), each exporting `name` and `async run({ baseUrl })` (plus whatever else the contract says).
 - `npm run accept` boots the app, runs every spec, and exits 0 only when all pass.
-- `npm run accept -- --expect-red` exits 0 only when every spec runs and fails — the state you must leave the repository in.
+- `npm run accept -- --expect-red` exits 0 only when **your branch's specs** run and fail — the state you must leave the repository in. On a branch with pre-existing specs, the red gate judges only the specs you add or change (the runner diffs against the default branch); older specs are skipped there and must keep passing.
 
 # Your job
 

@@ -29,7 +29,7 @@ acceptance/
 | `npm test` | unit tests |
 | `npm run verify` | typecheck + tests + build — the bar every change must clear |
 | `npm run accept` | acceptance specs against a freshly built, freshly seeded backend |
-| `npm run accept -- --expect-red` | the red gate: exits 0 only when every spec runs and fails |
+| `npm run accept -- --expect-red` | the red gate: exits 0 only when the specs this branch adds or changed all run and fail |
 
 ## The acceptance contract
 
@@ -51,7 +51,10 @@ export async function run({ baseUrl }) {
   clean slate; use distinct data when two specs must not meet.
 - Helpers live in `acceptance/helpers.mjs` (`assert`, `expectStatus`, `json`).
 - The green gate is `npm run accept`: exit 0 only when every spec passes. The red gate adds
-  `--expect-red`: exit 0 only when every spec fails. No specs at all fails both gates.
+  `--expect-red`: exit 0 only when **the specs this branch adds or changes** all fail, judged against
+  the merge-base with the default branch — pre-existing specs legitimately pass, so the red gate
+  reports them as `SKIP` and judges only the branch's own specs. No specs at all, or a branch that
+  adds none, fails both gates.
 
 ## House rules
 

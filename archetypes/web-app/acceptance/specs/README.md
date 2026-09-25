@@ -21,4 +21,7 @@ export async function run({ baseUrl }) {
 
 The database is throwaway and empty at the start of every run; specs run in file-name order against
 one backend. `npm run accept` must exit 0 (green) before work counts as done; `npm run accept --
---expect-red` must exit 0 (red) the moment specs exist and the behavior does not.
+--expect-red` must exit 0 (red) the moment a branch's specs exist and their behavior does not. The
+red gate judges only the specs the branch adds or changes (against the merge-base with the default
+branch) and reports pre-existing ones as `SKIP` — they already describe shipped behavior and must
+keep passing.

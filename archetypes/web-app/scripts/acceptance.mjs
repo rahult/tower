@@ -3,8 +3,11 @@
 // in acceptance/specs/, prints a one line verdict per spec, and exits:
 //   default        exit 0 iff every spec passes          (the green gate)
 //   --expect-red   exit 0 iff every spec runs and fails  (the red gate — specs exist, behavior doesn't)
+// On an incremental branch the red gate is scoped to the specs this branch adds or changes (the diff
+// against the merge-base with the default branch): pre-existing specs legitimately pass, so they are
+// reported as SKIP and never fail the red gate. The green gate always gates every spec.
 // No specs at all fails both gates: an empty harness must never look like a pass.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -18,6 +21,24 @@ const specFiles = existsSync(specsDir) ? readdirSync(specsDir).filter((file) => 
 if (specFiles.length === 0) {
 	console.error(`No acceptance specs in ${join(root, "acceptance", "specs")} — nothing to gate on.`);
 	process.exit(1);
+}
+
+// The specs this branch is responsible for turning red: those it added or changed since the
+// merge-base with the default branch. No git, no default branch, or a spec untouched by the
+// branch means old all-specs semantics only when there is no base to diff against at all.
+const git = (...args) => {
+	try {
+		return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+	} catch {
+		return null;
+	}
+};
+const baseCommit = git("merge-base", "HEAD", "main") ?? git("merge-base", "HEAD", "master");
+const ownSpecs = new Set();
+if (baseCommit) {
+	for (const path of git("diff", "--name-only", baseCommit, "HEAD").split("\n")) {
+		if (path.startsWith("acceptance/specs/") && path.endsWith(".mjs")) ownSpecs.add(path.slice("acceptance/specs/".length));
+	}
 }
 
 const dbFile = join(mkdtempSync(join(tmpdir(), "accept-")), "acceptance.sqlite");
@@ -47,9 +68,9 @@ try {
 		try {
 			if (typeof spec.run !== "function") throw new Error("the spec does not export run()");
 			await spec.run({ baseUrl, fetch });
-			results.push({ name, ok: true });
+			results.push({ file, name, ok: true });
 		} catch (error) {
-			results.push({ name, ok: false, why: error instanceof Error ? error.message : String(error) });
+			results.push({ file, name, ok: false, why: error instanceof Error ? error.message : String(error) });
 		}
 	}
 
@@ -59,18 +80,25 @@ try {
 
 	const width = Math.max(...results.map((result) => result.name.length));
 	for (const result of results) {
-		console.log(`${result.ok ? "  PASS" : "  FAIL"}  ${result.name.padEnd(width)}${result.ok ? "" : ` — ${result.why}`}`);
+		const skipped = expectRed && baseCommit !== null && !ownSpecs.has(result.file);
+		console.log(`${skipped ? "  SKIP" : result.ok ? "  PASS" : "  FAIL"}  ${result.name.padEnd(width)}${result.ok || skipped ? "" : ` — ${result.why}`}`);
 	}
 	const passed = results.filter((result) => result.ok).length;
 	const red = expectRed ? `${passed}/${results.length} red` : `${passed}/${results.length} green`;
 
 	if (expectRed) {
-		const held = results.filter((result) => result.ok);
-		if (held.length > 0) {
-			console.error(`\nRED GATE FAILED: ${red}. These specs already pass — the behavior exists before the build did:\n${held.map((result) => `  - ${result.name}`).join("\n")}`);
+		const gated = baseCommit === null ? results : results.filter((result) => ownSpecs.has(result.file));
+		const skipped = results.length - gated.length;
+		if (gated.length === 0) {
+			console.error(`\nRED GATE FAILED: this branch changes no acceptance spec, so there is nothing to hold red.${baseCommit ? " The build's specs must be added under acceptance/specs/." : ""}`);
 			process.exit(1);
 		}
-		console.log(`\nRED GATE OK: ${red}. Every spec fails for the right reason — the build's job is to turn them green.`);
+		const held = gated.filter((result) => result.ok);
+		if (held.length > 0) {
+			console.error(`\nRED GATE FAILED: ${red} (of ${gated.length} gated). These specs already pass — the behavior exists before the build did:\n${held.map((result) => `  - ${result.name}`).join("\n")}`);
+			process.exit(1);
+		}
+		console.log(`\nRED GATE OK: ${gated.length}/${gated.length} red${skipped > 0 ? `, ${skipped} pre-existing skipped` : ""}. Every gated spec fails for the right reason — the build's job is to turn them green.`);
 		process.exit(0);
 	}
 	if (passed < results.length) {
