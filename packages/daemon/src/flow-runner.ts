@@ -98,6 +98,10 @@ export class FlowRunner {
 		for (const step of flow.steps) {
 			last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback, shared }));
 			if (last.kind !== "settled") return last;
+			// A step that stopped to ask has parked the work on a decision: later steps must not run past
+			// it, or the questions dangle while the flow reports success (observed live: a red gate
+			// "passed" while the spec writer waited for an answer).
+			if (last.result === "blocked" && last.hasQuestions) return last;
 			if (step.run !== undefined && last.result !== "pass") return last;
 		}
 		return last;

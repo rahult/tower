@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STAGE_RESULT_FILE } from "@tower/core";
@@ -208,6 +209,45 @@ describe("plan coach", () => {
 		// The gate itself is untouched: no runs were consumed, the decision is still pending.
 		expect(detail.gates).toHaveLength(1);
 		expect(detail.gates[0]).toMatchObject({ kind: "plan_approval", status: "pending" });
+	});
+});
+
+describe("a blocked hook step", () => {
+	it("stops the flow: later steps do not run past a waiting question", async () => {
+		// The harness step stops to ask; the red gate must NOT run past it (the red gate passing would
+		// otherwise swallow the questions and open the plan gate with them dangling).
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("-plan-")) return [planningTurn()];
+			if (spec.sessionId.includes("acceptance-red")) {
+				if (spec.sessionId.includes("write-specs"))
+					return [
+						{
+							events: [],
+							effect: ({ spec: handle }) => {
+								writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need a decision.", questions: [{ question: "Which semantics?", options: ["A", "B"] }] }));
+							},
+						},
+					];
+				return [{ events: [] }]; // the red gate, if it ever ran, would pass
+			}
+			return byStage()(spec);
+		}, ENV);
+		// The harness needs the acceptance runner in the repository (the same fixture the gates test uses).
+		writeFileSync(join(h.repo, "package.json"), JSON.stringify({ name: "fixture", private: true, type: "module", scripts: { accept: "node scripts/acceptance.mjs" } }));
+		mkdirSync(join(h.repo, "scripts"), { recursive: true });
+		writeFileSync(join(h.repo, "scripts", "acceptance.mjs"), "process.exit(0);\n");
+		execFileSync("git", ["add", "."], { cwd: h.repo });
+		execFileSync("git", ["-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "runner"], { cwd: h.repo });
+		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
+		await h.api("PATCH", `/api/projects/${project.id}`, { acceptanceGates: true });
+		const card = (await h.api("POST", "/api/cards", { projectId: project.id, title: "x" })).body;
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		const stuck = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		expect(stuck.card).toMatchObject({ stage: "planning", status: "needs_attention" });
+		expect(stuck.card.needsAttentionReason).toContain("Need a decision.");
+		// The red gate never ran past the question.
+		expect(stuck.runs.some((run: { id: string }) => run.id.includes("red-gate"))).toBe(false);
 	});
 });
 
