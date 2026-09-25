@@ -1,0 +1,9 @@
+{
+	"name": "plan-coach",
+	"title": "Coach the plan",
+	"description": "At the plan gate, a rubric pass over the draft: what it leaves unanswered, what a reviewer would ask, what is missing before a cheaper model builds from it alone. Read-only — its findings are advice you pin or reject, never a verdict.",
+	"when": ["manual"],
+	"steps": [
+		{ "name": "coach", "prompt": "plan-coach.md", "model": "planning", "thinking": "high", "access": "read-only" }
+	]
+}

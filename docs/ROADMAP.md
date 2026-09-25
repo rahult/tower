@@ -105,6 +105,10 @@ and where existing repositories are understood before they are changed.
 
 ## P3 — Verification depth (next)
 
+- **Plan-gate coach** [shipped 2026-09-25, first slice]: `plan-coach` — a manual, read-only
+  rubric pass over a draft plan at the plan gate (behavior, contract, data, failure modes,
+  test targets, verification, edges, security, rollback, honesty). Its findings land beside
+  approve/reject as advice a person pins as margin notes or ignores; the verdict never gates.
 - **Promote invariant simulation to an after-build hook**: the modeling protocol already
   ships in planning/testing; with P0 a project can copy `invariant-simulation.flow.json`
   into `~/.tower/flows/` with `"when": ["after-build"]` to gate testing on it. Remaining

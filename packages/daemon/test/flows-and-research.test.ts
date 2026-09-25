@@ -167,6 +167,50 @@ function researchScript(intentReply: string): FakeScript {
 	};
 }
 
+describe("plan coach", () => {
+	it("runs beside the plan gate as advice: report lands, verdict is never a lifecycle event", async () => {
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("plan-coach")) {
+				return [
+					{
+						events: [{ type: "message", message: { role: "assistant", text: "Coached.", thinking: "", toolCalls: [] } }],
+						effect: ({ prompt, spec: handle }) => {
+							const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+							if (report) {
+								mkdirSync(dirname(report), { recursive: true });
+								writeFileSync(report, "# What the plan doesn't answer\n\n1. **Rollback** — blocking: no way back is named.\n\nReady to build.\n");
+							}
+							writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Ready to build." }));
+						},
+					},
+				];
+			}
+			const stages = byStage()(spec);
+			return spec.sessionId.includes("-plan-") ? [planningTurn()] : stages;
+		}, ENV);
+		const project = await addProject();
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+
+		const res = await h.api("POST", `/api/cards/${card.id}/adhoc`, { flow: "plan-coach" });
+		expect(res.status).toBe(202);
+		await h.daemon.whenIdle();
+
+		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		// Advice only: the decision still waits for the person.
+		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+		expect(detail.artifacts.map((artifact: { name: string }) => artifact.name)).toContain("reviews/plan-coach.md");
+		const coach = h.driver.handles.find((handle) => handle.sessionId.includes("plan-coach"));
+		expect(coach?.prompts[0]).toContain("The rubric");
+		expect(coach?.prompts[0]).toContain("plan.md");
+		// The gate itself is untouched: no runs were consumed, the decision is still pending.
+		expect(detail.gates).toHaveLength(1);
+		expect(detail.gates[0]).toMatchObject({ kind: "plan_approval", status: "pending" });
+	});
+});
+
 describe("deep research", () => {
 	it("runs on a backlog card in the project checkout, before any work starts", async () => {
 		h = await bootHarness(researchScript(""), ENV);
