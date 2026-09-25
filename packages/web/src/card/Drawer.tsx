@@ -10,6 +10,7 @@ import { Markdown } from "../content/Markdown.tsx";
 import { ArtifactsPanel } from "./ArtifactsPanel.tsx";
 import { DiffPanel } from "./DiffPanel.tsx";
 import { FeedbackPanel } from "./FeedbackPanel.tsx";
+import { BudgetGatePanel } from "./BudgetGatePanel.tsx";
 import { GatePanel } from "./GatePanel.tsx";
 import { QuestionsPanel } from "./QuestionsPanel.tsx";
 import { RunPanel } from "./RunPanel.tsx";
@@ -206,6 +207,8 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 					<RunPanel cardId={card.id} project={project} hasWorktree={!!card.worktreePath} bench={detail.data.bench.preview} busy={isLive(card) || card.status === "queued"} onStarted={() => (setPickedRunId(null), setTab("session"))} />
 				) : activeTab === "decision" && pendingGate?.kind === "plan_approval" ? (
 					<GatePanel cardId={card.id} gate={pendingGate} annotations={annotations} />
+				) : activeTab === "decision" && pendingGate?.kind === "budget" ? (
+					<BudgetGatePanel cardId={card.id} gate={pendingGate} />
 				) : activeTab === "decision" && pendingGate?.kind === "feedback" ? (
 					<FeedbackPanel cardId={card.id} gate={pendingGate} runs={runs} artifacts={artifacts} annotations={annotations} mergesLocally={project?.hasOrigin === false} />
 				) : activeTab === "decision" && asked ? (

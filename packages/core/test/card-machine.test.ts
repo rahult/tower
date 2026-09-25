@@ -4,7 +4,7 @@ import { type CardEvent, type CardState, InvalidTransition, type SettleContext, 
 const card = (stage: CardState["stage"], status: CardState["status"]): CardState => ({ stage, status, needsAttentionReason: null });
 const RETRY = { action: "retry", feedback: "2 tests failed" } as const;
 const GIVE_UP = { action: "needs_attention", reason: "Still failing after 3 build attempts." } as const;
-const context = (partial: Partial<SettleContext> = {}): SettleContext => ({ requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, afterPlanFlows: false, afterBuildFlows: false, onFailure: RETRY, ...partial });
+const context = (partial: Partial<SettleContext> = {}): SettleContext => ({ requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, afterPlanFlows: false, afterBuildFlows: false, budget: null, onFailure: RETRY, ...partial });
 const verified = (passed: boolean, partial: Partial<SettleContext> = {}): CardEvent => ({ type: "verify_finished", passed, context: context(partial) });
 const settled = (
 	result: "pass" | "fail" | "blocked" | "missing",
@@ -14,7 +14,7 @@ const settled = (
 	type: "run_settled",
 	result,
 	summary,
-	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, afterPlanFlows: false, afterBuildFlows: false, onFailure: RETRY, ...context },
+	context: { requiredGates: ["plan_approval", "feedback"], hasVerifyCommand: false, hasQuestions: false, hasReviewFlows: false, afterPlanFlows: false, afterBuildFlows: false, budget: null, onFailure: RETRY, ...context },
 });
 
 describe("transition", () => {

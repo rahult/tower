@@ -21,7 +21,7 @@ import {
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
 import { getCard, getCardByIssue, insertCard, listCards, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard, type CardPatch } from "./db/repo-cards.ts";
-import { decideGate, getGate, insertGate } from "./db/repo-gates.ts";
+import { decideGate, getGate, insertGate, listGatesForCard } from "./db/repo-gates.ts";
 import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
@@ -231,8 +231,14 @@ export class Orchestrator {
 		if (card?.stage === "testing" && card.status === "idle" && !feedback && lastTest?.resultStatus === "pass") {
 			return this.dispatch(cardId, {
 				type: "tests_already_passed",
-				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, afterPlanFlows: false, afterBuildFlows: false, onFailure: { action: "needs_attention", reason: "" } },
+				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, afterPlanFlows: false, afterBuildFlows: false, budget: this.budgetFor(cardId), onFailure: { action: "needs_attention", reason: "" } },
 			});
+		}
+		// Stuck on a declined budget: the person just raised or cleared it, so continue the settled work —
+		// re-planning would charge the budget twice for one plan.
+		if (card?.status === "needs_attention" && card.needsAttentionReason?.startsWith("Budget declined")) {
+			this.dispatch(cardId, { type: "gate_decided", decision: "approve", feedback: "", gateKind: "budget" });
+			return this.replayPastBudget(cardId, { feedback: "continuing now that the budget was raised or cleared" });
 		}
 		// Stuck on a failed hook flow: the fix is a rebuild with the gate's output, not another test run —
 		// except a failed before-plan understanding, which reruns itself: planning has nothing to go on without it.
@@ -292,10 +298,36 @@ export class Orchestrator {
 		// what-should-change, and they land in the gate's record and the next attempt alike.
 		const composed = decision === "reject" ? feedbackWithAnnotations(feedback, paths.cardDir(this.deps.config, cardId)) : feedback;
 		// Transition first: if it is invalid nothing is recorded.
-		const card = this.dispatch(cardId, { type: "gate_decided", decision, feedback: composed });
+		const card =
+			gate.kind === "budget" && decision === "approve"
+				? this.replayPastBudget(cardId, gate)
+				: this.dispatch(cardId, { type: "gate_decided", decision, feedback: composed, gateKind: gate.kind });
 		decideGate(this.deps.db, gateId, decision === "approve" ? "approved" : "rejected", composed || null);
 		this.deps.bus.publish({ topic: "board", type: "gate_decided", data: { cardId, gateId, decision } });
 		return card;
+	}
+
+	/** The budget gate approved: the work settled clean and the person says continue, so the settle is
+	 *  replayed exactly as it was, minus the budget — hooks, gates, testing all recompute as they were. */
+	private replayPastBudget(cardId: string, gate: { feedback: string | null }): Card {
+		const card = getCard(this.deps.db, cardId) as Card;
+		const afterPlanFlows = card.stage === "planning" && this.triggeredFlows("after-plan", card.projectId).length > 0;
+		const afterBuildFlows = card.stage === "building" && this.triggeredFlows("after-build", card.projectId).length > 0;
+		return this.dispatch(cardId, {
+			type: "run_settled",
+			result: "pass",
+			summary: gate.feedback ?? "Continuing past the budget.",
+			context: {
+				requiredGates: this.gatesFor(cardId),
+				hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
+				hasQuestions: false,
+				hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
+				afterPlanFlows,
+				afterBuildFlows,
+				budget: null,
+				onFailure: this.failureDecision(cardId, gate.feedback ?? "", null),
+			},
+		});
 	}
 
 	handleStarted(cardId: string): void {
@@ -324,6 +356,7 @@ export class Orchestrator {
 					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
 					afterPlanFlows,
 					afterBuildFlows,
+					budget: this.budgetFor(cardId),
 					onFailure: this.failureDecision(cardId, outcome.summary, null),
 				},
 			});
@@ -367,6 +400,19 @@ export class Orchestrator {
 		return (card && getProject(this.deps.db, card.projectId)?.verifyCommand) || null;
 	}
 
+	/** The card's spend against the project's per-card budget, as a note for the person, or null when
+	 *  there is no budget, it is not reached, or a person already approved continuing past it. */
+	private budgetFor(cardId: string): string | null {
+		const card = getCard(this.deps.db, cardId);
+		const project = card ? getProject(this.deps.db, card.projectId) : null;
+		if (!project?.budgetUsd) return null;
+		const spent = listRunsForCard(this.deps.db, cardId).reduce((sum, run) => sum + (run.costUsd ?? 0), 0);
+		if (spent < project.budgetUsd) return null;
+		if (listGatesForCard(this.deps.db, cardId).some((gate) => gate.kind === "budget" && gate.status === "approved")) return null;
+		const usd = (amount: number) => `$${amount.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+		return `spent ${usd(spent)} of the ${usd(project.budgetUsd)} per-card budget`;
+	}
+
 	private gatesFor(cardId: string): GateKind[] {
 		const card = getCard(this.deps.db, cardId) as Card;
 		const planFile = join(paths.cardDir(this.deps.config, cardId), "plan.md");
@@ -388,7 +434,7 @@ export class Orchestrator {
 
 	private execute(cardId: string, effect: Effect): void {
 		if (effect.type === "open_gate") {
-			const gate = { id: randomUUID().slice(0, 8), cardId, kind: effect.kind, createdAt: Date.now() };
+			const gate = { id: randomUUID().slice(0, 8), cardId, kind: effect.kind, createdAt: Date.now(), feedback: "note" in effect ? effect.note ?? null : null };
 			insertGate(this.deps.db, gate);
 			this.deps.bus.publish({ topic: "board", type: "gate_opened", data: gate });
 			return;
@@ -518,6 +564,7 @@ export class Orchestrator {
 				hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
 				afterPlanFlows: false,
 				afterBuildFlows: false,
+				budget: this.budgetFor(cardId),
 				onFailure: this.failureDecision(cardId, outcome.summary, null),
 			},
 		});
@@ -815,6 +862,7 @@ export class Orchestrator {
 					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
 					afterPlanFlows: false,
 					afterBuildFlows: false,
+					budget: this.budgetFor(cardId),
 					onFailure: this.failureDecision(cardId, result.output, previous),
 				},
 			});

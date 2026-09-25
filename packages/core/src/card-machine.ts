@@ -32,7 +32,7 @@ export type CardEvent =
 	| { type: "ci_failed"; feedback: string }
 	| { type: "run_failed"; error: string }
 	| { type: "run_aborted" }
-	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string }
+	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string; /** Which gate was decided, when it is not the stage's usual one (the budget gate). */ gateKind?: GateKind }
 	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean; /** Set when the stuck work is a failed after-build gate: rebuild with this as feedback. */ gateFeedback?: string; /** Set when the stuck work is a failed after-plan gate: rerun the gate's flows with this as feedback, not the plan. */ afterPlanFeedback?: string; /** Set when the stuck work is a failed before-plan understanding: rerun it, not the plan. */ beforePlan?: boolean }
 	/** The daemon restarted while this card's work was in flight. */
 	| { type: "daemon_restarted" }
@@ -56,6 +56,8 @@ export interface SettleContext {
 	afterBuildFlows: boolean;
 	/** What the retry policy says to do if this settle is a testing failure. */
 	onFailure: FailureDecision;
+	/** The card's spend has reached the project's per-card budget (prebuilt note), so the pipeline pauses for a person. */
+	budget: string | null;
 }
 
 export type Effect =
@@ -69,7 +71,7 @@ export type Effect =
 	/** Reopen the stage's session (same session id). Without a message the agent is told to carry on after an interruption. */
 	| { type: "resume_run"; stage: AgentStage; message?: string }
 	| { type: "run_verify" }
-	| { type: "open_gate"; kind: GateKind };
+	| { type: "open_gate"; kind: GateKind; /** For the budget gate: the spend note the person sees at the gate. */ note?: string };
 
 export interface Transition {
 	next: CardState;
@@ -138,10 +140,12 @@ export function transition(card: CardState, event: CardEvent): Transition {
 				return { next: rest(stage, "needs_attention", reason), effects: [] };
 			}
 			if (stage === "planning") {
+				if (event.context.budget) return { next: rest(stage, "running"), effects: [{ type: "open_gate", kind: "budget", note: event.context.budget }] };
 				if (event.context.afterPlanFlows) return { next: rest("planning", "queued"), effects: [{ type: "run_flows", phase: "after_plan" }] };
 				return afterPlanningPass(event.context);
 			}
 			if (stage === "building") {
+				if (event.context.budget) return { next: rest(stage, "running"), effects: [{ type: "open_gate", kind: "budget", note: event.context.budget }] };
 				if (event.context.afterBuildFlows) return { next: rest("testing", "queued"), effects: [{ type: "run_flows", phase: "after_build" }] };
 				return event.context.hasVerifyCommand ? { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] } : queue("testing");
 			}
@@ -216,6 +220,15 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			break;
 
 		case "gate_decided":
+			if (event.gateKind === "budget") {
+				// Approve at the gate never reaches the machine: the orchestrator replays the settle
+				// without the budget. A decline is a real stop — the card is sound but unfunded — and
+				// approving again after the budget was raised hands the card back to its settle.
+				if (event.decision === "reject" && status === "running")
+					return { next: rest(stage, "needs_attention", `Budget declined (${event.feedback || "no reason given"}). Raise or clear the budget in the project settings, then Retry to continue where it stopped.`), effects: [] };
+				if (event.decision === "approve" && status === "needs_attention") return { next: rest(stage, "running"), effects: [] };
+				break;
+			}
 			if (status !== "awaiting_gate") break;
 			if (stage === "planning") return event.decision === "approve" ? queue("building") : queue("planning", event.feedback);
 			if (stage === "feedback") return event.decision === "approve" ? openPr() : queue("building", event.feedback);

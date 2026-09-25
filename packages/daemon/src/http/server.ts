@@ -149,6 +149,7 @@ export function createApp(deps: AppDeps): Hono {
 			previewCommand: null,
 			previewUrl: null,
 			previewCheck: null,
+			budgetUsd: null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,
@@ -270,6 +271,16 @@ export function createApp(deps: AppDeps): Hono {
 			if (body.acceptanceGates !== null && typeof body.acceptanceGates !== "boolean") throw new HttpError(400, '"acceptanceGates" must be a boolean, or null for the default');
 			settings.acceptanceGates = body.acceptanceGates as boolean | null;
 		}
+		if (body.budgetUsd !== undefined) {
+			// Blank or null clears the budget; a number is dollars per card, so it stays human-sized.
+			if (body.budgetUsd === null || body.budgetUsd === "") {
+				settings.budgetUsd = null;
+			} else {
+				const budget = Number(body.budgetUsd);
+				if (!Number.isFinite(budget) || budget <= 0 || budget > 1000) throw new HttpError(400, '"budgetUsd" must be a dollar amount up to 1000, or null to clear it');
+				settings.budgetUsd = Math.round(budget * 10000) / 10000;
+			}
+		}
 		if (body.concurrencyLimit !== undefined) {
 			const limit = Number(body.concurrencyLimit);
 			if (!Number.isInteger(limit) || limit < 1 || limit > 16) throw new HttpError(400, '"concurrencyLimit" must be a whole number from 1 to 16');
@@ -338,6 +349,7 @@ export function createApp(deps: AppDeps): Hono {
 			previewCommand: manifest.previewCommand ?? null,
 			previewUrl: manifest.previewUrl ?? null,
 			previewCheck: manifest.previewCheck ?? null,
+			budgetUsd: null,
 			trustProjectPi: false,
 			extensions: [],
 			concurrencyLimit: 1,

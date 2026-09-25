@@ -137,6 +137,10 @@ const MIGRATIONS: string[] = [
 	-- A done card's parting words (merged locally, PR merged) are an outcome, not an attention reason.
 	ALTER TABLE cards ADD COLUMN finish_note TEXT;
 	`,
+	`
+	-- The most one card may spend on agent sessions before the pipeline pauses for a person. NULL: unbudgeted.
+	ALTER TABLE projects ADD COLUMN budget_usd REAL;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

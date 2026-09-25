@@ -23,8 +23,9 @@ const toGate = (row: Row): Gate => ({
 	decidedAt: row.decided_at as number | null,
 });
 
-export function insertGate(db: Db, gate: Pick<Gate, "id" | "cardId" | "kind" | "createdAt">): void {
+export function insertGate(db: Db, gate: Pick<Gate, "id" | "cardId" | "kind" | "createdAt"> & { feedback?: string | null }): void {
 	db.prepare("INSERT INTO gates (id, card_id, kind, created_at) VALUES (?, ?, ?, ?)").run(gate.id, gate.cardId, gate.kind, gate.createdAt);
+	if (gate.feedback) db.prepare("UPDATE gates SET feedback = ? WHERE id = ?").run(gate.feedback, gate.id);
 }
 
 export function getGate(db: Db, id: string): Gate | null {

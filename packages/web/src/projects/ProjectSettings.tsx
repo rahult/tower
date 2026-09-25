@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -21,6 +21,7 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [previewCommand, setPreviewCommand] = useState(project.previewCommand ?? "");
 	const [previewUrl, setPreviewUrl] = useState(project.previewUrl ?? "");
 	const [previewCheck, setPreviewCheck] = useState(project.previewCheck ?? "");
+	const [budgetUsd, setBudgetUsd] = useState(project.budgetUsd?.toString() ?? "");
 	const [concurrencyLimit, setConcurrencyLimit] = useState(project.concurrencyLimit);
 	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
 	const [reviewFlows, setReviewFlows] = useState<string[] | null>(project.reviewFlows);
@@ -32,7 +33,7 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [acceptanceGates, setAcceptanceGates] = useState<boolean | null>(project.acceptanceGates);
 	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
@@ -289,6 +290,7 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 				</div>
 				<div className="v">
 					<input id={`concurrency-${project.id}`} type="number" min={1} max={16} value={concurrencyLimit} onChange={(event) => setConcurrencyLimit(Number(event.target.value))} className={`${monoField} !w-24`} />
+					<input aria-label="Budget per card (USD)" type="number" min={0.01} max={1000} step={0.01} value={budgetUsd} onChange={(event) => setBudgetUsd(event.target.value)} placeholder="no budget" className={`${monoField} !w-32`} />
 				</div>
 			</div>
 			{showSpend && (

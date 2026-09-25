@@ -39,6 +39,8 @@ export interface Project {
 	previewUrl: string | null;
 	/** Run after the preview starts: exits 0 when the URL is really serving this app. A preview that passes its check is trusted; one that fails is reported degraded instead of silently wrong. */
 	previewCheck: string | null;
+	/** The most one card may spend on agent sessions before the pipeline pauses for a person. null: unbudgeted. */
+	budgetUsd: number | null;
 	trustProjectPi: boolean;
 	extensions: string[];
 	concurrencyLimit: number;

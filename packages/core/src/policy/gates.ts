@@ -1,4 +1,4 @@
-export type GateKind = "plan_approval" | "feedback";
+export type GateKind = "plan_approval" | "feedback" | "budget";
 
 export interface RequiredGatesContext {
 	card: {
