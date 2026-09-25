@@ -270,7 +270,8 @@ function TabButton({ id, active, onSelect, tone, children }: { id: string; activ
  * newest is picked unless the reader says otherwise.
  */
 function RunsRail({ runs, picked, onPick }: { runs: StageRun[]; picked: string; onPick: (id: string) => void }) {
-	// The row scrolls sideways when a card has many sessions; the picked tab must stay in view.
+	// The row wraps when a card has many sessions, so no session hides behind a scroll; the picked
+	// tab must still come into view for a reader who landed on a long rail (block/inline nearest: no jump).
 	useEffect(() => {
 		document.getElementById(`run-tab-${picked}`)?.scrollIntoView({ inline: "nearest", block: "nearest" });
 	}, [picked]);
@@ -292,7 +293,7 @@ function RunsRail({ runs, picked, onPick }: { runs: StageRun[]; picked: string; 
 	return (
 		<div role="tablist" aria-label="Sessions on this card" className="flex shrink-0 items-stretch gap-3 border-b border-rule bg-sheet px-4" onKeyDown={onArrow}>
 			<span className="label flex shrink-0 items-center !text-[11px]">Sessions</span>
-			<div className="flex items-stretch gap-1 overflow-x-auto">
+			<div className="flex flex-wrap items-stretch gap-x-1 gap-y-0">
 				{runs.map((r) => {
 					const state = r.status === "running" || r.status === "starting" ? "live" : r.resultStatus === "pass" ? "pass" : r.resultStatus === "fail" ? "fail" : r.status === "aborted" ? "stop" : r.error ? "fail" : "rest";
 					const dot = { live: "bg-primary pulse", pass: "bg-ok", fail: "bg-danger", stop: "bg-rule", rest: "bg-rule" }[state];
