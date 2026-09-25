@@ -33,7 +33,7 @@ export type CardEvent =
 	| { type: "run_failed"; error: string }
 	| { type: "run_aborted" }
 	| { type: "gate_decided"; decision: "approve" | "reject"; feedback: string }
-	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean; /** Set when the stuck work is a failed after-build gate: rebuild with this as feedback. */ gateFeedback?: string; /** Set when the stuck work is a failed before-plan understanding: rerun it, not the plan. */ beforePlan?: boolean }
+	| { type: "retry"; feedback?: string; hasVerifyCommand?: boolean; /** Set when the stuck work is a failed after-build gate: rebuild with this as feedback. */ gateFeedback?: string; /** Set when the stuck work is a failed after-plan gate: rerun the gate's flows with this as feedback, not the plan. */ afterPlanFeedback?: string; /** Set when the stuck work is a failed before-plan understanding: rerun it, not the plan. */ beforePlan?: boolean }
 	/** The daemon restarted while this card's work was in flight. */
 	| { type: "daemon_restarted" }
 	/** `wasVerifying`: the interrupted work was the verify command, which has no session to reopen. */
@@ -61,8 +61,8 @@ export interface SettleContext {
 export type Effect =
 	/** `fixingCi`: a build run that repairs a failing pull request; the card stays in its pull request stage. */
 	| { type: "start_run"; stage: AgentStage; feedback?: string; fixingCi?: boolean }
-	/** `phase`: which lifecycle moment the flows belong to. Absent: the post-test reviews. */
-	| { type: "run_flows"; phase?: "before_plan" | "after_plan" | "after_build" }
+	/** `phase`: which lifecycle moment the flows belong to. Absent: the post-test reviews. `feedback`: what a previous failed run of this hook said, so the rerun's agents fix the cause. */
+	| { type: "run_flows"; phase?: "before_plan" | "after_plan" | "after_build"; feedback?: string }
 	/** The finish line: push the branch and open its pull request — or, with no origin remote, merge it locally. */
 	| { type: "open_pr" }
 	| { type: "cleanup_worktree" }
@@ -241,6 +241,9 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			if (!isAgentStage(stage) || (status !== "needs_attention" && status !== "idle" && status !== "interrupted" && status !== "awaiting_input")) break;
 			// A failed before-plan understanding reruns itself: planning must not start without its model.
 			if (stage === "planning" && event.beforePlan) return { next: rest("planning", "queued"), effects: [{ type: "run_flows", phase: "before_plan" }] };
+			// A failed after-plan gate reruns its flows with the failure as feedback: the specs were wrong,
+			// not the plan, and re-planning would pay twice for one gate's opinion.
+			if (stage === "planning" && event.afterPlanFeedback !== undefined) return { next: rest("planning", "queued"), effects: [{ type: "run_flows", phase: "after_plan", feedback: event.afterPlanFeedback }] };
 			// A failed after-build gate is repaired by rebuilding, not by re-testing: the gate output is the feedback.
 			if (stage === "testing" && event.gateFeedback !== undefined) return queue("building", event.gateFeedback);
 			if (stage === "testing" && event.hasVerifyCommand) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };

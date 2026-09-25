@@ -212,18 +212,18 @@ export class Orchestrator {
 		}
 		// Stuck on a failed hook flow: the fix is a rebuild with the gate's output, not another test run —
 		// except a failed before-plan understanding, which reruns itself: planning has nothing to go on without it.
-		if (card && !feedback && card.status === "needs_attention") {
-			const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled");
-			if (last?.kind === "flow_step" && last.resultStatus !== "pass" && (last.stage === "planning" || last.stage === "testing")) {
-				const summary = last.resultSummary ?? "";
-				const gate = last.id.includes(UNDERSTAND_FLOW)
-					? { beforePlan: true }
-					: last.stage === "testing"
-						? { gateFeedback: `The after-build flows did not pass and must pass before testing:\n\n${summary}` }
-						: { feedback: `The after-plan flows did not pass:\n\n${summary}` };
-				return this.dispatch(cardId, { type: "retry", ...gate, hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
+			if (card && !feedback && card.status === "needs_attention") {
+				const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled");
+				if (last?.kind === "flow_step" && last.resultStatus !== "pass" && (last.stage === "planning" || last.stage === "testing")) {
+					const summary = last.resultSummary ?? "";
+					const gate = last.id.includes(UNDERSTAND_FLOW)
+						? { beforePlan: true }
+						: last.stage === "testing"
+							? { gateFeedback: `The after-build flows did not pass and must pass before testing:\n\n${summary}` }
+							: { afterPlanFeedback: `The after-plan flows did not pass and must pass before the plan gate:\n\n${summary}` };
+					return this.dispatch(cardId, { type: "retry", ...gate, hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
+				}
 			}
-		}
 		return this.dispatch(cardId, { type: "retry", ...(feedback ? { feedback } : {}), hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
 	}
 
@@ -417,9 +417,9 @@ export class Orchestrator {
 			effect.type === "run_verify"
 				? this.verify(card.id)
 				: effect.type === "run_flows"
-					? effect.phase
-						? this.hookFlows(card.id, effect.phase)
-						: this.review(card.id)
+						? effect.phase
+							? this.hookFlows(card.id, effect.phase, effect.feedback)
+							: this.review(card.id)
 					: effect.type === "open_pr"
 						? this.finishBranch(card.id)
 						: (effect.type === "resume_run"
@@ -456,11 +456,11 @@ export class Orchestrator {
 	 * planning start. Unlike reviews, a hook that does not pass stops the card — deterministic gates exist
 	 * to be satisfied, not weighed.
 	 */
-	private async hookFlows(cardId: string, phase: "before_plan" | "after_plan" | "after_build"): Promise<void> {
+	private async hookFlows(cardId: string, phase: "before_plan" | "after_plan" | "after_build", feedback?: string): Promise<void> {
 		this.launching.delete(cardId);
 		this.dispatch(cardId, { type: "hook_started" });
 		const names = phase === "before_plan" ? [UNDERSTAND_FLOW] : this.triggeredFlows(phase === "after_plan" ? "after-plan" : "after-build", getCard(this.deps.db, cardId)?.projectId);
-		const outcome = await this.deps.flows.runFlows(cardId, names);
+		const outcome = await this.deps.flows.runFlows(cardId, names, feedback);
 		if (this.stopping) return;
 		if (outcome.kind === "aborted") return void this.dispatch(cardId, { type: "run_aborted" });
 		if (outcome.kind === "failed") return void this.dispatch(cardId, { type: "run_failed", error: outcome.error });

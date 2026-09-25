@@ -62,9 +62,10 @@ export class FlowRunner {
 	/**
 	 * Runs the flows one after another. A crash or abort stops early. A deterministic step that fails also
 	 * stops the flow — a failed gate says the work is not worth the next step — while an agent's "fail"
-	 * verdict is a finding, not a crash, so later steps still run.
+	 * verdict is a finding, not a crash, so later steps still run. `feedback` carries what a previous
+	 * failed run of this hook said, so the rerun's agent steps fix the cause instead of repeating it.
 	 */
-	async runFlows(cardId: string, names: string[]): Promise<RunOutcome> {
+	async runFlows(cardId: string, names: string[], feedback?: string): Promise<RunOutcome> {
 		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
 		for (const name of names) {
 			const flow = this.flow(name);
@@ -74,7 +75,7 @@ export class FlowRunner {
 				throw new Error(`"${name}" runs commands or changes code, so it needs the card's worktree — start the card first.`);
 			}
 			for (const step of flow.steps) {
-				last = step.run !== undefined ? await this.runStep(cardId, flow, step) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true }));
+				last = step.run !== undefined ? await this.runStep(cardId, flow, step) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback }));
 				if (last.kind !== "settled") return last;
 				if (step.run !== undefined && last.result !== "pass") return last;
 			}
@@ -170,7 +171,7 @@ export class FlowRunner {
 		this.deps.bus.publish({ topic: "board", type: "run_upserted", data: getRun(this.deps.db, runId) });
 	}
 
-	private request(cardId: string, step: FlowStep, options: { flow: Flow | null; requireResult: boolean }): CustomRun {
+	private request(cardId: string, step: FlowStep, options: { flow: Flow | null; requireResult: boolean; feedback?: string }): CustomRun {
 		const { config, db } = this.deps;
 		const card = getCard(db, cardId) as Card;
 		const project = getProject(db, card.projectId);
@@ -197,6 +198,7 @@ export class FlowRunner {
 		let prompt: string;
 		try {
 			prompt = this.prompt(card, step, options.flow ? join(cardDir, "reviews", `${label}.md`) : null);
+			if (options.feedback) prompt += `\n\n## What should change\n\nThe previous run of this gate did not pass, so the card stopped:\n\n${options.feedback}\n\nFind and fix the cause in this run — do not simply restate last run's output.`;
 		} catch (error) {
 			// The usual cause is updating Tower's files while the daemon still runs the previous version.
 			const reason = error instanceof Error ? error.message : String(error);

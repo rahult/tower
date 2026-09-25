@@ -138,6 +138,40 @@ describe("acceptance gates", () => {
 		expect(h.driver.handles.some((handle) => handle.sessionId.includes("-build-"))).toBe(false);
 	});
 
+	it("retrying a failed red gate reruns the harness with the failure as feedback, not the plan", async () => {
+		// First attempt writes a spec that is not red; the retry — told what failed — writes a red one.
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("-plan-")) return [planningTurn()];
+			if (spec.sessionId.includes("acceptance-red")) return [harnessTurn(!spec.sessionId.endsWith("-2"))];
+			if (spec.sessionId.includes("-build-") || spec.sessionId.includes("-cifix-")) return [greenBuilderTurn()];
+			if (spec.sessionId.includes("-test-")) return [testerTurn()];
+			return [reviewTurn()];
+		}, ENV);
+		installAcceptanceRunner(h);
+		const project = await addProject();
+		await h.api("PATCH", `/api/projects/${project.id}`, { acceptanceGates: true });
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "planning", status: "needs_attention" });
+
+		// The retry is feedback-only recovery: the flow reruns, the plan does not.
+		await h.api("POST", `/api/cards/${card.id}/retry`);
+		await h.daemon.whenIdle();
+
+		const planRuns = h.driver.handles.filter((handle) => handle.sessionId.includes("-plan-"));
+		expect(planRuns).toHaveLength(1);
+		const rerun = h.driver.handles.find((handle) => handle.sessionId.endsWith("acceptance-red-write-specs-2"));
+		expect(rerun?.prompts[0]).toContain("## What should change");
+		expect(rerun?.prompts[0]).toContain("The after-plan flows did not pass");
+
+		// Red held on the second attempt, so the plan gate opened without another planning session.
+		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+		const redGate = detail.runs.find((run: { id: string }) => run.id.includes("acceptance-red-red-gate-2"));
+		expect(redGate).toMatchObject({ kind: "flow_step", resultStatus: "pass" });
+	});
+
 	it("without the toggle, the acceptance flows never run", async () => {
 		h = await bootHarness(script(), ENV);
 		installAcceptanceRunner(h);
