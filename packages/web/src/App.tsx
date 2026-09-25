@@ -21,13 +21,14 @@ import { NewFromIdea } from "./projects/NewFromIdea.tsx";
 import { PlanToBacklog } from "./projects/PlanToBacklog.tsx";
 import { ProjectSettings } from "./projects/ProjectSettings.tsx";
 import { Projects } from "./projects/Projects.tsx";
+import { PassThrough } from "./review/PassThrough.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
 import { Usage } from "./usage/Usage.tsx";
 import { useDensity, usePrefersDark, useTheme, type Theme } from "./theme.ts";
 
-const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage"];
-const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", usage: "chart" } as const;
-const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", usage: "Usage" };
+const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage", "review"];
+const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", usage: "chart", review: "check" } as const;
+const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", usage: "Usage", review: "Review" };
 
 const FILTER_KEY = "tower-filter";
 
@@ -71,6 +72,8 @@ export function App() {
 	const cards = board.data?.cards ?? [];
 	const waiting = cards.filter(needsYou).length;
 	const running = cards.filter(isLive).length;
+	// The pass-through list: the two human gates, wherever they are parked.
+	const pendingGates = (board.data?.gates ?? []).filter((gate) => gate.kind !== "budget").length;
 	const names = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 	const titles = useMemo(() => new Map(cards.map((card) => [card.id, card.title])), [cards]);
 
@@ -240,11 +243,12 @@ export function App() {
 					<span className="txt">Tower</span>
 				</div>
 				<nav className="nav" aria-label="Views">
-					{VIEW_ORDER.map((view, index) => (
+					{VIEW_ORDER.filter((view) => view !== "review" || pendingGates > 0 || route.view === "review").map((view, index) => (
 						<button key={view} type="button" onClick={() => navigate({ view, cardId: null })} aria-current={route.view === view ? "page" : undefined} title={`${VIEW_LABEL[view]} (⌘${index + 1})`}>
 							<Icon name={VIEW_ICON[view]} />
 							<span className="txt">{VIEW_LABEL[view]}</span>
 							{view === "focus" && waiting > 0 && <span className="count">{waiting}</span>}
+							{view === "review" && pendingGates > 0 && <span className="count">{pendingGates}</span>}
 						</button>
 					))}
 				</nav>
@@ -323,6 +327,7 @@ export function App() {
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
 						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenProject={(project) => setEditing({ project })} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
+						{board.data && route.view === "review" && <PassThrough gates={board.data.gates} projects={projects} cards={cards} onOpen={openCard} />}
 					</div>
 					{inspector}
 				</div>

@@ -8,7 +8,7 @@ import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
 import { deleteCard, getCard, insertCard, listCards } from "../db/repo-cards.ts";
 import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
-import { listGatesForCard } from "../db/repo-gates.ts";
+import { listGatesForCard, listPendingGates } from "../db/repo-gates.ts";
 import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
@@ -82,7 +82,9 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.get("/api/health", (c) => c.json({ ok: true }));
 
-	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db) }));
+	// The gates ride the board payload, so a phone can carry the whole human job: pass-through review
+	// needs the list of decisions waiting, not a detail fetch per card.
+	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db), gates: listPendingGates(db) }));
 
 	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, understandBeforePlan: config.understandBeforePlan, acceptanceGates: config.acceptanceGates, maxCrew: config.maxCrew, feedbackRepo: config.feedbackRepo });
 

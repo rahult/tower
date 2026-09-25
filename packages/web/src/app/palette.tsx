@@ -50,10 +50,10 @@ export function Palette({ cards, projectNames, projects, actions, onClose }: { c
 			{ group: "Theme", label: "Light", run: () => actions.setTheme("light") },
 			{ group: "Theme", label: "Dark", run: () => actions.setTheme("dark") },
 		];
-		const views: Item[] = (["focus", "board", "projects", "usage"] as View[]).map((view) => ({
+		const views: Item[] = (["focus", "board", "projects", "usage", "review"] as View[]).map((view) => ({
 			group: "Go to",
-			label: view === "focus" ? "Tower" : view.charAt(0).toUpperCase() + view.slice(1),
-			hint: "⌘" + (["focus", "board", "projects", "usage"].indexOf(view) + 1),
+			label: view === "focus" ? "Tower" : view === "review" ? "Pass-through review" : view.charAt(0).toUpperCase() + view.slice(1),
+			hint: "⌘" + (["focus", "board", "projects", "usage", "review"].indexOf(view) + 1),
 			run: () => actions.goToView(view),
 		}));
 		const filters: Item[] = [

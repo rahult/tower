@@ -174,6 +174,16 @@ describe("pull requests", () => {
 		expect(approved.status).toBe(200);
 	});
 
+	it("the board carries the pending gates, so the human job passes through from a phone", async () => {
+		h = await bootHarness(byStage(), FLOWS);
+		const { card, gate } = await toFeedbackGate(h);
+		const listed = (await h.api("GET", "/api/board")).body.gates.find((candidate: { cardId: string }) => candidate.cardId === card.id);
+		expect(listed).toMatchObject({ id: gate.id, kind: "feedback", status: "pending" });
+
+		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		expect((await h.api("GET", "/api/board")).body.gates.find((candidate: { cardId: string }) => candidate.cardId === card.id)).toBeUndefined();
+	});
+
 	it("a done card can be deleted from the board, and a live one cannot", async () => {
 		h = await bootHarness(byStage());
 		const { project, card, gate } = await toFeedbackGate(h);

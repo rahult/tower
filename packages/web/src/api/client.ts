@@ -1,9 +1,19 @@
 import type { Annotation, Card, Project, StageRun } from "@tower/core";
 
+/** A human decision the pipeline is parked on, as the board payload carries it. */
+export interface GateInfo {
+	id: string;
+	cardId: string;
+	kind: "plan_approval" | "feedback" | "budget";
+	status: "pending" | "approved" | "rejected";
+	createdAt: number;
+}
+
 export interface Board {
 	projects: Project[];
 	cards: Card[];
 	activeRuns: StageRun[];
+	gates: GateInfo[];
 }
 
 export interface Artifact {

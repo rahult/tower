@@ -40,3 +40,8 @@ export function decideGate(db: Db, id: string, status: "approved" | "rejected", 
 export function listGatesForCard(db: Db, cardId: string): Gate[] {
 	return (db.prepare("SELECT * FROM gates WHERE card_id = ? ORDER BY created_at").all(cardId) as Row[]).map(toGate);
 }
+
+/** Every gate waiting on a person, across all cards — the pass-through review list. */
+export function listPendingGates(db: Db): Gate[] {
+	return (db.prepare("SELECT * FROM gates WHERE status = 'pending' ORDER BY created_at").all() as Row[]).map(toGate);
+}
