@@ -211,6 +211,58 @@ describe("plan coach", () => {
 	});
 });
 
+describe("answers at the feedback stage", () => {
+	it("a review that stops to ask gets the person's answers as its rerun feedback", async () => {
+		const DISCOVERY = { ...ENV, TOWER_REVIEW_FLOWS: undefined };
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("solid-review")) {
+				if (spec.sessionId.endsWith("-1")) {
+					return [
+						{
+							events: [],
+							effect: ({ spec: handle }) => {
+								writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need the person's call.", questions: [{ question: "Is the retry budget acceptable?", options: ["Yes", "No"] }] }));
+							},
+						},
+					];
+				}
+				return [
+					{
+						events: [{ type: "message", message: { role: "assistant", text: "Reviewed with the answer.", thinking: "", toolCalls: [] } }],
+						effect: ({ prompt, spec: handle }) => {
+							const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
+							if (report) {
+								mkdirSync(dirname(report), { recursive: true });
+								writeFileSync(report, "# Review with answers\n\nThe person decided.\n");
+							}
+							writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Reviewed with the person's decision." }));
+						},
+					},
+				];
+			}
+			const stages = byStage()(spec);
+			return spec.sessionId.includes("-plan-") ? [planningTurn()] : stages;
+		}, DISCOVERY);
+		const project = await addProject();
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		const gate = (await h.api("GET", `/api/cards/${card.id}`)).body.gates.find((gate: { kind: string }) => gate.kind === "plan_approval");
+		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+		const stuck = (await h.api("GET", `/api/cards/${card.id}`)).body.card;
+		expect(stuck).toMatchObject({ stage: "feedback", status: "awaiting_input" });
+
+		const answered = await h.api("POST", `/api/cards/${card.id}/answers`, { answers: [{ question: "Is the retry budget acceptable?", answer: "Yes — 5 attempts with jitter." }] });
+		expect(answered.status).toBe(202);
+		await h.daemon.whenIdle();
+
+		const rerun = h.driver.handles.find((handle) => handle.sessionId.endsWith("solid-review-2"));
+		expect(rerun?.prompts[0]).toContain("Here are the answers to your questions");
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "feedback", status: "awaiting_gate" });
+	});
+});
+
 describe("review fan-out", () => {
 	it("a project can run its reviews at the same time", async () => {
 		h = await bootHarness(byStage(), ENV);

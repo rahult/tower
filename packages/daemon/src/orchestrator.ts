@@ -497,7 +497,7 @@ export class Orchestrator {
 				: effect.type === "run_flows"
 						? effect.phase
 							? this.hookFlows(card.id, effect.phase, effect.feedback)
-							: this.review(card.id)
+							: this.review(card.id, effect.feedback)
 					: effect.type === "open_pr"
 						? this.finishBranch(card.id)
 						: (effect.type === "resume_run"
@@ -517,7 +517,9 @@ export class Orchestrator {
 	}
 
 	/** Runs the project's review flows, then hands the card to the feedback gate. */
-	private async review(cardId: string): Promise<void> {
+	/** Runs the project's review flows, then hands the card to the feedback gate. `feedback` carries a
+	 *  person's answers from a review that stopped to ask, so the rerun's agents act on the decision. */
+	private async review(cardId: string, feedback?: string): Promise<void> {
 		this.launching.delete(cardId);
 		this.dispatch(cardId, { type: "flows_started" });
 		const names = this.reviewFlowsFor(cardId);
@@ -526,10 +528,28 @@ export class Orchestrator {
 		const outcome =
 			project?.parallelReviews === true && names.length > 1
 				? await this.deps.flows.runFlowsConcurrently(cardId, names)
-				: await this.deps.flows.runFlows(cardId, names);
+				: await this.deps.flows.runFlows(cardId, names, feedback);
 		if (this.stopping) return;
 		if (outcome.kind === "aborted") this.dispatch(cardId, { type: "run_aborted" });
 		else if (outcome.kind === "failed") this.dispatch(cardId, { type: "run_failed", error: outcome.error });
+		// A review that stopped to ask the person something parks the card on those questions, answerable
+		// like any stage's — the answers ride the rerun as feedback.
+		else if (outcome.result === "blocked" && outcome.hasQuestions)
+			this.dispatch(cardId, {
+				type: "run_settled",
+				result: "blocked",
+				summary: outcome.summary,
+				context: {
+					requiredGates: this.gatesFor(cardId),
+					hasVerifyCommand: this.verifyCommandFor(cardId) !== null,
+					hasQuestions: true,
+					hasReviewFlows: this.reviewFlowsFor(cardId).length > 0,
+					afterPlanFlows: false,
+					afterBuildFlows: false,
+					budget: this.budgetFor(cardId),
+					onFailure: this.failureDecision(cardId, outcome.summary, null),
+				},
+			});
 		// A review that finds blocking problems has done its job; whether to act on them is the person's call at the gate.
 		else this.dispatch(cardId, { type: "flows_finished" });
 	}
