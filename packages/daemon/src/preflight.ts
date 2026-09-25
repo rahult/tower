@@ -1,6 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "./config.ts";
+import type { Db } from "./db/open.ts";
+import { recordOneoff } from "./oneoffs.ts";
 import type { DriverEvent, RunHandle, SessionDriver } from "./pi/session-driver.ts";
 
 export interface ModelCheck {
@@ -22,12 +24,12 @@ const TIMEOUT_MS = 90_000;
  * the session actually did: a provider rejection (no key, exhausted quota, unknown model) arrives as
  * the assistant message's error rather than a thrown exception, so it is read off the settled turn.
  */
-export async function checkModels(options: { config: Config; driver: SessionDriver; models: string[]; timeoutMs?: number }): Promise<ModelCheck[]> {
+export async function checkModels(options: { config: Config; db: Db; driver: SessionDriver; models: string[]; timeoutMs?: number }): Promise<ModelCheck[]> {
 	const models = [...new Set(options.models.map((model) => model.trim()).filter(Boolean))];
-	return Promise.all(models.map((model) => checkModel(options.config, options.driver, model, options.timeoutMs ?? TIMEOUT_MS)));
+	return Promise.all(models.map((model) => checkModel(options.config, options.db, options.driver, model, options.timeoutMs ?? TIMEOUT_MS)));
 }
 
-async function checkModel(config: Config, driver: SessionDriver, model: string, timeoutMs: number): Promise<ModelCheck> {
+async function checkModel(config: Config, db: Db, driver: SessionDriver, model: string, timeoutMs: number): Promise<ModelCheck> {
 	const started = Date.now();
 	const slug = model.replace(/[^a-zA-Z0-9.-]+/g, "-");
 	const sessionId = `model-check-${slug}-${Date.now().toString(36)}`;
@@ -42,6 +44,7 @@ async function checkModel(config: Config, driver: SessionDriver, model: string, 
 	});
 	try {
 		handle = await driver.start({ sessionId, cwd: config.home, sessionDir, model, thinking: "off", tools: [], extensions: [], trustProject: false, appendSystemPromptFiles: [] });
+		recordOneoff(db, "model-check", model, handle);
 		stopWatching = handle.onEvent((event: DriverEvent) => {
 			if (event.type === "message" && event.message.role === "assistant") providerError = event.message.error ?? providerError;
 		});

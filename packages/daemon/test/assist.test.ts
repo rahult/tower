@@ -24,6 +24,19 @@ function makeRepo(dir: string): string {
 }
 
 describe("the command box ask", () => {
+	it("the ask's session spends tokens, and Usage sees them", async () => {
+		h = await bootHarness(intentReply('{"action":"add_card","project":"","title":"T","brief":""}'), ENV);
+		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
+		const before = (await h.api("GET", "/api/usage")).body.byDay;
+		const res = await h.api("POST", "/api/assist", { text: "hello board" });
+		expect(res.status).toBe(200);
+		const usage = (await h.api("GET", "/api/usage")).body;
+		const day = usage.byDay.at(-1);
+		// The assist session is card-less; without the oneoff ledger it would be invisible here.
+		expect(day.runs).toBe((before[0]?.runs ?? 0) + 1);
+		expect(day.tokens).toBeGreaterThan(before[0]?.tokens ?? 0);
+		expect(usage.byModel.length).toBeGreaterThan(0);
+	});
 	it("reads a tagged line and files a card on that project", async () => {
 		h = await bootHarness(intentReply('{"action":"add_card","project":"axiom","title":"Fix the retry loop","brief":"5xx retries drop attempts."}'), ENV);
 		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;

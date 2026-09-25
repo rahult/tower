@@ -104,7 +104,7 @@ export interface UsageRow {
 /** Token and cost totals grouped by card, project, model or day (local time). */
 export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): UsageRow[] {
 	const key = { card: "r.card_id", project: "c.project_id", model: "r.model", day: "date(r.started_at / 1000, 'unixepoch', 'localtime')" }[group];
-	return db
+	const cardSessions = db
 		.prepare(
 			`SELECT ${key} AS key, count(*) AS runs,
 				coalesce(sum(json_extract(r.tokens_json, '$.total')), 0) AS tokens, coalesce(sum(r.cost_usd), 0) AS costUsd
@@ -114,4 +114,26 @@ export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): Us
 			 WHERE r.kind IN ('stage', 'flow_step', 'adhoc', 'subagent') AND r.tokens_json IS NOT NULL GROUP BY ${key} ORDER BY tokens DESC`,
 		)
 		.all() as unknown as UsageRow[];
+	// Card-less sessions (the ask box, command suggestions, model checks) have no card or project,
+	// so they join the day and model totals only.
+	if (group === "day" || group === "model") {
+		const oneoffs = db
+			.prepare(
+				`SELECT ${group === "day" ? "date(started_at / 1000, 'unixepoch', 'localtime')" : "model"} AS key, count(*) AS runs,
+				coalesce(sum(json_extract(tokens_json, '$.total')), 0) AS tokens, coalesce(sum(cost_usd), 0) AS costUsd
+			 FROM oneoff_runs WHERE tokens_json IS NOT NULL GROUP BY key ORDER BY tokens DESC`,
+			)
+			.all() as unknown as UsageRow[];
+		const merged = new Map<string, UsageRow>();
+		for (const row of [...cardSessions, ...oneoffs]) {
+			const held = merged.get(row.key);
+			if (held) {
+				held.runs += row.runs;
+				held.tokens += row.tokens;
+				held.costUsd += row.costUsd;
+			} else merged.set(row.key, { ...row });
+		}
+		return [...merged.values()].sort((a, b) => b.tokens - a.tokens);
+	}
+	return cardSessions;
 }

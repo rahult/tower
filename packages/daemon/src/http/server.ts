@@ -116,7 +116,7 @@ export function createApp(deps: AppDeps): Hono {
 		const models = Array.isArray(body.models) ? body.models.filter((model): model is string => typeof model === "string") : [];
 		if (models.length === 0) throw new HttpError(400, 'Send the "models" to check');
 		const timeoutMs = typeof body.timeoutMs === "number" && body.timeoutMs > 0 ? body.timeoutMs : undefined;
-		return c.json({ checks: await checkModels({ config, driver, models, timeoutMs }) });
+		return c.json({ checks: await checkModels({ config, db, driver, models, timeoutMs }) });
 	});
 
 	app.put("/api/settings", async (c) => {
@@ -173,7 +173,7 @@ export function createApp(deps: AppDeps): Hono {
 	app.post("/api/projects/:id/suggest-commands", async (c) => {
 		const project = getProject(db, c.req.param("id"));
 		if (!project) throw new HttpError(404, "Project not found");
-		return c.json(await suggestCommands({ config, driver, repoPath: project.repoPath }));
+		return c.json(await suggestCommands({ config, db, driver, repoPath: project.repoPath }));
 	});
 
 	// The archetypes a project can be scaffolded from when it starts as an idea rather than a checkout.
@@ -399,7 +399,7 @@ export function createApp(deps: AppDeps): Hono {
 		let verdict = null;
 		let readError: string | null = null;
 		try {
-			verdict = await readIntent({ config, driver, text, projects });
+			verdict = await readIntent({ config, db, driver, text, projects });
 		} catch (error) {
 			readError = error instanceof Error ? error.message : String(error);
 		}

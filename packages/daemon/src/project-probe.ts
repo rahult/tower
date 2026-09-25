@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 import { resolveStageConfig, type RunSpec } from "@tower/core";
 import { type Config } from "./config.ts";
+import type { Db } from "./db/open.ts";
+import { recordOneoff } from "./oneoffs.ts";
 import type { SessionDriver } from "./pi/session-driver.ts";
 
 export interface CommandSuggestions {
@@ -66,7 +68,7 @@ export function suggestPrompt(facts: Record<string, unknown>): string {
 }
 
 /** One cheap, tool-less session: the repository's facts go in, the commands come back as JSON. */
-export async function suggestCommands(options: { config: Config; driver: SessionDriver; repoPath: string }): Promise<CommandSuggestions> {
+export async function suggestCommands(options: { config: Config; db: Db; driver: SessionDriver; repoPath: string }): Promise<CommandSuggestions> {
 	const { config, driver, repoPath } = options;
 	// The cheapest tier is enough: the hard part is the daemon's file reading, not the choice of verb.
 	const model = resolveStageConfig("testing", { global: config.globalStageConfig });
@@ -75,6 +77,7 @@ export async function suggestCommands(options: { config: Config; driver: Session
 	mkdirSync(sessionDir, { recursive: true });
 	const spec: RunSpec = { sessionId, cwd: repoPath, sessionDir, model: model.model, thinking: "off", tools: [], extensions: [], trustProject: false, appendSystemPromptFiles: [] };
 	const handle = await driver.start(spec);
+	recordOneoff(options.db, "suggest", model.model, handle);
 	let reply = "";
 	const off = handle.onEvent((event: { type: string; message?: { role: string; text?: string } }) => {
 		if (event.type === "message" && event.message?.role === "assistant" && event.message.text?.trim()) reply = event.message.text;

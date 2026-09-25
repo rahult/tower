@@ -3,6 +3,8 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { resolveStageConfig, type RunSpec } from "@tower/core";
 import type { Config } from "./config.ts";
+import type { Db } from "./db/open.ts";
+import { recordOneoff } from "./oneoffs.ts";
 import type { SessionDriver } from "./pi/session-driver.ts";
 
 export type AssistAction = "add_card" | "start_card" | "research_card" | "new_project" | "none";
@@ -70,7 +72,7 @@ export function matchProject(name: string, projects: Array<{ id: string; name: s
  * transcript lands under <home>/assist. Throws on a malformed reply, a dead session or a timeout —
  * the caller decides the fallback.
  */
-export async function readIntent(options: { config: Config; driver: SessionDriver; text: string; projects: Array<{ id: string; name: string }> }): Promise<AssistVerdict> {
+export async function readIntent(options: { config: Config; db: Db; driver: SessionDriver; text: string; projects: Array<{ id: string; name: string }> }): Promise<AssistVerdict> {
 	const { config, driver } = options;
 	// The cheapest tier judges builds; it can certainly tag a line of text.
 	const model = resolveStageConfig("testing", { global: config.globalStageConfig });
@@ -79,6 +81,7 @@ export async function readIntent(options: { config: Config; driver: SessionDrive
 	mkdirSync(sessionDir, { recursive: true });
 	const spec: RunSpec = { sessionId, cwd: config.home, sessionDir, model: model.model, thinking: "off", tools: [], extensions: [], trustProject: false, appendSystemPromptFiles: [] };
 	const handle = await driver.start(spec);
+	recordOneoff(options.db, "assist", model.model, handle);
 	let reply = "";
 	const off = handle.onEvent((event) => {
 		if (event.type === "message" && event.message.role === "assistant" && event.message.text.trim()) reply = event.message.text;

@@ -145,6 +145,18 @@ const MIGRATIONS: string[] = [
 	-- Run the after-tests review flows at the same time instead of one after another. NULL: Tower's default (sequential).
 	ALTER TABLE projects ADD COLUMN parallel_reviews INTEGER;
 	`,
+	`
+	-- Card-less model sessions (the ask box's intent reader, command suggestions, model checks) so
+	-- their spend is visible in Usage like everything else's.
+	CREATE TABLE oneoff_runs (
+		id TEXT PRIMARY KEY,
+		kind TEXT NOT NULL,
+		model TEXT NOT NULL,
+		tokens_json TEXT,
+		cost_usd REAL,
+		started_at INTEGER NOT NULL
+	);
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */
