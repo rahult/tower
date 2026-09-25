@@ -96,7 +96,7 @@ export class FlowRunner {
 		}
 		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
 		for (const step of flow.steps) {
-			last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback }));
+			last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback, shared }));
 			if (last.kind !== "settled") return last;
 			if (step.run !== undefined && last.result !== "pass") return last;
 		}
@@ -191,7 +191,7 @@ export class FlowRunner {
 		this.deps.bus.publish({ topic: "board", type: "run_upserted", data: getRun(this.deps.db, runId) });
 	}
 
-	private request(cardId: string, step: FlowStep, options: { flow: Flow | null; requireResult: boolean; feedback?: string }): CustomRun {
+	private request(cardId: string, step: FlowStep, options: { flow: Flow | null; requireResult: boolean; feedback?: string; shared?: boolean }): CustomRun {
 		const { config, db } = this.deps;
 		const card = getCard(db, cardId) as Card;
 		const project = getProject(db, card.projectId);
@@ -228,6 +228,7 @@ export class FlowRunner {
 		return {
 			sessionId: `c${cardId}-${label}-${attempt}`,
 			kind: options.flow ? "flow_step" : "adhoc",
+			shared: options.shared === true,
 			attempt,
 			model,
 			thinking,
