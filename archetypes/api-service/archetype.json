@@ -1,0 +1,8 @@
+{
+  "title": "API service",
+  "description": "Zero-dependency Node HTTP JSON API: boundary-validated routes, node:sqlite storage, vitest unit tests, and an acceptance runner that boots the server and drives it over HTTP. The baseline for headless services built test-first.",
+  "acceptance": true,
+  "setup": "npm install",
+  "verify": "npm run verify",
+  "test": "npm test"
+}
