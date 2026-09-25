@@ -20,7 +20,7 @@ import {
 } from "@tower/core";
 import { type Config, paths } from "./config.ts";
 import type { Db } from "./db/open.ts";
-import { getCard, getCardByIssue, insertCard, listCards, listExecuting, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard, type CardPatch } from "./db/repo-cards.ts";
+import { getCard, getCardByIssue, insertCard, listCards, listExecuting, listLandedIds, listQueued, listWatchedPullRequests, setQueuedEffect, updateCard, type CardPatch } from "./db/repo-cards.ts";
 import { decideGate, getGate, insertGate, listGatesForCard } from "./db/repo-gates.ts";
 import { getProject, listProjects } from "./db/repo-projects.ts";
 import { countRunsForStage, getRun, insertRun, interruptActiveRuns, lastRunForCard, listRunsForCard, updateRun } from "./db/repo-runs.ts";
@@ -108,6 +108,12 @@ export class Orchestrator {
 		return this.dispatch(cardId, understandFirst ? { type: "enqueue", understandFirst: true } : { type: "enqueue" });
 	}
 
+	/** Runs the scheduler now. A card that left the board releases whatever waited on it, and that wait
+	 *  ends outside any transition — so deletion, unlike a gate decision, must invite the queue itself. */
+	reschedule(): void {
+		this.schedule();
+	}
+
 	/** Whether enqueue should run the understanding pass first: the project opted in, and the model is missing or the code has moved past it. */
 	private async understandFirstFor(cardId: string): Promise<boolean> {
 		const card = getCard(this.deps.db, cardId);
@@ -178,6 +184,7 @@ export class Orchestrator {
 			needsAttentionReason: null,
 			finishNote: null,
 			baseCardId: null,
+			dependsOn: null,
 			issueUrl: null,
 			issueNumber: null,
 			issueAuthor: null,
@@ -477,6 +484,7 @@ export class Orchestrator {
 			const queued = listQueued(db);
 			if (queued.length === 0) return;
 			const executing = listExecuting(db).filter((card) => !this.launching.has(card.id));
+			const landed = new Set(listLandedIds(db));
 			const state: SchedulerState = {
 				ready: queued.map(({ card, queuedAt }): ReadyCard => ({
 					cardId: card.id,
@@ -485,9 +493,11 @@ export class Orchestrator {
 					priority: card.priority,
 					queuedAt,
 					buildAttempt: countRunsForStage(db, card.id, "building"),
+					waitingOn: card.dependsOn,
 				})),
 				running: [...executing.map((card) => ({ cardId: card.id, projectId: card.projectId })), ...[...this.launching].map(([cardId, projectId]) => ({ cardId, projectId }))],
 				caps: { global: config.maxConcurrent, perProject: Object.fromEntries(listProjects(db).map((project) => [project.id, project.concurrencyLimit])) },
+				landed,
 			};
 			const candidates = eligible(state);
 			const pickedId = pickNext(candidates, state);
@@ -866,6 +876,7 @@ export class Orchestrator {
 			needsAttentionReason: null,
 			finishNote: null,
 			baseCardId: null,
+			dependsOn: null,
 			issueUrl: issue.url,
 			issueNumber: issue.number,
 			issueAuthor: issue.author,

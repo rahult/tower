@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { eligible, pickNext, type ReadyCard, type SchedulerState } from "../src/index.ts";
 
-const ready = (cardId: string, projectId: string, queuedAt: number): ReadyCard => ({ cardId, projectId, stage: "planning", priority: 0, queuedAt, buildAttempt: 0 });
-const state = (partial: Partial<SchedulerState>): SchedulerState => ({ ready: [], running: [], caps: { global: 2, perProject: {} }, ...partial });
+const ready = (cardId: string, projectId: string, queuedAt: number, waitingOn: string | null = null): ReadyCard => ({ cardId, projectId, stage: "planning", priority: 0, queuedAt, buildAttempt: 0, waitingOn });
+const state = (partial: Partial<SchedulerState>): SchedulerState => ({ ready: [], running: [], caps: { global: 2, perProject: {} }, landed: new Set(), ...partial });
 
 describe("eligible", () => {
 	it("offers nothing once the global cap is reached", () => {
@@ -18,6 +18,20 @@ describe("eligible", () => {
 	it("honours a raised per-project cap", () => {
 		const s = state({ ready: [ready("b", "p1", 1)], running: [{ cardId: "a", projectId: "p1" }], caps: { global: 3, perProject: { p1: 2 } } });
 		expect(eligible(s).map((c) => c.cardId)).toEqual(["b"]);
+	});
+
+	it("holds a card back until the card it waits for has landed, then releases it", () => {
+		const waiting = ready("b", "p1", 2, "a");
+		const s = state({ ready: [waiting], running: [] });
+		expect(eligible(s)).toEqual([]);
+		const s2 = state({ ready: [waiting], running: [], landed: new Set(["a"]) });
+		expect(eligible(s2).map((c) => c.cardId)).toEqual(["b"]);
+	});
+
+	it("a dependency holds its dependent back but never advances it past the caps", () => {
+		const s = state({ ready: [ready("b", "p1", 1, "a"), ready("c", "p1", 2)], running: [{ cardId: "a", projectId: "p1" }], caps: { global: 4, perProject: { p1: 2 } } });
+		// "a" is still running, so "b" waits; the freed slot goes to "c".
+		expect(eligible(s).map((c) => c.cardId)).toEqual(["c"]);
 	});
 });
 

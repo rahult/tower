@@ -332,6 +332,7 @@ export function App() {
 			{addingWork && (
 				<QuickAdd
 					projects={projects}
+					cards={cards}
 					presetProjectId={addingWork.projectId}
 					onClose={() => setAddingWork(null)}
 					onOpenCard={openCard}

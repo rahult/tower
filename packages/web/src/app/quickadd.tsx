@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
-import type { Project } from "@tower/core";
+import type { Card, Project } from "@tower/core";
 import { api } from "../api/client.ts";
 import { field } from "../ui.ts";
 import { Modal } from "./bits.tsx";
@@ -8,10 +8,11 @@ import { Modal } from "./bits.tsx";
 /**
  * Adding work: pick one of the projects Tower already knows, say what is wanted, then add it to the
  * backlog or start it straight away. Adding a *project* is its own dialog — `onAddProject` swaps to it
- * when there is nothing to add work to yet.
+ * when there is nothing to add work to yet. A card may also wait for another card to land first.
  */
-export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard, onAddProject }: {
+export function QuickAdd({ projects, cards, presetProjectId, onClose, onOpenCard, onAddProject }: {
 	projects: Project[];
+	cards: Card[];
 	presetProjectId?: string;
 	onClose: () => void;
 	onOpenCard: (cardId: string) => void;
@@ -21,14 +22,17 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard, onAdd
 	const [projectId, setProjectId] = useState(presetProjectId ?? projects[0]?.id ?? "");
 	const [title, setTitle] = useState("");
 	const [brief, setBrief] = useState("");
+	const [dependsOn, setDependsOn] = useState("");
 
 	const refresh = () => void queryClient.invalidateQueries({ queryKey: ["board"] });
+	// Only this project's unlanded cards can be waited on, and the list follows the project picker.
+	const waitable = cards.filter((card) => card.projectId === projectId && card.stage !== "done");
 
 	// One chain, whichever entry made it: create the card, maybe start it straight away.
 	const finish = useMutation({
 		mutationFn: async ({ start }: { start: boolean }) => {
 			const project = projects.find((p) => p.id === projectId) as Project;
-			const card = await api.addCard(project.id, title.trim(), brief.trim());
+			const card = await api.addCard(project.id, title.trim(), brief.trim(), undefined, dependsOn || undefined);
 			if (start) await api.enqueue(card.id);
 			return card;
 		},
@@ -108,6 +112,18 @@ export function QuickAdd({ projects, presetProjectId, onClose, onOpenCard, onAdd
 					<label htmlFor="quick-brief">Anything the planner should know?</label>
 					<span className="hint">Optional. Constraints, files, what done looks like.</span>
 					<textarea id="quick-brief" value={brief} onChange={(event) => setBrief(event.target.value)} rows={3} className={`${field} !min-h-0 resize-y`} />
+				</div>
+				<div className="field">
+					<label htmlFor="quick-after">Wait for another card?</label>
+					<select id="quick-after" value={dependsOn} onChange={(event) => setDependsOn(event.target.value)} className={field}>
+						<option value="">— no, schedule it freely —</option>
+						{waitable.map((card) => (
+							<option key={card.id} value={card.id}>
+								{card.title}
+							</option>
+						))}
+					</select>
+					<span className="hint">{dependsOn ? "This card keeps its place in the queue until that card lands." : "Optional — for work that only makes sense once other work has landed."}</span>
 				</div>
 				<div className="field">
 					<label>Start</label>

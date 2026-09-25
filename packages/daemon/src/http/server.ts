@@ -161,6 +161,7 @@ export function createApp(deps: AppDeps): Hono {
 			understandBeforePlan: null,
 			acceptanceGates: null,
 			hasOrigin: (await listRemotes(repoPath)).includes("origin"),
+			sources: [],
 			createdAt: Date.now(),
 		};
 		insertProject(db, project);
@@ -259,6 +260,11 @@ export function createApp(deps: AppDeps): Hono {
 			if (unknown.length > 0) throw new HttpError(400, `There is no flow called ${unknown.map((name) => `"${name}"`).join(", ")}. Known flows: ${[...known].join(", ")}`);
 			settings.reviewFlows = body.reviewFlows as string[] | null;
 		}
+		if (body.sources !== undefined) {
+			// The project's source tray: repository paths or URLs research steps read before the network.
+			if (!Array.isArray(body.sources) || body.sources.some((source) => typeof source !== "string")) throw new HttpError(400, '"sources" must be a list of repository paths or URLs');
+			settings.sources = (body.sources as string[]).map((source) => source.trim()).filter(Boolean).slice(0, 20).map((source) => source.slice(0, 500));
+		}
 		if (body.invariantSimulation !== undefined) {
 			// null goes back to Tower's default.
 			if (body.invariantSimulation !== null && typeof body.invariantSimulation !== "boolean") throw new HttpError(400, '"invariantSimulation" must be a boolean, or null for the default');
@@ -305,7 +311,7 @@ export function createApp(deps: AppDeps): Hono {
 	});
 
 	// One factory, so cards made by the form and cards made by the ask look exactly the same.
-	const createCard = (projectId: string, title: string, brief: string, stageConfig: Card["stageConfig"] = {}, baseCardId: string | null = null): Card => {
+	const createCard = (projectId: string, title: string, brief: string, stageConfig: Card["stageConfig"] = {}, baseCardId: string | null = null, dependsOn: string | null = null): Card => {
 		const now = Date.now();
 		const card: Card = {
 			id: shortId(),
@@ -326,6 +332,7 @@ export function createApp(deps: AppDeps): Hono {
 			needsAttentionReason: null,
 			finishNote: null,
 			baseCardId,
+			dependsOn,
 			issueUrl: null,
 			issueNumber: null,
 			issueAuthor: null,
@@ -347,7 +354,14 @@ export function createApp(deps: AppDeps): Hono {
 			if (!base || base.projectId !== projectId) throw new HttpError(400, '"baseCardId" must name a card of the same project');
 			baseCardId = base.id;
 		}
-		const card = createCard(projectId, requireString(body, "title"), typeof body.brief === "string" ? body.brief : "", typeof body.stageConfig === "object" && body.stageConfig !== null ? (body.stageConfig as Card["stageConfig"]) : {}, baseCardId);
+		let dependsOn: string | null = null;
+		if (typeof body.dependsOn === "string" && body.dependsOn.trim()) {
+			const dependency = getCard(db, body.dependsOn.trim());
+			if (!dependency || dependency.projectId !== projectId) throw new HttpError(400, '"dependsOn" must name a card of the same project');
+			if (dependency.stage === "done") throw new HttpError(400, '"dependsOn" names a card that has already landed — nothing to wait for');
+			dependsOn = dependency.id;
+		}
+		const card = createCard(projectId, requireString(body, "title"), typeof body.brief === "string" ? body.brief : "", typeof body.stageConfig === "object" && body.stageConfig !== null ? (body.stageConfig as Card["stageConfig"]) : {}, baseCardId, dependsOn);
 		return c.json(card, 201);
 	});
 
@@ -383,6 +397,7 @@ export function createApp(deps: AppDeps): Hono {
 			understandBeforePlan: false,
 			acceptanceGates: manifest.acceptance === true ? true : null,
 			hasOrigin: false,
+			sources: [],
 			createdAt: Date.now(),
 		};
 		insertProject(db, project);
@@ -545,6 +560,8 @@ export function createApp(deps: AppDeps): Hono {
 		}
 		deleteCard(db, card.id);
 		bus.publish({ topic: "board", type: "card_deleted", data: { id: card.id } });
+		// A deleted card releases whatever waited on it: give the freed queue a chance to move now.
+		orchestrator.reschedule();
 		return c.json({ ok: true });
 	});
 

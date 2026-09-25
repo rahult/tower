@@ -9,6 +9,8 @@ export interface ReadyCard {
 	queuedAt: number;
 	/** How many times the card has been built; > 1 means it is coming back from a failed test. */
 	buildAttempt: number;
+	/** Another card this one explicitly waits for; it may not start until that card has landed. */
+	waitingOn?: string | null;
 }
 
 export interface SchedulerState {
@@ -16,13 +18,20 @@ export interface SchedulerState {
 	ready: ReadonlyArray<ReadyCard>;
 	running: ReadonlyArray<{ cardId: string; projectId: string }>;
 	caps: { global: number; perProject: Readonly<Record<string, number>> };
+	/** Cards that have landed (stage done), by id — the set a waitingOn id must be in to start. */
+	landed: ReadonlySet<string>;
 }
 
-/** Cards that may start right now without breaking the global or per-project cap. The caps are not yours to bend. */
+/** Cards that may start right now without breaking the global or per-project cap, or jumping a card
+ *  they explicitly wait for. The caps are not yours to bend; neither is a dependency. */
 export function eligible(state: SchedulerState): ReadyCard[] {
 	if (state.running.length >= state.caps.global) return [];
 	const runningIn = (projectId: string) => state.running.filter((r) => r.projectId === projectId).length;
-	return state.ready.filter((card) => runningIn(card.projectId) < (state.caps.perProject[card.projectId] ?? 1));
+	return state.ready.filter(
+		(card) =>
+			// A dependency holds its dependent back, but never advances it: the caps still decide when.
+			(!(card.waitingOn && !state.landed.has(card.waitingOn)) && runningIn(card.projectId) < (state.caps.perProject[card.projectId] ?? 1)),
+	);
 }
 
 /**

@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null; sources: string[] };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -32,9 +32,10 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [understandBeforePlan, setUnderstandBeforePlan] = useState<boolean | null>(project.understandBeforePlan);
 	const [acceptanceGates, setAcceptanceGates] = useState<boolean | null>(project.acceptanceGates);
 	const [parallelReviews, setParallelReviews] = useState<boolean | null>(project.parallelReviews);
+	const [sources, setSources] = useState<string[]>(project.sources ?? []);
 	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, sources }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
@@ -241,6 +242,24 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 						<option value="on">On for this project</option>
 						<option value="off">Off for this project</option>
 					</select>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">Source tray</div>
+					<div className="d">Documents research reads before it searches the network — internal docs, design notes, past briefs. One per line: a path in this repository, or a URL.</div>
+				</div>
+				<div className="v">
+					<textarea
+						id={`sources-${project.id}`}
+						value={sources.join("\n")}
+						onChange={(event) => setSources(event.target.value.split("\n").map((line) => line.trim()).filter(Boolean))}
+						rows={3}
+						spellCheck={false}
+						placeholder={"docs/decisions.md\nhttps://internal.example.com/architecture"}
+						className={`${field} resize-y font-mono !text-[13px]`}
+					/>
+					<span className="hint">{sources.length === 0 ? "Empty — research works from the repository and the open network alone." : `${sources.length} pinned — deep research reads ${sources.length === 1 ? "it" : "them"} first.`}</span>
 				</div>
 			</div>
 			<div className="setting">

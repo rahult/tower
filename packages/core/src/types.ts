@@ -59,6 +59,8 @@ export interface Project {
 	acceptanceGates: boolean | null;
 	/** Probed from the repository: with an `origin` remote cards finish as pull requests, without one Tower merges locally. null = not probed yet. */
 	hasOrigin: boolean | null;
+	/** Pinned sources — repository paths or URLs (internal docs, design notes, past briefs) — that research steps read before searching the network. */
+	sources: string[];
 	createdAt: number;
 }
 
@@ -83,6 +85,8 @@ export interface Card {
 	finishNote: string | null;
 	/** Stacked on another card: this card's branch starts from that card's branch, so it builds on unmerged work. */
 	baseCardId: string | null;
+	/** This card waits for that card to land before it is worth a slot; scheduling skips it until then. */
+	dependsOn: string | null;
 	/** The GitHub issue this card came from, when intake filed it from the feedback repo. */
 	issueUrl: string | null;
 	issueNumber: number | null;

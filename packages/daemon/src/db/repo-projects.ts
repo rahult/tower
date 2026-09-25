@@ -27,6 +27,7 @@ function toProject(row: Row): Project {
 		understandBeforePlan: row.understand_before_plan == null ? null : row.understand_before_plan === 1,
 		acceptanceGates: row.acceptance_gates == null ? null : row.acceptance_gates === 1,
 		hasOrigin: row.has_origin == null ? null : row.has_origin === 1,
+		sources: row.sources_json ? JSON.parse(row.sources_json as string) : [],
 	createdAt: row.created_at as number,
 };
 }
@@ -34,8 +35,8 @@ function toProject(row: Row): Project {
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
 		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, preview_check, budget_usd, parallel_reviews, trust_project_pi,
-			 extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, sources_json, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -58,6 +59,7 @@ export function insertProject(db: Db, project: Project): void {
 		project.understandBeforePlan == null ? null : project.understandBeforePlan ? 1 : 0,
 		project.acceptanceGates == null ? null : project.acceptanceGates ? 1 : 0,
 		project.hasOrigin == null ? null : project.hasOrigin ? 1 : 0,
+		JSON.stringify(project.sources ?? []),
 		project.createdAt,
 	);
 }
@@ -76,7 +78,7 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates" | "sources">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", previewCheck: "preview_check", budgetUsd: "budget_usd", concurrencyLimit: "concurrency_limit" } as const;
 
@@ -84,8 +86,10 @@ const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCom
 const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates", parallelReviews: "parallel_reviews" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
+	const { reviewFlows, sources, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
+	// null reviewFlows means "Tower's default set" and must stay SQL NULL; sources are always a list.
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
+	if (sources !== undefined) db.prepare("UPDATE projects SET sources_json = ? WHERE id = ?").run(JSON.stringify(sources), id);
 	for (const [key, column] of Object.entries(TOGGLE_COLUMNS)) {
 		const value = settings[key as keyof typeof TOGGLE_COLUMNS] as boolean | null | undefined;
 		if (value !== undefined) db.prepare(`UPDATE projects SET ${column} = ? WHERE id = ?`).run(value == null ? null : value ? 1 : 0, id);

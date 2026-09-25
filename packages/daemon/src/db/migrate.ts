@@ -162,6 +162,28 @@ const MIGRATIONS: string[] = [
 	-- build on unmerged work. NULL: branch from the default branch as always.
 	ALTER TABLE cards ADD COLUMN base_card_id TEXT;
 	`,
+	`
+	-- Pinned sources (internal docs, design notes, past briefs — repository paths or URLs) that
+	-- research steps read before they search the network. The tray is the project's own memory.
+	ALTER TABLE projects ADD COLUMN sources_json TEXT NOT NULL DEFAULT '[]';
+	`,
+	`
+	-- A card may wait for another card to land before it is worth a slot. NULL: free to schedule.
+	ALTER TABLE cards ADD COLUMN depends_on TEXT;
+	`,
+	`
+	-- A research question asked without a project yet: the deep-research steps run on it where it
+	-- stands, and promotion files the brief as a card in the project the person picks.
+	CREATE TABLE research_questions (
+		id TEXT PRIMARY KEY,
+		question TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'open',
+		created_at INTEGER NOT NULL,
+		brief TEXT,
+		promoted_card_id TEXT,
+		promoted_project_id TEXT
+	);
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

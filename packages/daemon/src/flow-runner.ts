@@ -221,7 +221,7 @@ export class FlowRunner {
 
 		let prompt: string;
 		try {
-			prompt = this.prompt(card, step, options.flow ? join(cardDir, "reviews", `${label}.md`) : null);
+			prompt = this.prompt(card, step, options.flow ? join(cardDir, "reviews", `${label}.md`) : null, project);
 			if (options.feedback) prompt += `\n\n## What should change\n\nThe previous run of this gate did not pass, so the card stopped:\n\n${options.feedback}\n\nFind and fix the cause in this run — do not simply restate last run's output.`;
 		} catch (error) {
 			// The usual cause is updating Tower's files while the daemon still runs the previous version.
@@ -245,12 +245,17 @@ export class FlowRunner {
 		};
 	}
 
-	private prompt(card: Card, step: FlowStep, reportPath: string | null): string {
+	private prompt(card: Card, step: FlowStep, reportPath: string | null, project: ReturnType<typeof getProject>): string {
 		const { config } = this.deps;
 		// pi expands /skill:name itself; an agent's role arrives as its system prompt, so the task is the whole prompt.
 		if (step.skill) return `/skill:${step.skill}${step.task ? ` ${step.task}` : ""}`;
 		if (step.agent) return step.task ?? `Do your job for this task: ${card.title}\n\n${card.brief}`;
 		const cardDir = paths.cardDir(config, card.id);
+		// The project's source tray: pinned documents a research step must read before it searches the network.
+		const pinned = project?.sources ?? [];
+		const pinnedSources = pinned.length
+			? ["## Pinned sources", "", "This project pins sources to read first — internal docs, design notes, past briefs:", ...pinned.map((source) => `- ${source}`), "", "Read these before you search the network; cite them like any other source, and say when one contradicts a web source."].join("\n")
+			: "";
 		// A prompt file ships with Tower (prompts/flows) or belongs to a person's own flow (home/flows):
 	// a flow in ~/.tower/flows references the .md files beside it.
 	const read = (...parts: string[]) => {
@@ -273,6 +278,7 @@ export class FlowRunner {
 				planPath: join(cardDir, "plan.md"),
 				reportPath,
 				resultPath: join(cardDir, STAGE_RESULT_FILE),
+				pinnedSources,
 			},
 			// renderPrompt expands partials in one pass, so the contract's own partial is filled in here.
 			{

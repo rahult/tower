@@ -8,6 +8,8 @@ Task: **{{title}}**
 
 You are in the repository this work would land in (your current directory). Read enough of it to know what any answer must fit: the stack, the size, the constraints that matter. **Do not modify the repository.**
 
+{{pinnedSources}}
+
 # How to survey
 
 1. Split the question into the 3–6 sub-questions a good answer needs (what exists, how each option really works, how it fails, what it costs, how it moves).

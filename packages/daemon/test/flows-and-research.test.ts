@@ -389,6 +389,10 @@ describe("deep research", () => {
 		h = await bootHarness(researchScript(""), ENV);
 		homeFlow(h, "writey", { name: "writey", title: "Writes", description: "", when: ["manual"], steps: [{ name: "go", run: "true" }] });
 		const project = await addProject();
+		// The project's source tray: research reads these before it searches the network.
+		const pinned = await h.api("PATCH", `/api/projects/${project.id}`, { sources: ["docs/decisions.md", "https://internal.example.com/architecture"] });
+		expect(pinned.status).toBe(200);
+		expect(pinned.body.sources).toEqual(["docs/decisions.md", "https://internal.example.com/architecture"]);
 		const card = await addCard(project.id);
 
 		// The shipped flow is read-only, so it needs no worktree — it explores in the checkout itself.
@@ -403,6 +407,11 @@ describe("deep research", () => {
 		for (const suffix of ["deep-research-survey", "deep-research-synthesize"]) {
 			expect(h.driver.handles.find((handle) => handle.sessionId.includes(suffix))?.spec.cwd).toBe(h.repo);
 		}
+		// The tray reached the survey agent; a project with no tray renders no section at all.
+		const survey = h.driver.handles.find((handle) => handle.sessionId.includes("deep-research-survey"));
+		expect(survey?.prompts[0]).toContain("Pinned sources");
+		expect(survey?.prompts[0]).toContain("docs/decisions.md");
+		expect(survey?.prompts[0]).not.toMatch(/\{\{/);
 		expect(detail.artifacts.map((artifact: { name: string }) => artifact.name)).toContain("reviews/deep-research-synthesize.md");
 
 		// A flow that runs commands needs the worktree — a backlog card refuses it.
