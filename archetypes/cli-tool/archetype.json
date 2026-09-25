@@ -1,0 +1,8 @@
+{
+  "title": "CLI tool",
+  "description": "Zero-dependency Node command-line tool in plain ESM: a command dispatcher, vitest unit tests, and an acceptance runner that drives the real binary. The baseline for command-line work built test-first.",
+  "acceptance": true,
+  "setup": "npm install",
+  "verify": "npm run verify",
+  "test": "npm test"
+}

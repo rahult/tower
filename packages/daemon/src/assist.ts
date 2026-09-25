@@ -14,6 +14,8 @@ export interface AssistVerdict {
 	project: string;
 	title: string;
 	brief: string;
+	/** Which archetype to scaffold for new_project; anything unknown falls back to Tower's default. */
+	archetype: string;
 }
 
 /** How long a one-line ask may take to interpret before the caller files it as-is. */
@@ -28,8 +30,8 @@ export function assistPrompt(text: string, projects: string[]): string {
 		"",
 		'A "@name" in the line tags the project the work belongs to; prefer it over guessing.',
 		'Reply with ONE JSON object and nothing else — no prose, no code fence:',
-		'{"action":"add_card" | "start_card" | "research_card" | "new_project" | "none","project":"<name from the list, or \\"\\">","title":"<short imperative title, at most 80 characters>","brief":"<one or two sentences of context for the planner, or \\"\\">"}',
-		'"add_card" puts new work on the backlog. "start_card" adds it and begins planning right away. "research_card" is for exploring unfamiliar ground before committing to work — lines like "research…", "how could we…", "what is the best…", or comparing libraries and approaches: it files the card and runs Tower\'s deep-research flow on it instead of planning. "new_project" is for a line that describes an application to build from scratch — "create a todo app", "build a habit tracker" — where no existing project is named: Tower scaffolds a fresh project from its web-app archetype and starts planning the idea on it. If the line is not a request for new work — a question, a greeting, a change to an existing card — reply {"action":"none","project":"","title":"","brief":""}.',
+		'{"action":"add_card" | "start_card" | "research_card" | "new_project" | "none","project":"<name from the list, or \\"\\">","title":"<short imperative title, at most 80 characters>","brief":"<one or two sentences of context for the planner, or \\"\\">","archetype":"web-app | cli-tool — for new_project only: a web or mobile application is web-app, a command-line tool is cli-tool"}',
+		'"add_card" puts new work on the backlog. "start_card" adds it and begins planning right away. "research_card" is for exploring unfamiliar ground before committing to work — lines like "research…", "how could we…", "what is the best…", or comparing libraries and approaches: it files the card and runs Tower\'s deep-research flow on it instead of planning. "new_project" is for a line that describes an application to build from scratch — "create a todo app", "build a habit tracker" — where no existing project is named: Tower scaffolds a fresh project from the archetype your "archetype" field names and starts planning the idea on it. If the line is not a request for new work — a question, a greeting, a change to an existing card — reply {"action":"none","project":"","title":"","brief":"","archetype":""}.',
 	].join("\n");
 }
 
@@ -46,6 +48,7 @@ export function parseVerdict(text: string): AssistVerdict | null {
 			project: typeof raw.project === "string" ? raw.project.trim() : "",
 			title: typeof raw.title === "string" ? raw.title.trim().slice(0, 120) : "",
 			brief: typeof raw.brief === "string" ? raw.brief.trim().slice(0, 2000) : "",
+			archetype: typeof raw.archetype === "string" ? raw.archetype.trim() : "",
 		};
 	} catch {
 		return null;

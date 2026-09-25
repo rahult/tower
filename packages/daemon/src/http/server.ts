@@ -418,7 +418,13 @@ export function createApp(deps: AppDeps): Hono {
 		if (verdict?.action === "new_project") {
 			const name = verdict.title.replace(/^build\s+/i, "").trim().slice(0, 60) || "New project";
 			const archetypes = listArchetypes(config);
-			const archetype = archetypes.some((candidate) => candidate.name === "web-app") ? "web-app" : archetypes[0]?.name;
+			// The intent reader names the archetype it judged fitting; an unknown or missing name
+			// falls back to web-app, then to whatever is installed.
+			const archetype = archetypes.some((candidate) => candidate.name === verdict.archetype)
+				? verdict.archetype
+				: archetypes.some((candidate) => candidate.name === "web-app")
+					? "web-app"
+					: archetypes[0]?.name;
 			if (!archetype) throw new HttpError(400, "No archetypes are installed, so there is nothing to scaffold from");
 			const project = await scaffoldProject(name, archetype);
 			const card = createCard(project.id, verdict.title || `Build ${name}`, verdict.brief);
