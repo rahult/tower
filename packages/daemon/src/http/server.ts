@@ -646,8 +646,11 @@ export function createApp(deps: AppDeps): Hono {
 		// decision that must be made with eyes open, in the UI or with the acknowledgment flag — never
 		// by accident through a script.
 		if (body.decision === "approve" && body.acknowledgeBlocking !== true) {
+			// Only the reviews at the feedback stage stand between the card and the finish line: a hook
+			// gate that failed earlier (a red gate, say) was already handled on its own — passed, fixed,
+			// or explicitly ruled satisfied — and must not block here as a stale verdict.
 			const verdicts = new Map<string, { resultStatus: string | null; resultSummary: string | null }>();
-			for (const run of listRunsForCard(db, card.id)) if (run.kind === "flow_step") verdicts.set(run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, ""), run);
+			for (const run of listRunsForCard(db, card.id)) if (run.kind === "flow_step" && run.stage === "feedback") verdicts.set(run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, ""), run);
 			const blocking = [...verdicts.values()].filter((run) => run.resultStatus === "fail");
 			if (blocking.length > 0) {
 				throw new HttpError(409, `A review found something blocking: ${blocking.map((run) => run.resultSummary ?? "blocking findings").join(" | ")}. Read it, then approve with "acknowledgeBlocking": true if you still want the work.`);

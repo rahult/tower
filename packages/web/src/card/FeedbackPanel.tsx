@@ -25,9 +25,10 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, merg
 	const openNotes = annotations.filter((annotation) => !annotation.resolved).length;
 
 	const checks = runs.findLast((run) => run.kind === "verify" || (run.kind === "stage" && run.stage === "testing"));
-	// The newest verdict of each review flow.
+	// The newest verdict of each review flow — only the ones that ran at this stage: an earlier hook
+	// gate's failure (a red gate) was handled on its own and must not banner here as stale.
 	const verdicts = new Map<string, StageRun>();
-	for (const run of runs) if (run.kind === "flow_step") verdicts.set(run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, ""), run);
+	for (const run of runs) if (run.kind === "flow_step" && run.stage === "feedback") verdicts.set(run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, ""), run);
 	const blocking = [...verdicts.values()].filter((run) => run.resultStatus === "fail").length;
 	const askBuilder = () => setFeedback((current) => current || `Address the blocking findings in ${reports.map((report) => report.name).join(" and ")}.`);
 

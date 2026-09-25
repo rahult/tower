@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type CardEvent, type CardState, InvalidTransition, transition } from "../src/index.ts";
+import { type CardEvent, type CardState, type GateKind, InvalidTransition, transition } from "../src/index.ts";
 
 /**
  * No stuck states, proven by reachability: walking every transition the machine can take from the
@@ -28,7 +28,7 @@ const HUMAN_EXITS: CardEvent[] = [
 
 /** The settle context a well-configured card carries; the walk's stands in for the orchestrator's IO. */
 const context = {
-	requiredGates: ["plan_approval", "feedback"] as const,
+	requiredGates: ["plan_approval", "feedback"] as GateKind[],
 	hasVerifyCommand: true,
 	hasQuestions: false,
 	hasReviewFlows: true,
@@ -81,7 +81,7 @@ const apply = (state: CardState, event: CardEvent): CardState | null => {
 
 describe("no stuck states (reachability walk)", () => {
 	it("every reachable cell except the deliberate terminal has a human way out", () => {
-		const start: CardState = { stage: "backlog", status: "idle", needsAttentionReason: null, finishNote: null, baseCardId: null };
+		const start: CardState = { stage: "backlog", status: "idle", needsAttentionReason: null };
 		const seen = new Set<string>([key(start)]);
 		const queue: CardState[] = [start];
 		const humanExit = (state: CardState): boolean =>
@@ -111,7 +111,7 @@ describe("no stuck states (reachability walk)", () => {
 		const stuck = reachable.filter((id) => {
 			const [stage, status] = id.split("/");
 			if (stage === "done" && status === "idle") return false;
-			return !humanExit({ stage: stage as CardState["stage"], status: status as CardState["status"], needsAttentionReason: null, finishNote: null, baseCardId: null });
+			return !humanExit({ stage: stage as CardState["stage"], status: status as CardState["status"], needsAttentionReason: null });
 		});
 		expect(stuck, `reachable cells with no human way out`).toEqual([]);
 		// The walk has to have covered the board's interesting quarters, or it proves nothing.
