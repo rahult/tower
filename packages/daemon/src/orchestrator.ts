@@ -187,7 +187,9 @@ export class Orchestrator {
 		this.schedule();
 	}
 
-	/** Hands a person's answers to the stage that asked, continuing its session so nothing it learned is lost. */
+	/** Hands a person's answers to the stage that asked, continuing its session so nothing it learned is lost.
+	 *  When the asker was a hook-flow step (the card is stuck at needs_attention, not awaiting input), the
+	 *  answers become the rerun's feedback: the same decision, delivered through the one door that is open. */
 	answer(cardId: string, answers: Array<{ question: string; answer: string }>): Card {
 		const lines = answers.map(({ question, answer }, index) => `${index + 1}. ${question}\n   Answer: ${answer}`);
 		const message = [
@@ -197,6 +199,19 @@ export class Orchestrator {
 			"",
 			`Treat them as decisions and continue the task from where you stopped. Your original instructions still apply, including writing ${STAGE_RESULT_FILE} when you are done. Ask again only if something new and essential is still open.`,
 		].join("\n");
+		const card = getCard(this.deps.db, cardId);
+		if (card?.status === "needs_attention") {
+			const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled" && run.questions !== null);
+			if (last?.kind === "flow_step" && (last.stage === "planning" || last.stage === "testing")) {
+				const feedback = `You stopped to ask; the person has decided. ${message}`;
+				const gate = last.id.includes(UNDERSTAND_FLOW)
+					? { beforePlan: true }
+					: last.stage === "testing"
+						? { gateFeedback: feedback }
+						: { afterPlanFeedback: feedback };
+				return this.dispatch(cardId, { type: "retry", ...gate, hasVerifyCommand: this.verifyCommandFor(cardId) !== null });
+			}
+		}
 		return this.dispatch(cardId, { type: "answers_given", message });
 	}
 

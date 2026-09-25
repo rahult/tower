@@ -138,6 +138,45 @@ describe("acceptance gates", () => {
 		expect(h.driver.handles.some((handle) => handle.sessionId.includes("-build-"))).toBe(false);
 	});
 
+	it("answering a hook step that stopped to ask reruns the hook with the decision, not the plan", async () => {
+		// First attempt stops to ask; the answer comes back as the rerun's feedback, and it writes red specs.
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("-plan-")) return [planningTurn()];
+			if (spec.sessionId.includes("acceptance-red")) {
+				if (spec.sessionId.endsWith("-1"))
+					return [
+						{
+							events: [],
+							effect: ({ spec: handle }) => {
+								writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need a decision on red-gate semantics.", questions: [{ question: "Red gate semantics: which option?", options: ["Extend the runner", "Scope the flow"] }] }));
+							},
+						},
+					];
+				return [harnessTurn(false)];
+			}
+			if (spec.sessionId.includes("-build-") || spec.sessionId.includes("-cifix-")) return [greenBuilderTurn()];
+			if (spec.sessionId.includes("-test-")) return [testerTurn()];
+			return [reviewTurn()];
+		}, ENV);
+		installAcceptanceRunner(h);
+		const project = await addProject();
+		await h.api("PATCH", `/api/projects/${project.id}`, { acceptanceGates: true });
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "planning", status: "needs_attention" });
+
+		const answered = await h.api("POST", `/api/cards/${card.id}/answers`, { answers: [{ question: "Red gate semantics: which option?", answer: "Extend the runner: --expect-red gates only specs new or changed vs the base commit." }] });
+		expect(answered.status).toBe(202);
+		await h.daemon.whenIdle();
+
+		const planRuns = h.driver.handles.filter((handle) => handle.sessionId.includes("-plan-"));
+		expect(planRuns).toHaveLength(1);
+		const rerun = h.driver.handles.find((handle) => handle.sessionId.endsWith("acceptance-red-write-specs-2"));
+		expect(rerun?.prompts[0]).toContain("Here are the answers to your questions");
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+	});
+
 	it("retrying a failed red gate reruns the harness with the failure as feedback, not the plan", async () => {
 		// First attempt writes a spec that is not red; the retry — told what failed — writes a red one.
 		h = await bootHarness((spec) => {
