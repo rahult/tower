@@ -642,6 +642,17 @@ export function createApp(deps: AppDeps): Hono {
 		const body = (await c.req.json()) as Record<string, unknown>;
 		if (body.decision !== "approve" && body.decision !== "reject") throw new HttpError(400, '"decision" must be "approve" or "reject"');
 		const feedback = typeof body.feedback === "string" ? body.feedback.trim() : "";
+		// A blocking review verdict stands between the card and the finish line: approving past one is a
+		// decision that must be made with eyes open, in the UI or with the acknowledgment flag — never
+		// by accident through a script.
+		if (body.decision === "approve" && body.acknowledgeBlocking !== true) {
+			const verdicts = new Map<string, { resultStatus: string | null; resultSummary: string | null }>();
+			for (const run of listRunsForCard(db, card.id)) if (run.kind === "flow_step") verdicts.set(run.id.replace(/^c[^-]+-/, "").replace(/-\d+$/, ""), run);
+			const blocking = [...verdicts.values()].filter((run) => run.resultStatus === "fail");
+			if (blocking.length > 0) {
+				throw new HttpError(409, `A review found something blocking: ${blocking.map((run) => run.resultSummary ?? "blocking findings").join(" | ")}. Read it, then approve with "acknowledgeBlocking": true if you still want the work.`);
+			}
+		}
 		// A rejection can be notes alone: the margin notes ride along as the what-should-change.
 		const hasOpenNotes = loadAnnotations(paths.cardDir(config, card.id)).some((annotation) => !annotation.resolved);
 		if (body.decision === "reject" && !feedback && !hasOpenNotes) throw new HttpError(400, "Say what should change so the planner can act on it");

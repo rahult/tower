@@ -21,7 +21,7 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, merg
 	const [feedback, setFeedback] = useState("");
 	const reports = artifacts.filter((artifact) => artifact.name.startsWith("reviews/"));
 	const contents = useQueries({ queries: reports.map((report) => ({ queryKey: ["artifact", cardId, report.name, report.modifiedAt], queryFn: () => api.artifact(cardId, report.name) })) });
-	const decide = useMutation({ mutationFn: (decision: "approve" | "reject") => api.decideGate(cardId, gate.id, decision, feedback.trim()) });
+	const decide = useMutation({ mutationFn: (decision: "approve" | "reject") => api.decideGate(cardId, gate.id, decision, feedback.trim(), decision === "approve" && blocking > 0) });
 	const openNotes = annotations.filter((annotation) => !annotation.resolved).length;
 
 	const checks = runs.findLast((run) => run.kind === "verify" || (run.kind === "stage" && run.stage === "testing"));

@@ -210,8 +210,8 @@ export const api = {
 	enqueue: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/enqueue`),
 	answer: (cardId: string, answers: Array<{ question: string; answer: string }>) => request<Card>("POST", `/api/cards/${cardId}/answers`, { answers }),
 	retry: (cardId: string, feedback?: string) => request<Card>("POST", `/api/cards/${cardId}/retry`, { feedback }),
-	decideGate: (cardId: string, gateId: string, decision: "approve" | "reject", feedback?: string) =>
-		request<Card>("POST", `/api/cards/${cardId}/gates/${gateId}`, { decision, feedback }),
+	decideGate: (cardId: string, gateId: string, decision: "approve" | "reject", feedback?: string, acknowledgeBlocking?: boolean) =>
+		request<Card>("POST", `/api/cards/${cardId}/gates/${gateId}`, { decision, feedback, ...(acknowledgeBlocking ? { acknowledgeBlocking: true } : {}) }),
 	steer: (cardId: string, text: string) => request<{ ok: true }>("POST", `/api/cards/${cardId}/steer`, { text }),
 	abort: (cardId: string) => request<{ ok: true }>("POST", `/api/cards/${cardId}/abort`),
 	runTests: (cardId: string) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/test`),

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { bootHarness, byStage, type Harness } from "./harness.ts";
+import { bootHarness, byStage, type Harness, reviewTurn } from "./harness.ts";
 
 let h: Harness;
 const originalPath = process.env.PATH;
@@ -153,6 +153,25 @@ describe("pull requests", () => {
 		expect(log).toContain("docs");
 		expect(log).toMatch(/Merge branch '.*' \(card/);
 		expect(execFileSync("git", ["branch", "--list", done.branchName], { cwd: h.repo, encoding: "utf8" })).toBe("");
+	});
+
+	it("approving past a blocking review needs eyes: the acknowledgment is required", async () => {
+		// The adversarial review finds something blocking; the flow still finishes (its verdict is a
+		// finding, not a crash) and the gate opens — but approve now demands the acknowledgment.
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("adversarial-review")) return [reviewTurn("fail")];
+			return byStage()(spec);
+		}, FLOWS);
+		const { card, gate } = await toFeedbackGate(h);
+		expect(gate.kind).toBe("feedback");
+
+		const refused = await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		expect(refused.status).toBe(409);
+		expect(refused.body.error).toContain("blocking");
+		expect(refused.body.error).toContain("acknowledgeBlocking");
+
+		const approved = await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve", acknowledgeBlocking: true });
+		expect(approved.status).toBe(200);
 	});
 
 	it("a done card can be deleted from the board, and a live one cannot", async () => {
