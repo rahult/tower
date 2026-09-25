@@ -211,6 +211,29 @@ describe("acceptance gates", () => {
 		expect(redGate).toMatchObject({ kind: "flow_step", resultStatus: "pass" });
 	});
 
+	it("a gate the person rules satisfied is replayed past, not re-run into the same failure", async () => {
+		// The specs already pass, so the red gate fails and the card sticks at needs_attention. When the
+		// failure is the gate being re-run against intentionally-present behavior (recorded pre-fix), the
+		// person rules it satisfied and the settle replays to the plan gate instead of re-running the flow.
+		h = await bootHarness(script({ specsWork: true }), ENV);
+		installAcceptanceRunner(h);
+		const project = await addProject();
+		await h.api("PATCH", `/api/projects/${project.id}`, { acceptanceGates: true });
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ stage: "planning", status: "needs_attention" });
+
+		const ruled = await h.api("POST", `/api/cards/${card.id}/retry`, { feedback: "gate satisfied: the behavior is intentionally present; the red gate was recorded before it landed" });
+		expect(ruled.status).toBe(202);
+		await h.daemon.whenIdle();
+
+		// Replayed to the plan gate — no second red-gate run, no re-plan.
+		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+		expect(detail.runs.filter((run: { id: string }) => run.id.includes("acceptance-red-red-gate"))).toHaveLength(1);
+	});
+
 	it("without the toggle, the acceptance flows never run", async () => {
 		h = await bootHarness(script(), ENV);
 		installAcceptanceRunner(h);

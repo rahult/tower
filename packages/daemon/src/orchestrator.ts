@@ -236,6 +236,15 @@ export class Orchestrator {
 				context: { requiredGates: this.gatesFor(cardId), hasVerifyCommand: this.verifyCommandFor(cardId) !== null, hasQuestions: false, hasReviewFlows: this.reviewFlowsFor(cardId).length > 0, afterPlanFlows: false, afterBuildFlows: false, budget: this.budgetFor(cardId), onFailure: { action: "needs_attention", reason: "" } },
 			});
 		}
+		// "gate satisfied: ..." is the person overruling a failed hook whose verdict is already recorded —
+		// a red gate honestly held before the fix landed, re-run mechanically into failure. The settle is
+		// replayed to wherever the work would have gone, with the decision in the card's record.
+		if (card?.status === "needs_attention" && feedback?.startsWith("gate satisfied:")) {
+			const last = listRunsForCard(this.deps.db, cardId).findLast((run) => run.status === "settled" && run.resultStatus === "fail" && run.kind === "flow_step");
+			const why = feedback.slice("gate satisfied:".length).trim();
+			this.dispatch(cardId, { type: "hook_ruled_satisfied" });
+			return this.replayPastBudget(cardId, { feedback: `The person ruled the failed gate satisfied: ${why}${last?.resultSummary ? ` (the gate had exited: ${last.resultSummary})` : ""}` }, true);
+		}
 		// Stuck on a declined budget: the person just raised or cleared it, so continue the settled work —
 		// re-planning would charge the budget twice for one plan.
 		if (card?.status === "needs_attention" && card.needsAttentionReason?.startsWith("Budget declined")) {
@@ -312,11 +321,12 @@ export class Orchestrator {
 	}
 
 	/** The budget gate approved: the work settled clean and the person says continue, so the settle is
-	 *  replayed exactly as it was, minus the budget — hooks, gates, testing all recompute as they were. */
-	private replayPastBudget(cardId: string, gate: { feedback: string | null }): Card {
+	 *  replayed exactly as it was, minus the budget — hooks, gates, testing all recompute as they were.
+	 *  `skipHooks` serves the gate-satisfied ruling: the failed hook's verdict is overruled, not re-run. */
+	private replayPastBudget(cardId: string, gate: { feedback: string | null }, skipHooks = false): Card {
 		const card = getCard(this.deps.db, cardId) as Card;
-		const afterPlanFlows = card.stage === "planning" && this.triggeredFlows("after-plan", card.projectId).length > 0;
-		const afterBuildFlows = card.stage === "building" && this.triggeredFlows("after-build", card.projectId).length > 0;
+		const afterPlanFlows = !skipHooks && card.stage === "planning" && this.triggeredFlows("after-plan", card.projectId).length > 0;
+		const afterBuildFlows = !skipHooks && card.stage === "building" && this.triggeredFlows("after-build", card.projectId).length > 0;
 		return this.dispatch(cardId, {
 			type: "run_settled",
 			result: "pass",

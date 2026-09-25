@@ -39,7 +39,9 @@ export type CardEvent =
 	/** `wasVerifying`: the interrupted work was the verify command, which has no session to reopen. */
 	| { type: "resume"; wasVerifying: boolean }
 	/** The person answered the questions a stage asked. `message` is what the agent is told. */
-	| { type: "answers_given"; message: string };
+	| { type: "answers_given"; message: string }
+	/** The person ruled a failed hook's verdict satisfied (its evidence is already recorded); the card goes back to running so the settle can be replayed. */
+	| { type: "hook_ruled_satisfied" };
 
 /** Facts the orchestrator gathers (with IO) so the transition itself can stay pure. */
 export interface SettleContext {
@@ -242,6 +244,10 @@ export function transition(card: CardState, event: CardEvent): Transition {
 			if (status !== "interrupted" || !isAgentStage(stage)) break;
 			if (event.wasVerifying) return { next: rest("testing", "verifying"), effects: [{ type: "run_verify" }] };
 			return { next: rest(stage, "queued"), effects: [{ type: "resume_run", stage }] };
+
+		case "hook_ruled_satisfied":
+			if (status === "needs_attention" && isAgentStage(stage)) return { next: rest(stage, "running"), effects: [] };
+			break;
 
 		case "answers_given":
 			if (status !== "awaiting_input") break;
