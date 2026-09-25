@@ -34,7 +34,7 @@ export function PlanToBacklog({ project, cards, onClose, onFiled }: { project: P
 	});
 
 	const file = useMutation({
-		mutationFn: () => api.filePlanCards(project.id, picked.filter((_, index) => checked[index])),
+		mutationFn: (queue: boolean) => api.filePlanCards(project.id, picked.filter((_, index) => checked[index]), queue),
 		onSuccess: ({ cards: filed }) => {
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
 			toast(`Filed ${filed.length} ${filed.length === 1 ? "card" : "cards"} to ${project.name}'s backlog.`);
@@ -109,9 +109,20 @@ export function PlanToBacklog({ project, cards, onClose, onFiled }: { project: P
 						<button type="button" className="btn ghost" onClick={() => setMode("input")}>
 							Back
 						</button>
-						<button type="button" className="btn primary" disabled={file.isPending || pickedCount === 0} onClick={() => file.mutate()}>
-							{file.isPending ? "Filing…" : `File ${pickedCount} ${pickedCount === 1 ? "card" : "cards"} to the backlog`}
-						</button>
+						<span className="flex items-center gap-2">
+							<button
+								type="button"
+								className="btn"
+								disabled={file.isPending || pickedCount === 0}
+								title="File them and enqueue each, so the pipeline plans, builds and reviews the queue on its own — gates still stop for you"
+								onClick={() => file.mutate(true)}
+							>
+								{file.isPending ? "Filing…" : "File and queue"}
+							</button>
+							<button type="button" className="btn primary" disabled={file.isPending || pickedCount === 0} onClick={() => file.mutate(false)}>
+								{file.isPending ? "Filing…" : `File ${pickedCount} ${pickedCount === 1 ? "card" : "cards"} to the backlog`}
+							</button>
+						</span>
 					</div>
 					{file.error && <p className="!mt-0 text-[14px] text-danger">{file.error.message}</p>}
 				</div>

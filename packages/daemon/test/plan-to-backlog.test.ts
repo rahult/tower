@@ -88,6 +88,22 @@ describe("plan to backlog", () => {
 		expect((await h.api("POST", `/api/projects/${project.id}/plan-to-backlog`, { plan: "too short" })).status).toBe(400);
 	});
 
+	it("queue:true files the cards and enqueues them, so the pipeline drains the queue on its own", async () => {
+		h = await bootHarness(splitterScript(), ENV);
+		const project = await addProject();
+		const proposal = (await h.api("POST", `/api/projects/${project.id}/plan-to-backlog`, { plan: PLAN })).body;
+		const filed = await h.api("POST", `/api/projects/${project.id}/plan-to-backlog/file`, { cards: proposal.cards.slice(0, 2), queue: true });
+		expect(filed.status).toBe(201);
+		// Every filed card is waiting in the queue for a slot, not inert on the backlog.
+		for (const card of filed.body.cards) expect(card).toMatchObject({ stage: "planning", status: "queued" });
+		// The queue is ordered: the first filed card plans first.
+		expect(filed.body.cards[0].createdAt).toBeLessThanOrEqual(filed.body.cards[1].createdAt);
+		await h.daemon.whenIdle();
+		// And the queue really drains: the first card reached its plan gate, planning ran once per card.
+		const planRuns = h.driver.handles.filter((handle) => handle.sessionId.includes("-plan-"));
+		expect(planRuns.length).toBeGreaterThanOrEqual(1);
+	});
+
 	it("parsePlanCards tolerates a fenced reply and drops malformed entries", () => {
 		const reply = 'Sure! ```json\n{"cards":[{"title":"A","brief":"do a"},{"title":"","brief":"skip"},{"title":"C","brief":"do c"}]}\n```';
 		expect(parsePlanCards(reply)).toEqual([

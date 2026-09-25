@@ -217,11 +217,12 @@ export function createApp(deps: AppDeps): Hono {
 		}
 	});
 
-	// Files the picked draft as inert backlog cards, in the plan's order.
+	// Files the picked draft as backlog cards, in the plan's order. `queue` also enqueues them, so a
+	// spec cut at night becomes a queue the pipeline drains on its own — gates still stop for a person.
 	app.post("/api/projects/:id/plan-to-backlog/file", async (c) => {
 		const project = getProject(db, c.req.param("id"));
 		if (!project) throw new HttpError(404, "Project not found");
-		const body = (await c.req.json()) as { cards?: unknown };
+		const body = (await c.req.json()) as { cards?: unknown; queue?: unknown };
 		const list = Array.isArray(body.cards) ? body.cards : [];
 		const cleaned = list.flatMap((entry) => {
 			const card = entry as Partial<{ title: unknown; brief: unknown }>;
@@ -231,7 +232,13 @@ export function createApp(deps: AppDeps): Hono {
 		});
 		if (cleaned.length === 0) throw new HttpError(400, 'Send the picked cards as [{"title", "brief"}]');
 		if (cleaned.length > PLAN_CARDS_MAX) throw new HttpError(400, `At most ${PLAN_CARDS_MAX} cards can be filed at once`);
-		return c.json({ cards: cleaned.map((card) => createCard(project.id, card.title, card.brief)) }, 201);
+		const cards: Card[] = [];
+		for (const card of cleaned) {
+			const made = createCard(project.id, card.title, card.brief);
+			if (body.queue === true) await orchestrator.enqueueCard(made.id);
+			cards.push(getCard(db, made.id) as Card);
+		}
+		return c.json({ cards }, 201);
 	});
 
 	app.patch("/api/projects/:id", async (c) => {
