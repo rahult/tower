@@ -11,8 +11,9 @@ interface Question {
 const OWN = "__own__";
 
 /**
- * What the agent needs decided, as questions you answer with a click. The first option is the agent's suggestion.
- * Sending the answers continues the same session, so nothing it has already worked out is lost.
+ * What the agent needs decided, as questions you answer with a click. The first option is the agent's suggestion,
+ * and one tap takes every suggestion at once — the skip for when you trust the defaults. Sending the answers
+ * continues the same session, so nothing it has already worked out is lost.
  * Lives in the card drawer by default; `className` re-homes it, e.g. inside a Focus row.
  */
 export function QuestionsPanel({ cardId, summary, questions, className }: { cardId: string; summary: string | null; questions: Question[]; className?: string }) {
@@ -20,13 +21,27 @@ export function QuestionsPanel({ cardId, summary, questions, className }: { card
 	const [own, setOwn] = useState<Record<number, string>>({});
 	const answerTo = (index: number) => (picked[index] === OWN || questions[index]?.options.length === 0 ? (own[index] ?? "").trim() : (picked[index] ?? ""));
 	const complete = questions.every((_question, index) => answerTo(index) !== "");
-	const send = useMutation({ mutationFn: () => api.answer(cardId, questions.map((q, index) => ({ question: q.question, answer: answerTo(index) }))) });
+	const send = useMutation({ mutationFn: (answers: Array<{ question: string; answer: string }>) => api.answer(cardId, answers) });
+	const hasSuggestions = questions.some((q) => q.options.length > 0);
+
+	// Taking the suggestions fills every option-bearing question with its first choice; when that answers
+	// everything, it also sends straight away — one tap instead of one tap per question.
+	const useSuggestions = () => {
+		const picks: Record<number, string> = {};
+		questions.forEach((q, index) => {
+			if (q.options.length > 0) picks[index] = q.options[0] as string;
+		});
+		setPicked(picks);
+		if (questions.every((q) => q.options.length > 0)) {
+			send.mutate(questions.map((q) => ({ question: q.question, answer: q.options[0] as string })));
+		}
+	};
 
 	return (
 		<form
 			onSubmit={(event: FormEvent) => {
 				event.preventDefault();
-				if (complete) send.mutate();
+				if (complete) send.mutate(questions.map((q, index) => ({ question: q.question, answer: answerTo(index) })));
 			}}
 			className={className ?? "flex max-h-[70%] shrink-0 flex-col border-b border-rule"}
 		>
@@ -75,7 +90,12 @@ export function QuestionsPanel({ cardId, summary, questions, className }: { card
 				<button type="submit" disabled={!complete || send.isPending} className={button.primary}>
 					Send {questions.length === 1 ? "answer" : "answers"} and continue
 				</button>
-				{!complete && <span className="text-[13px] text-slate">Answer every question to continue.</span>}
+				{hasSuggestions && (
+					<button type="button" onClick={useSuggestions} disabled={send.isPending} className={button.quiet}>
+						Use the suggestions
+					</button>
+				)}
+				{!complete && <span className="text-[13px] text-slate">{hasSuggestions ? "Or take the agent's suggestions where it offered them." : "Answer every question to continue."}</span>}
 				{send.error && <span className="text-[14px] text-danger">{send.error.message}</span>}
 			</div>
 		</form>
