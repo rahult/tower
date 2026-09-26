@@ -403,6 +403,24 @@ pre {
 .display .line {
 	display: block;
 }
+/* The before → after headline: what was asked, in its own voice; what shipped, in the amber. */
+.display .say {
+	font-style: normal;
+	font-family: var(--mono);
+	font-size: 0.78em;
+	font-weight: 480;
+	text-transform: none;
+	letter-spacing: -0.01em;
+	color: var(--muted);
+}
+/* The thesis rides under the transformation, at a step-down size. */
+.display .line.sub {
+	font-size: 0.36em;
+	font-weight: 520;
+	letter-spacing: 0.04em;
+	margin-top: 0.5em;
+	color: var(--ink);
+}
 /* Dark (native): amber with the glow. Day: ink with an amber highlighter sweep. */
 .display .amber {
 	color: var(--amber);
