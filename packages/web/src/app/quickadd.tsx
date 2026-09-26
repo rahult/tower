@@ -1,14 +1,17 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type FormEvent, useEffect, useState } from "react";
 import type { Card, Project } from "@tower/core";
 import { api } from "../api/client.ts";
+import { STAGE_LABEL } from "../board/status.ts";
 import { field } from "../ui.ts";
 import { Modal } from "./bits.tsx";
 
 /**
  * Adding work: pick one of the projects Tower already knows, say what is wanted, then add it to the
- * backlog or start it straight away. Adding a *project* is its own dialog — `onAddProject` swaps to it
- * when there is nothing to add work to yet. A card may also wait for another card to land first.
+ * backlog or start it straight away. While the title is written, the board shows what already says
+ * the same thing — a near-duplicate is cheaper to spot here than mid-planning. Adding a *project* is
+ * its own dialog — `onAddProject` swaps to it when there is nothing to add work to yet. A card may
+ * also wait for another card to land first.
  */
 export function QuickAdd({ projects, cards, presetProjectId, onClose, onOpenCard, onAddProject }: {
 	projects: Project[];
@@ -27,6 +30,18 @@ export function QuickAdd({ projects, cards, presetProjectId, onClose, onOpenCard
 	const refresh = () => void queryClient.invalidateQueries({ queryKey: ["board"] });
 	// Only this project's unlanded cards can be waited on, and the list follows the project picker.
 	const waitable = cards.filter((card) => card.projectId === projectId && card.stage !== "done");
+
+	// The title, debounced, drives the already-on-the-board check — not every keystroke.
+	const [typed, setTyped] = useState("");
+	useEffect(() => {
+		const timer = setTimeout(() => setTyped(title.trim()), 250);
+		return () => clearTimeout(timer);
+	}, [title]);
+	const similar = useQuery({
+		queryKey: ["similar-cards", projectId, typed],
+		queryFn: () => api.similarCards(projectId, typed),
+		enabled: typed.length >= 8,
+	});
 
 	// One chain, whichever entry made it: create the card, maybe start it straight away.
 	const finish = useMutation({
@@ -107,6 +122,27 @@ export function QuickAdd({ projects, cards, presetProjectId, onClose, onOpenCard
 						aria-invalid={finish.isError && !title.trim() ? true : undefined}
 						className={field}
 					/>
+					{similar.data !== undefined && similar.data.cards.length > 0 && (
+						<>
+							<div className="mt-2 flex flex-col gap-1.5" role="note" aria-label="Similar cards already on the board">
+								{similar.data.cards.map((entry) => (
+									<button
+										key={entry.id}
+										type="button"
+										onClick={() => {
+											onClose();
+											onOpenCard(entry.id);
+										}}
+										className="flex w-full items-center justify-between gap-3 rounded-md border border-rule bg-sheet px-3 py-2 text-left text-[14px] hover:bg-wash"
+									>
+										<span className="min-w-0 truncate font-medium">{entry.title}</span>
+										<span className="shrink-0 text-[12px] text-slate">{STAGE_LABEL[entry.stage]}</span>
+									</button>
+								))}
+							</div>
+							<span className="hint">Already filed? Open it instead — or carry on if this work is genuinely different.</span>
+						</>
+					)}
 				</div>
 				<div className="field">
 					<label htmlFor="quick-brief">Anything the planner should know?</label>

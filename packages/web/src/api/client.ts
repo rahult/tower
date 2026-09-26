@@ -213,6 +213,8 @@ export const api = {
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; parallelReviews: boolean | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; sources: string[] }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string, baseCardId?: string, dependsOn?: string) =>
 		request<Card>("POST", "/api/cards", { projectId, title, brief, ...(baseCardId ? { baseCardId } : {}), ...(dependsOn ? { dependsOn } : {}) }),
+	similarCards: (projectId: string, q: string) =>
+		request<{ cards: Array<{ id: string; title: string; stage: Card["stage"]; score: number }> }>("GET", `/api/projects/${projectId}/similar-cards?q=${encodeURIComponent(q)}`),
 	assist: (text: string) => request<AssistOutcome>("POST", "/api/assist", { text }),
 	fileFeedback: async (body: { kind: FeedbackKind; title: string; details: string; includeDiagnostics: boolean }): Promise<FiledFeedback> => {
 		// A 503 carries a prefilled GitHub issue form alongside the error, which the modal offers as the way out.

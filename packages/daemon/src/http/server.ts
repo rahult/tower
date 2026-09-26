@@ -182,6 +182,16 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(await suggestCommands({ config, db, driver, repoPath: project.repoPath }));
 	});
 
+	// What the board already says about the work being typed: the add-work dialog asks while the
+	// title is written, so a near-duplicate is caught before a planner spends money rediscovering it.
+	app.get("/api/projects/:id/similar-cards", (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const exclude = c.req.query("exclude") ?? "";
+		const open = listCards(db).filter((card) => card.projectId === project.id && card.stage !== "done" && card.id !== exclude);
+		return c.json({ cards: similarCards(c.req.query("q") ?? "", open).slice(0, 3) });
+	});
+
 	// The archetypes a project can be scaffolded from when it starts as an idea rather than a checkout.
 	app.get("/api/archetypes", (c) => c.json({ archetypes: listArchetypes(config) }));
 
@@ -785,4 +795,32 @@ function listArtifacts(config: Config, cardId: string): Array<{ name: string; by
 			: [];
 	// pr-body.md is scaffolding for gh, not something to read; crew/ holds mechanical per-builder verdicts.
 	return [...list(root, ""), ...list(join(root, "reviews"), "reviews/"), ...list(join(root, "research"), "research/")].filter((file) => file.name !== "pr-body.md");
+}
+
+/** Open cards whose title or brief shares real words with what was typed, closest first. */
+function similarCards(q: string, cards: Card[]): Array<{ id: string; title: string; stage: Card["stage"]; score: number }> {
+	const asked = contentWords(q);
+	if (asked.size === 0) return [];
+	return cards
+		.map((card) => {
+			const title = contentWords(card.title);
+			const brief = contentWords(card.brief);
+			let score = 0;
+			for (const token of asked) if (title.has(token)) score += 2;
+			for (const token of asked) if (brief.has(token)) score += 1;
+			return { id: card.id, title: card.title, stage: card.stage, score };
+		})
+		.filter((entry) => entry.score >= 4)
+		.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+}
+
+/** Lower-cased words worth matching on: long enough to mean something, not the everyday glue. */
+function contentWords(text: string): Set<string> {
+	const stop = new Set(["the", "and", "for", "with", "that", "this", "when", "into", "from", "add", "support", "should"]);
+	return new Set(
+		text
+			.toLowerCase()
+			.split(/[^a-z0-9]+/)
+			.filter((token) => token.length >= 3 && !stop.has(token)),
+	);
 }
