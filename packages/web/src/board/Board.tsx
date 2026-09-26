@@ -151,6 +151,9 @@ function BoardMatrix({
 	const [adding, setAdding] = useState<string | null>(null);
 	const [configuring, setConfiguring] = useState<string | null>(null);
 	const count = (col: Column) => cards.filter((card) => col.stages.includes(card.stage)).length;
+	// The review column is the one lane a person must walk: when work waits in it, its header wears the amber.
+	const reviewWaiting = (col: Column) => col.stages.includes("feedback") && count(col) > 0;
+	const reviewTint = (col: Column) => (reviewWaiting(col) ? { color: "var(--caution-text)", fontWeight: 600 } : undefined);
 
 	return (
 		<>
@@ -159,15 +162,19 @@ function BoardMatrix({
 				folded.has(col.id) ? (
 					<button key={col.id} type="button" className="mh folded" onClick={() => onUnfold(col.id)} aria-label={`Expand ${col.label}, ${count(col)} cards`} title={`Expand ${col.label}`}>
 						<Icon name="chev-r" />
-						<span className="vlabel">
+						<span className="vlabel" style={reviewTint(col)}>
 							{col.label}
 							{count(col) > 0 && <span className="n"> {count(col)}</span>}
 						</span>
 					</button>
 				) : (
 					<div key={col.id} className="mh" title={col.id in STAGE_DESCRIPTIONS ? STAGE_DESCRIPTIONS[col.id as Card["stage"]] : "Testing and pull requests share this column on a narrow window"}>
-						<span>{col.label}</span>
-						{count(col) > 0 && <span className="n">{count(col)}</span>}
+						<span style={reviewTint(col)}>{col.label}</span>
+						{count(col) > 0 && (
+							<span className="n" style={reviewWaiting(col) ? { color: "var(--caution-text)" } : undefined}>
+								{count(col)}
+							</span>
+						)}
 						<button type="button" className="fold" onClick={() => onFold(col.id)} aria-label={`Collapse ${col.label}`} title="Collapse column">
 							<Icon name="chev-l" />
 						</button>
