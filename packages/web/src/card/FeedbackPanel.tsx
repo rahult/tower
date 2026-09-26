@@ -16,7 +16,11 @@ interface FeedbackPanelProps {
 	mergesLocally?: boolean;
 }
 
-/** The last human decision before the finish line: what the checks said, what the reviewers found, then approve or send back. */
+/**
+ * The last human decision before the finish line: what the checks said, what the reviewers found, then
+ * approve or send back. The invariant check is a second pass a person can run beside the decision —
+ * the diff judged against the invariants the plan named — like the plan coach, advice, never a verdict.
+ */
 export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, mergesLocally }: FeedbackPanelProps) {
 	const [feedback, setFeedback] = useState("");
 	const reports = artifacts.filter((artifact) => artifact.name.startsWith("reviews/"));
@@ -32,6 +36,10 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, merg
 	const blocking = [...verdicts.values()].filter((run) => run.resultStatus === "fail").length;
 	const askBuilder = () => setFeedback((current) => current || `Address the blocking findings in ${reports.map((report) => report.name).join(" and ")}.`);
 
+	const checked = artifacts.some((artifact) => artifact.name === "reviews/invariant-diff.md");
+	const checking = runs.some((run) => run.id.includes("-invariant-diff-") && run.status === "running");
+	const invariantCheck = useMutation({ mutationFn: () => api.adhoc(cardId, { flow: "invariant-diff" }) });
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<p className={`shrink-0 border-b border-rule px-4 py-2 text-[14px] ${blocking > 0 ? "bg-danger-soft" : "bg-caution-soft"}`}>
@@ -39,6 +47,15 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, merg
 				Look at the Changes tab, then approve the work or send it back. Select text to pin a margin note.
 			</p>
 			<div className="min-h-0 flex-1 overflow-y-auto bg-sheet px-5 py-4">
+				<div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-rule bg-wash/50 px-3 py-2">
+					<span className="min-w-0 flex-1 text-[14px]">
+						<span className="font-semibold">Second pass.</span> The diff judged against the invariants the plan named — cheap, and advice all the same: it never replaces your read.
+					</span>
+					<button type="button" onClick={() => invariantCheck.mutate()} disabled={checking || invariantCheck.isPending} className={button.quiet}>
+						{checking ? "Checking the diff…" : checked ? "Run the invariant check again" : "Run the invariant check"}
+					</button>
+					{invariantCheck.error && <span className="w-full text-[13px] text-danger">{invariantCheck.error.message}</span>}
+				</div>
 				{checks && (
 					<p className="mb-4 text-[14px]">
 						<Verdict status={checks.resultStatus} /> <span className="font-semibold">Checks.</span> {checks.resultSummary}
