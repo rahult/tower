@@ -103,48 +103,55 @@ and where existing repositories are understood before they are changed.
   briefs. The draft returns as a checklist; filing lands the picked cards as inert backlog
   cards in the plan's order, so a spec can become a night's queue.
 
-## P3 — Verification depth (next)
+## P3 — Verification depth [shipped 2026-09-26]
 
 - **Plan-gate coach** [shipped 2026-09-25, first slice]: `plan-coach` — a manual, read-only
   rubric pass over a draft plan at the plan gate (behavior, contract, data, failure modes,
   test targets, verification, edges, security, rollback, honesty). Its findings land beside
   approve/reject as advice a person pins as margin notes or ignores; the verdict never gates.
-- **Promote invariant simulation to an after-build hook**: the modeling protocol already
-  ships in planning/testing; with P0 a project can copy `invariant-simulation.flow.json`
-  into `~/.tower/flows/` with `"when": ["after-build"]` to gate testing on it. Remaining
-  work: a cheaper second-pass simulation prompt that checks the *diff* against the plan's
-  model rather than re-deriving it.
-- **Review fan-out**: crews exist for building; feedback flows should also run in parallel
-  when a project opts in.
-- **Verification budget**: a per-card ceiling on agent spend before the human is asked,
-  surfaced in the drawer next to attempt counts.
-- **Flaky-test memory**: a run of the same failing signature N times files a card with the
-  history attached instead of rebuilding blindly.
+- **Invariant simulation as an after-build hook**: copy `invariant-simulation.flow.json`
+  into `~/.tower/flows/` with `"when": ["after-build"]` to gate testing on it. The cheaper
+  second pass ships too: `invariant-diff.flow.json` checks the *diff* against the
+  invariants the plan already named (test tier) instead of re-deriving the model.
+- **Review fan-out** [shipped 2026-09-25]: `parallelReviews` runs the after-tests reviews at
+  the same time — reviewers who never see each other gain nothing from an order anyway.
+- **Verification budget** [shipped 2026-09-25]: `budgetUsd` per project meters each card's
+  spend while it runs; the pipeline opens a budget gate at the line.
+- **Flaky-test memory** [shipped 2026-09-25]: the same failing signature twice stops the
+  loop with the history attached instead of rebuilding blindly.
 
-## P4 — Research harness depth
+## P4 — Research harness depth [shipped 2026-09-26]
 
-- **Deep research on the board, not just the card**: a Research lane where a question
-  doesn't need a project yet; promoting a brief to a card picks the project then.
-- **Live probes**: run spike code against candidate libraries inside a throwaway worktree
-  as part of a research step (today research is read-only + HTTP).
-- **Source trays**: per-project pinned sources (internal docs, design docs, past briefs)
-  that research steps are told to read first.
-- **Scheduled deterministic agents**: `when: ["schedule"]` + an interval — nightly drift
-  checks, dependency audits, cost reports as first-class flows.
+- **The Research lane** [shipped]: a question asked on the `#research` view needs no project.
+  A survey gathers evidence over the network, a synthesizer writes the cited brief, and
+  promotion — the person's decision — files the brief as a card in the project they pick,
+  where the planner reads it like any research brief.
+- **Live probes** [shipped]: a flow step with `"access": "probe"` gets full tools working in
+  a throwaway probe directory (the card's `<cardDir>/probe`), so spike code can settle what
+  the docs cannot — nothing in the worktree is touched, and backlog cards can probe too.
+  The research lane's survey probes the same way.
+- **Source trays** [shipped]: `sources` on a project (paths or URLs, edited in the project
+  settings) render into research prompts as a pinned tray the survey must read first.
+- **Scheduled deterministic agents** [shipped 2026-09-25]: `when: ["schedule"]` +
+  `intervalHours` — a flow fires itself on a carrier card, on an interval.
 
-## P5 — Work shaping
+## P5 — Work shaping [shipped 2026-09-26]
 
-- **Stacked cards**: a card whose base is another card's branch (design note in
-  `~/.zcode` project memory; plumbing exists — `ensureWorktree` takes a base branch).
-- **Card dependencies**: explicit "after card X" scheduling beyond stacking.
-- **Archive/delete**: board hygiene without database surgery.
+- **Stacked cards** [shipped 2026-09-25]: a card whose `baseCardId` is another card's branch
+  builds on unmerged work; when the base lands first, the stack merges cleanly after.
+- **Card dependencies** [shipped]: `dependsOn` on a card (set at creation from Add work) —
+  the scheduler holds the dependent's queue place until the dependency lands; deleting the
+  dependency releases it, never strands it.
+- **Archive/delete** [shipped 2026-09-25]: finished and backlog cards delete from the board;
+  deleting also clears dependents' waits.
 
 ## P6 — Product surface
 
-- **Usage accounting for assist sessions** (today card-less sessions are invisible to
-  Usage).
-- **Mobile pass-through review**: the two gates (plan approval, feedback) are the whole
-  human job; make them one-tap from a phone.
+- **Usage accounting for assist sessions** [shipped 2026-09-25]: card-less sessions (ask
+  box, command drafts, model checks, research questions) are counted in Usage.
+- **Mobile pass-through review** [shipped]: the board payload carries the pending gates and
+  the `#review` view answers them — one tap to approve, a written note to send back. The
+  nav entry appears only when a decision waits.
 - **Multi-board**: one daemon, several boards by project set.
 
 ## Non-goals

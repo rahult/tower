@@ -174,7 +174,7 @@ A flow is a JSON file: shipped ones are in `flows/`, yours go in `~/.tower/flows
 - `run` executes in the card's worktree. `{{worktreePath}}`, `{{repoPath}}`, `{{branchName}}`, `{{cardDir}}` and `{{title}}` are substituted. A non-zero exit fails the flow unless `expect` is `"note"` — an informational step records its output and never blocks. Output streams into the run's transcript like the verify command does.
 - `when` says when the flow runs. `manual` (the default) puts it in every card's Run tab. `after-plan` runs it between a passing plan and the plan gate; `after-build` between a passing build and testing; `after-tests` makes it one of the post-test reviews (the shipped adversarial and SOLID reviews declare this — with no `TOWER_REVIEW_FLOWS` set, every `after-tests` flow runs, in file order).
 - A triggered flow that does not pass stops the card at `needs_attention` with the failing step's own words. Retrying from a failed after-build gate sends the gate's output back to the builder as feedback — the loop closes deterministically, without an opinion in sight.
-- `model` is a stage name (`planning` means whatever plans for you) or an explicit `provider/model`. `access` is `read-only`, `read-and-run` or `write`. Pull requests need the [`gh` CLI](https://cli.github.com) logged in.
+- `model` is a stage name (`planning` means whatever plans for you) or an explicit `provider/model`. `access` is `read-only`, `read-and-run`, `write`, or `probe` (full tools working in a throwaway `<cardDir>/probe` directory, so spike code never touches the worktree). Pull requests need the [`gh` CLI](https://cli.github.com) logged in.
 
 ### Deep research
 
