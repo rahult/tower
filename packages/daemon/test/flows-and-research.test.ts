@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { STAGE_RESULT_FILE } from "@tower/core";
 import { afterEach, describe, expect, it } from "vitest";
@@ -441,6 +441,53 @@ describe("deep research", () => {
 		const planner = h.driver.handles.find((handle) => handle.sessionId.endsWith("-plan-1"));
 		expect(planner?.prompts[0]).toContain("deep-research-synthesize.md");
 		expect(planner?.prompts[0]).toContain("Research brief");
+	});
+});
+
+describe("live probes", () => {
+	it("a probe step writes and runs spike code in a throwaway directory, not the worktree", async () => {
+		h = await bootHarness((spec) => {
+			if (spec.sessionId.includes("spikey"))
+				return [
+					{
+						events: [{ type: "message", message: { role: "assistant", text: "Spike written and run.", thinking: "", toolCalls: [] } }],
+						effect: ({ spec, prompt }) => {
+							// The spike lands in whatever directory the session was handed; the report and
+							// result go where the prompt points, like any flow step.
+							writeFileSync(join(spec.cwd, "spike.mjs"), "console.log('candidate A boots in 3ms');");
+							probeCwd = spec.cwd;
+							probeTools = spec.tools;
+							const report = prompt.match(/absolute path `([^`]+)`/)?.[1];
+							if (report) writeFileSync(report, "# Spike\n\nCandidate A boots in 3ms.");
+							writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Spike run." }));
+						},
+					},
+				];
+			return byStage()(spec);
+		}, ENV);
+		let probeCwd: string | undefined;
+		let probeTools: string[] | undefined;
+		// The person's own flow, with a probe step: the prompt file sits beside the flow in ~/.tower/flows.
+		homeFlow(h, "spikey", { name: "spikey", title: "Spike", description: "", when: ["manual"], steps: [{ name: "run", prompt: "spikey.md", access: "probe", model: "testing", thinking: "low" }] });
+		writeFileSync(join(h.home, "flows", "spikey.md"), "Write a spike under this directory and run it. Write your findings to the absolute path `{{reportPath}}`.");
+
+		const project = await addProject();
+		const card = await addCard(project.id);
+		await h.api("POST", `/api/cards/${card.id}/enqueue`);
+		await h.daemon.whenIdle();
+		// The card rests at its plan gate — a probe works even before a worktree exists.
+		const res = await h.api("POST", `/api/cards/${card.id}/adhoc`, { flow: "spikey" });
+		expect(res.status).toBe(202);
+		await h.daemon.whenIdle();
+
+		// The spike ran in the card's probe directory, with full tools, never in a worktree.
+		expect(probeCwd).toBe(join(h.home, "cards", card.id, "probe"));
+		expect(existsSync(join(probeCwd as string, "spike.mjs"))).toBe(true);
+		expect(probeTools).toContain("edit");
+		expect(probeTools).toContain("bash");
+		const detail = (await h.api("GET", `/api/cards/${card.id}`)).body;
+		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+		expect(detail.artifacts.map((artifact: { name: string }) => artifact.name)).toContain("reviews/spikey.md");
 	});
 });
 

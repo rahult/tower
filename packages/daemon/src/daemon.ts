@@ -11,6 +11,7 @@ import { createApp } from "./http/server.ts";
 import type { SessionDriver } from "./pi/session-driver.ts";
 import { FlowRunner } from "./flow-runner.ts";
 import { Orchestrator } from "./orchestrator.ts";
+import { ResearchRunner } from "./research.ts";
 import { listRemotes } from "./pr/gh.ts";
 import { RunManager } from "./run/run-manager.ts";
 import { StageRunner } from "./stage-runner.ts";
@@ -64,7 +65,8 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 	const flows = new FlowRunner({ config, db, bus, runs, stages });
 	orchestrator = new Orchestrator({ config, db, bus, runs, stages, flows });
 	const bench = new BenchRunner({ config, db, bus, runs });
-	const app = createApp({ config, db, bus, runs, stages, orchestrator, bench, driver });
+	const research = new ResearchRunner({ config, db, driver });
+	const app = createApp({ config, db, bus, runs, stages, orchestrator, bench, research, driver });
 	// Whatever the previous process left in flight is interrupted; queued work carries on.
 	orchestrator.recover();
 	orchestrator.watchPullRequests();
@@ -78,12 +80,16 @@ export async function startDaemon(config: Config, driver: SessionDriver): Promis
 
 	return {
 		url: `http://${config.host}:${port}`,
-		whenIdle: () => orchestrator.whenIdle(),
+		whenIdle: async () => {
+			await orchestrator.whenIdle();
+			await research.whenIdle();
+		},
 		pollPullRequests: () => orchestrator.pollPullRequests(),
 		pollIssues: () => orchestrator.pollIssues(),
 		async close() {
 			orchestrator.beginShutdown();
 			bench.beginShutdown();
+			await research.beginShutdown();
 			await runs.stopAll();
 			await orchestrator.whenIdle();
 			await new Promise<void>((resolve) => {

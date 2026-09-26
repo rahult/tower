@@ -32,7 +32,7 @@ export interface AdhocRequest {
 	task?: string;
 	model?: string;
 	thinking?: ThinkingLevel;
-	access?: "read-only" | "read-and-run" | "write";
+	access?: "read-only" | "read-and-run" | "write" | "probe";
 }
 
 /** The run id a step's sessions and commands share, so the drawer's rail groups them. */
@@ -242,7 +242,17 @@ export class FlowRunner {
 			requireResult: options.requireResult,
 			// A card with no worktree (research on a backlog card) works straight in the project checkout.
 			...(card.worktreePath ? {} : { cwd: project?.repoPath }),
+			// A probe step works in a throwaway scratch directory instead: spike code runs there, so the
+			// worktree stays clean and a backlog card can probe too.
+			...(step.access === "probe" ? { cwd: this.probeDir(cardId) } : {}),
 		};
+	}
+
+	/** The card's probe directory, created on first use: disposable, nothing in it is ever merged. */
+	private probeDir(cardId: string): string {
+		const dir = paths.probe(this.deps.config, cardId);
+		mkdirSync(dir, { recursive: true });
+		return dir;
 	}
 
 	private prompt(card: Card, step: FlowStep, reportPath: string | null, project: ReturnType<typeof getProject>): string {

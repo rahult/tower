@@ -22,13 +22,14 @@ import { PlanToBacklog } from "./projects/PlanToBacklog.tsx";
 import { ProjectSettings } from "./projects/ProjectSettings.tsx";
 import { Projects } from "./projects/Projects.tsx";
 import { PassThrough } from "./review/PassThrough.tsx";
+import { Research } from "./research/Research.tsx";
 import { ModelSettings } from "./settings/ModelSettings.tsx";
 import { Usage } from "./usage/Usage.tsx";
 import { useDensity, usePrefersDark, useTheme, type Theme } from "./theme.ts";
 
-const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage", "review"];
-const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", usage: "chart", review: "check" } as const;
-const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", usage: "Usage", review: "Review" };
+const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage", "review", "research"];
+const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", usage: "chart", review: "check", research: "spark" } as const;
+const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", usage: "Usage", review: "Review", research: "Research" };
 
 const FILTER_KEY = "tower-filter";
 
@@ -44,6 +45,8 @@ export function App() {
 	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
 	// Refetched with the board, so today's spend keeps up with finished sessions.
 	const usage = useQuery({ queryKey: ["board", "usage"], queryFn: api.usage });
+	// The Research lane: polled lightly while any question is being researched, SSE otherwise keeps it fresh.
+	const research = useQuery({ queryKey: ["board", "research"], queryFn: api.research, refetchInterval: (query) => (query.state.data?.questions.some((question) => question.status === "running") ? 2500 : false) });
 	const today = usage.data?.byDay.find((row) => row.key === new Date().toLocaleDateString("en-CA"));
 	const [route, navigate] = useRoute();
 	const [openRunId, setOpenRunId] = useState<string | null>(null);
@@ -243,7 +246,7 @@ export function App() {
 					<span className="txt">Tower</span>
 				</div>
 				<nav className="nav" aria-label="Views">
-					{VIEW_ORDER.filter((view) => view !== "review" || pendingGates > 0 || route.view === "review").map((view, index) => (
+					{VIEW_ORDER.filter((view) => view !== "review" || pendingGates > 0 || route.view === "review").filter((view) => view !== "research" || (research.data?.questions.length ?? 0) > 0 || route.view === "research").map((view, index) => (
 						<button key={view} type="button" onClick={() => navigate({ view, cardId: null })} aria-current={route.view === view ? "page" : undefined} title={`${VIEW_LABEL[view]} (⌘${index + 1})`}>
 							<Icon name={VIEW_ICON[view]} />
 							<span className="txt">{VIEW_LABEL[view]}</span>
@@ -328,6 +331,7 @@ export function App() {
 						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenProject={(project) => setEditing({ project })} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 						{board.data && route.view === "review" && <PassThrough gates={board.data.gates} projects={projects} cards={cards} onOpen={openCard} />}
+						{board.data && route.view === "research" && <Research projects={projects} onOpenCard={openCard} />}
 					</div>
 					{inspector}
 				</div>

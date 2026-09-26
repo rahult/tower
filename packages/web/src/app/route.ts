@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type View = "focus" | "board" | "projects" | "usage" | "review";
+export type View = "focus" | "board" | "projects" | "usage" | "review" | "research";
 
 export interface Route {
 	view: View;
@@ -12,12 +12,12 @@ export interface Route {
 function parse(): Route {
 	const hash = window.location.hash.replace(/^#/, "");
 	const [head, tail] = hash.split("/");
-	if (head === "board" || head === "projects" || head === "usage" || head === "review") return { view: head, cardId: null };
+	if (head === "board" || head === "projects" || head === "usage" || head === "review" || head === "research") return { view: head, cardId: null };
 	if (head === "card" && tail) return { view: "focus", cardId: tail };
 	return { view: "focus", cardId: null };
 }
 
-const VIEWS: ReadonlySet<string> = new Set(["focus", "board", "projects", "usage", "review"]);
+const VIEWS: ReadonlySet<string> = new Set(["focus", "board", "projects", "usage", "review", "research"]);
 
 /** The view and open card, as a deep-linkable hash. Back and forward both work. */
 export function useRoute(): [Route, (route: Partial<Route>) => void] {

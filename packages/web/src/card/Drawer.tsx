@@ -200,6 +200,11 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 						Stacked on card <span className="font-mono">{card.baseCardId}</span> — this branch started from that card's branch.
 					</p>
 				)}
+				{card.dependsOn && (
+					<p className="text-[13px] text-slate">
+						Waits for card <span className="font-mono">{card.dependsOn}</span> to land before it takes a slot.
+					</p>
+				)}
 				{card.stage === "done" && card.finishNote && (
 					<p className="text-[14px] text-slate">
 						<span className="mr-1.5 inline-block size-2 rounded-full bg-ok align-middle" aria-hidden />

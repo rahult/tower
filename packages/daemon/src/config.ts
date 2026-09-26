@@ -92,4 +92,8 @@ export const paths = {
 	systemModelMeta: (config: Config, projectId: string) => join(config.home, "projects", projectId, "system-model.json"),
 	/** Where scaffolded repositories live when a project is created from an idea rather than added from disk. */
 	repos: (config: Config) => join(config.home, "repos"),
+	/** A research question asked before any project exists: its two steps work here, and the brief waits for promotion. */
+	research: (config: Config, questionId: string) => join(config.home, "research", questionId),
+	/** A card's throwaway probe directory — spike code runs here so the worktree stays clean. */
+	probe: (config: Config, cardId: string) => join(config.home, "cards", cardId, "probe"),
 };

@@ -4,12 +4,14 @@ import { join } from "node:path";
 import type { AgentStage, ThinkingLevel } from "@tower/core";
 import type { Config } from "./config.ts";
 
-/** What a step's session may do. Reviews never get edit; "read-and-run" adds bash so they can execute the code. */
-export type Access = "read-only" | "read-and-run" | "write";
+/** What a step's session may do. Reviews never get edit; "read-and-run" adds bash so they can execute the code.
+ *  "probe" is full access working in a throwaway probe directory — spike code runs there, not in the worktree. */
+export type Access = "read-only" | "read-and-run" | "write" | "probe";
 const TOOLS: Record<Access, string[]> = {
 	"read-only": ["read", "grep", "find", "ls", "write"],
 	"read-and-run": ["read", "grep", "find", "ls", "bash", "write"],
 	write: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+	probe: ["read", "bash", "edit", "write", "grep", "find", "ls"],
 };
 // "write" is present even for reviews because the report and result file are written with it; the prompt forbids touching the repository.
 export const toolsFor = (access: Access) => TOOLS[access];

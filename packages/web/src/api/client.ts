@@ -1,4 +1,4 @@
-import type { Annotation, Card, Project, StageRun } from "@tower/core";
+import type { Annotation, Card, Project, ResearchQuestion, StageRun } from "@tower/core";
 
 /** A human decision the pipeline is parked on, as the board payload carries it. */
 export interface GateInfo {
@@ -187,6 +187,10 @@ export const api = {
 	suggestCommands: (projectId: string) => request<CommandSuggestions>("POST", `/api/projects/${projectId}/suggest-commands`),
 	planToBacklog: (projectId: string, body: { plan?: string; cardId?: string }) => request<{ cards: PlanCard[] }>("POST", `/api/projects/${projectId}/plan-to-backlog`, body),
 	filePlanCards: (projectId: string, cards: PlanCard[], queue = false) => request<{ cards: Card[] }>("POST", `/api/projects/${projectId}/plan-to-backlog/file`, { cards, ...(queue ? { queue: true } : {}) }),
+	research: () => request<{ questions: ResearchQuestion[] }>("GET", "/api/research"),
+	askResearch: (question: string) => request<{ question: ResearchQuestion }>("POST", "/api/research", { question }),
+	runResearch: (id: string) => request<{ ok: true }>("POST", `/api/research/${id}/run`),
+	promoteResearch: (id: string, projectId: string, title?: string) => request<{ card: Card }>("POST", `/api/research/${id}/promote`, { projectId, ...(title ? { title } : {}) }),
 	usage: () => request<Usage>("GET", "/api/usage"),
 	adhoc: (cardId: string, body: Record<string, string | undefined>) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/adhoc`, body),
 	addAnnotation: (cardId: string, body: { artifact: string; quote: string; note: string }) =>

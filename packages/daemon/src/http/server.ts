@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { type Card, InvalidTransition, type Project } from "@tower/core";
@@ -9,6 +9,7 @@ import type { Db } from "../db/open.ts";
 import { deleteCard, getCard, insertCard, listCards } from "../db/repo-cards.ts";
 import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
 import { listGatesForCard, listPendingGates } from "../db/repo-gates.ts";
+import { markQuestionPromoted } from "../db/repo-research.ts";
 import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
 import type { Bus } from "../events/bus.ts";
 import { handleStream } from "../events/sse.ts";
@@ -24,6 +25,7 @@ import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktre
 import { listRemotes } from "../pr/gh.ts";
 import { ConflictError, type Orchestrator } from "../orchestrator.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
+import type { ResearchRunner } from "../research.ts";
 import { checkModels } from "../preflight.ts";
 import type { RunManager } from "../run/run-manager.ts";
 import type { SessionDriver } from "../pi/session-driver.ts";
@@ -40,6 +42,7 @@ export interface AppDeps {
 	stages: StageRunner;
 	orchestrator: Orchestrator;
 	bench: BenchRunner;
+	research: ResearchRunner;
 	/** The session seam, for one-shot sessions that belong to no card (the command box's ask). */
 	driver: SessionDriver;
 }
@@ -61,7 +64,7 @@ function requireString(body: Record<string, unknown>, key: string): string {
 }
 
 export function createApp(deps: AppDeps): Hono {
-	const { config, db, bus, runs, stages, orchestrator, bench, driver } = deps;
+	const { config, db, bus, runs, stages, orchestrator, bench, research, driver } = deps;
 	const app = new Hono();
 
 	app.onError((error, c) => {
@@ -242,6 +245,44 @@ export function createApp(deps: AppDeps): Hono {
 			cards.push(getCard(db, made.id) as Card);
 		}
 		return c.json({ cards }, 201);
+	});
+
+	// The Research lane: a question asked before any project exists.
+	app.get("/api/research", (c) => c.json({ questions: research.list() }));
+
+	app.post("/api/research", async (c) => {
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const question = requireString(body, "question");
+		if (question.length > 2000) throw new HttpError(400, "A research question is at most 2000 characters");
+		return c.json({ question: research.ask(question) }, 202);
+	});
+
+	app.post("/api/research/:id/run", async (c) => {
+		const question = research.get(c.req.param("id"));
+		if (!question) throw new HttpError(404, "No such research question");
+		if (question.status !== "open") throw new HttpError(409, `Only an unanswered question can run — this one is ${question.status}`);
+		research.run(question.id);
+		return c.json({ ok: true }, 202);
+	});
+
+	// Promotion is the person's decision: the brief becomes a card in the project they pick, and the
+	// planner reads it exactly as if deep research had run on the card itself.
+	app.post("/api/research/:id/promote", async (c) => {
+		const question = research.get(c.req.param("id"));
+		if (!question) throw new HttpError(404, "No such research question");
+		if (!question.brief) throw new HttpError(409, "The question has no brief yet — promote it once the research is done");
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const projectId = requireString(body, "projectId");
+		if (!getProject(db, projectId)) throw new HttpError(404, `Project not found: ${projectId}`);
+		const title = typeof body.title === "string" && body.title.trim() ? body.title.trim().slice(0, 120) : `Research: ${question.question.slice(0, 90)}`;
+		const card = createCard(projectId, title, `From the research lane. The question: ${question.question}\n\nThe cited brief is in this card's files — the planner reads it before planning.`);
+		const cardDir = paths.cardDir(config, card.id);
+		mkdirSync(join(cardDir, "reviews"), { recursive: true });
+		writeFileSync(join(cardDir, "reviews", "deep-research-synthesize.md"), question.brief);
+		const surveyFile = join(paths.research(config, question.id), "survey.md");
+		if (existsSync(surveyFile)) copyFileSync(surveyFile, join(cardDir, "reviews", "deep-research-survey.md"));
+		markQuestionPromoted(db, question.id, card.id, projectId);
+		return c.json({ card }, 201);
 	});
 
 	app.patch("/api/projects/:id", async (c) => {

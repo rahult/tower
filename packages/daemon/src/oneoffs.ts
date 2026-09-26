@@ -3,7 +3,7 @@ import type { Db } from "./db/open.ts";
 import { insertOneoffRun } from "./db/repo-oneoffs.ts";
 import type { RunHandle } from "./pi/session-driver.ts";
 
-export type OneoffKind = "assist" | "suggest" | "model-check";
+export type OneoffKind = "assist" | "suggest" | "model-check" | "research";
 
 /** What a one-off session spent, pulled off its handle after the turn settled. */
 export function recordOneoff(db: Db, kind: OneoffKind, model: string, handle: RunHandle): void {

@@ -138,6 +138,21 @@ export interface Annotation {
 	createdAt: number;
 }
 
+/** A research question asked with no project yet: the deep-research steps run where it stands, and
+ *  promotion files the brief as a card in whichever project the person picks. */
+export type ResearchStatus = "open" | "running" | "brief" | "promoted";
+
+export interface ResearchQuestion {
+	id: string;
+	question: string;
+	status: ResearchStatus;
+	/** The cited brief, once the synthesizer has written it. */
+	brief: string | null;
+	promotedCardId: string | null;
+	promotedProjectId: string | null;
+	createdAt: number;
+}
+
 export interface StageModelConfig {
 	model: string;
 	thinking: ThinkingLevel;

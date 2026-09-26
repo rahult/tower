@@ -74,6 +74,17 @@ const result = (status: string, summary: string): FakeTurn => ({
 	effect: ({ spec }) => writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status, summary })),
 });
 
+/** A scripted research-question step: it writes to wherever its prompt points, like the real agent. */
+function questionTurn(label: string, body: string[]): FakeTurn {
+	return {
+		events: [{ type: "message", message: { role: "assistant", text: `${label} written.`, thinking: "", toolCalls: [] } }],
+		effect: ({ prompt }) => {
+			const report = prompt.match(/absolute path `([^`]+)`/)?.[1];
+			if (report) writeFileSync(report, body.join("\n"));
+		},
+	};
+}
+
 /** A scripted deep-research step: writes its piece where the prompt points. The brief is what the planner would read. */
 function researchTurn(label: string): FakeTurn {
 	const brief = [
@@ -246,6 +257,32 @@ const driver = new FakeSessionDriver((spec) => {
 					writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Ready to build — two notes worth a thought." }));
 				},
 			},
+		];
+	// The Research lane's two steps, so a question asked with no project resolves on the demo board.
+	if (spec.sessionId.includes("research-survey"))
+		return [
+			questionTurn("Survey notes", [
+				"# Survey notes",
+				"",
+				"- CRDT via Yjs: mature, heavy for single-user-mostly; offline merge is its sweet spot.",
+				"- Event-sourced sync: a log of captures replays into any view; tombstones settle deletes.",
+				"- Last-write-wins: simplest, silently loses the most.",
+			]),
+		];
+	if (spec.sessionId.includes("research-brief"))
+		return [
+			questionTurn("Research brief", [
+				"# Research brief",
+				"",
+				"## TL;DR",
+				"",
+				"- Event-sourced sync behind a storage interface wins for a single-user-mostly notes app.",
+				"- Revisit a CRDT when sharing (and real merge conflicts) land.",
+				"",
+				"## Recommendation",
+				"",
+				"- Event log now; the interface is the escape hatch later.",
+			]),
 		];
 	// The crew card's members first: their ids carry no stage token, so they must not fall through to reviews.
 	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
