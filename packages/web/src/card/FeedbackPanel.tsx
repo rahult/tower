@@ -1,5 +1,5 @@
 import type { Annotation, StageRun } from "@tower/core";
-import { useMutation, useQueries } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { type Artifact, api, type Gate } from "../api/client.ts";
 import { Markdown } from "../content/Markdown.tsx";
@@ -39,6 +39,9 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, merg
 	const checked = artifacts.some((artifact) => artifact.name === "reviews/invariant-diff.md");
 	const checking = runs.some((run) => run.id.includes("-invariant-diff-") && run.status === "running");
 	const invariantCheck = useMutation({ mutationFn: () => api.adhoc(cardId, { flow: "invariant-diff" }) });
+	// The builder's honest self-report, written when the work finished. Cards built before it existed
+	// have none; the query just stays empty then.
+	const shipped = useQuery({ queryKey: ["artifact", cardId, "shipped.md", gate.id], queryFn: () => api.artifact(cardId, "shipped.md"), retry: false });
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -47,6 +50,14 @@ export function FeedbackPanel({ cardId, gate, runs, artifacts, annotations, merg
 				Look at the Changes tab, then approve the work or send it back. Select text to pin a margin note.
 			</p>
 			<div className="min-h-0 flex-1 overflow-y-auto bg-sheet px-5 py-4">
+				{shipped.data && (
+					<section aria-label="The builder's own report" className="mb-4 rounded-lg border border-rule bg-wash/50 p-4">
+						<h3 className="mb-2 font-semibold">The builder&rsquo;s own report</h3>
+						<Annotatable cardId={cardId} artifact="shipped.md" annotations={annotations} contentKey={shipped.data.length}>
+							<Markdown text={shipped.data} />
+						</Annotatable>
+					</section>
+				)}
 				<div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-rule bg-wash/50 px-3 py-2">
 					<span className="min-w-0 flex-1 text-[14px]">
 						<span className="font-semibold">Second pass.</span> The diff judged against the invariants the plan named — cheap, and advice all the same: it never replaces your read.

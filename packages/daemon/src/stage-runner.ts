@@ -399,6 +399,7 @@ export class StageRunner {
 					branchName,
 					planPath: join(cardDir, "plan.md"),
 					reportPath: join(cardDir, "test-report.md"),
+					shippedPath: join(cardDir, "shipped.md"),
 					resultPath: join(cardDir, STAGE_RESULT_FILE),
 					feedbackSection: feedback ? `# Feedback on your previous attempt\n\n${feedback}` : "",
 				},

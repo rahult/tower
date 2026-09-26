@@ -349,7 +349,35 @@ const driver = new FakeSessionDriver((spec) => {
 		];
 	}
 	if (title.startsWith("Dark mode") && stage === "plan") return [busy];
-	return [stage === "plan" ? planningTurn() : stage === "build" ? buildingTurn() : testerTurn()];
+	// The builder leaves its shipped report beside the result, so the review gate shows an honest self-report.
+	const buildingWithReport = (): FakeTurn => {
+		const turn = buildingTurn();
+		return {
+			...turn,
+			effect: ({ spec }) => {
+				turn.effect?.({ spec, prompt: "" });
+				writeFileSync(
+					join(spec.sessionDir, "..", "shipped.md"),
+					[
+						"## What shipped",
+						"",
+						"- The capture flow validates entry boundaries and answers 409 for a duplicate.",
+						"- The weekly summary groups captured entries by day.",
+						"",
+						"## Verified",
+						"",
+						"- `[command]` `pnpm test --run` — 214 passed.",
+						"- `[by hand]` Captured an entry, captured the same one again, saw the duplicate rejected.",
+						"",
+						"## Gaps",
+						"",
+						"- The summary for an empty week is not covered yet.",
+					].join("\n"),
+				);
+			},
+		};
+	};
+	return [stage === "plan" ? planningTurn() : stage === "build" ? buildingWithReport() : testerTurn()];
 });
 const titles = new Map<string, string>();
 
