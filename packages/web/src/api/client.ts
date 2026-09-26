@@ -27,6 +27,8 @@ export interface Gate {
 	kind: "plan_approval" | "feedback" | "budget";
 	status: "pending" | "approved" | "rejected";
 	feedback: string | null;
+	createdAt: number;
+	decidedAt: number | null;
 }
 
 /** The dev-server preview of a card, if one is running. In-memory state; it does not survive a daemon restart. */

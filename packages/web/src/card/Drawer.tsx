@@ -14,6 +14,7 @@ import { BudgetGatePanel } from "./BudgetGatePanel.tsx";
 import { GatePanel } from "./GatePanel.tsx";
 import { QuestionsPanel } from "./QuestionsPanel.tsx";
 import { RunPanel } from "./RunPanel.tsx";
+import { Activity } from "./Activity.tsx";
 import { SteerBox } from "./SteerBox.tsx";
 import { Transcript } from "./Transcript.tsx";
 
@@ -25,7 +26,7 @@ interface DrawerProps {
 	onRunOpen: (runId: string | null) => void;
 }
 
-type Tab = "decision" | "session" | "changes" | "files" | "run";
+type Tab = "decision" | "session" | "changes" | "files" | "activity" | "run";
 
 /**
  * The card inspector: one surface docked beside whichever view is active. When the card is waiting
@@ -132,6 +133,7 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 		{ id: "session" as Tab, label: "Session" },
 		{ id: "changes" as Tab, label: "Changes" },
 		{ id: "files" as Tab, label: <>Files <span className="text-slate">{artifacts.length}</span></> },
+		{ id: "activity" as Tab, label: "Activity" },
 		{ id: "run" as Tab, label: "Run" },
 	];
 	const onTabArrow = (event: React.KeyboardEvent) => {
@@ -224,6 +226,8 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 			<div key={activeTab} role="tabpanel" id={`drawer-panel-${activeTab}`} aria-labelledby={`drawer-tab-${activeTab}`} tabIndex={0} className="flex min-h-0 flex-col outline-none">
 				{activeTab === "files" ? (
 					<ArtifactsPanel cardId={card.id} artifacts={artifacts} annotations={annotations} />
+				) : activeTab === "activity" ? (
+					<Activity card={card} runs={runs} gates={detail.data.gates} />
 				) : activeTab === "changes" ? (
 					<DiffPanel cardId={card.id} refreshKey={card.updatedAt} />
 				) : activeTab === "run" ? (
