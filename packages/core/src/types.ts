@@ -146,6 +146,8 @@ export interface ResearchQuestion {
 	id: string;
 	question: string;
 	status: ResearchStatus;
+	/** The step in flight while running: the survey gathers evidence, then the synthesizer writes the brief. */
+	step: "survey" | "brief" | null;
 	/** The cited brief, once the synthesizer has written it. */
 	brief: string | null;
 	promotedCardId: string | null;

@@ -275,6 +275,14 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json({ ok: true }, 202);
 	});
 
+	// A run in flight is stoppable: the question goes back to open, spend already recorded stays.
+	app.post("/api/research/:id/cancel", (c) => {
+		const question = research.get(c.req.param("id"));
+		if (!question) throw new HttpError(404, "No such research question");
+		if (!research.cancel(question.id)) throw new HttpError(409, "The question is not running");
+		return c.json({ ok: true }, 202);
+	});
+
 	// Promotion is the person's decision: the brief becomes a card in the project they pick, and the
 	// planner reads it exactly as if deep research had run on the card itself.
 	app.post("/api/research/:id/promote", async (c) => {

@@ -33,6 +33,11 @@ export function Research({ projects, onOpenCard }: { projects: Project[]; onOpen
 		mutationFn: (id: string) => api.runResearch(id),
 		onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board", "research"] }),
 	});
+	const cancel = useMutation({
+		mutationFn: (id: string) => api.cancelResearch(id),
+		onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board", "research"] }),
+		onError: (error: Error) => toast(error.message),
+	});
 
 	return (
 		<div className="mx-auto w-full max-w-2xl px-4 py-6">
@@ -64,7 +69,7 @@ export function Research({ projects, onOpenCard }: { projects: Project[]; onOpen
 			</form>
 
 			<ul className="mt-5 grid gap-3">
-				<ResearchList onPromote={setPromoting} onRerun={(id) => rerun.mutate(id)} onOpenCard={onOpenCard} />
+				<ResearchList onPromote={setPromoting} onRerun={(id) => rerun.mutate(id)} onCancel={(id) => cancel.mutate(id)} onOpenCard={onOpenCard} />
 			</ul>
 
 			{promoting && <PromoteDialog question={promoting} projects={projects} onClose={() => setPromoting(null)} onOpenCard={onOpenCard} />}
@@ -79,7 +84,10 @@ const STATUS: Record<ResearchQuestion["status"], { label: string; className: str
 	promoted: { label: "Promoted", className: "bg-wash text-slate" },
 };
 
-function ResearchList({ onPromote, onRerun, onOpenCard }: { onPromote: (question: ResearchQuestion) => void; onRerun: (id: string) => void; onOpenCard: (cardId: string) => void }) {
+/** The unique links a brief cites — a rough but honest measure of how much evidence stands under it. */
+const citedSources = (brief: string | null): number => (brief ? new Set(brief.match(/https?:\/\/[^\s)>]+/g) ?? []).size : 0);
+
+function ResearchList({ onPromote, onRerun, onCancel, onOpenCard }: { onPromote: (question: ResearchQuestion) => void; onRerun: (id: string) => void; onCancel: (id: string) => void; onOpenCard: (cardId: string) => void }) {
 	// The lane refetches with the board (SSE chatter and research events alike), so a running
 	// question's steps land without a manual refresh.
 	const research = useQuery({ queryKey: ["board", "research"], queryFn: api.research, refetchInterval: (query) => (query.state.data?.questions.some((question) => question.status === "running") ? 2500 : false) });
@@ -91,10 +99,10 @@ function ResearchList({ onPromote, onRerun, onOpenCard }: { onPromote: (question
 			</li>
 		);
 	}
-	return <QuestionRows questions={questions} onPromote={onPromote} onRerun={onRerun} onOpenCard={onOpenCard} />;
+	return <QuestionRows questions={questions} onPromote={onPromote} onRerun={onRerun} onCancel={onCancel} onOpenCard={onOpenCard} />;
 }
 
-function QuestionRows({ questions, onPromote, onRerun, onOpenCard }: { questions: ResearchQuestion[]; onPromote: (question: ResearchQuestion) => void; onRerun: (id: string) => void; onOpenCard: (cardId: string) => void }) {
+function QuestionRows({ questions, onPromote, onRerun, onCancel, onOpenCard }: { questions: ResearchQuestion[]; onPromote: (question: ResearchQuestion) => void; onRerun: (id: string) => void; onCancel: (id: string) => void; onOpenCard: (cardId: string) => void }) {
 	return (
 		<>
 			{questions.map((question) => (
@@ -105,7 +113,10 @@ function QuestionRows({ questions, onPromote, onRerun, onOpenCard }: { questions
 					</div>
 					{question.brief && (
 						<details className="mt-2">
-							<summary className="cursor-pointer select-none text-[13px] text-primary">Read the brief</summary>
+							<summary className="cursor-pointer select-none text-[13px] text-primary">
+								Read the brief
+								{citedSources(question.brief) > 0 && <span className="text-slate"> · {citedSources(question.brief)} cited {citedSources(question.brief) === 1 ? "source" : "sources"}</span>}
+							</summary>
 							<div className="mt-2 max-h-96 overflow-y-auto rounded-md border border-rule bg-wash/40 p-3 text-[13.5px]">
 								<Markdown text={question.brief} />
 							</div>
@@ -122,7 +133,17 @@ function QuestionRows({ questions, onPromote, onRerun, onOpenCard }: { questions
 								Try again
 							</button>
 						)}
-						{question.status === "running" && <span className="text-[13px] text-slate">The survey is gathering evidence — the brief follows.</span>}
+						{question.status === "running" && (
+							<>
+								<span className="flex items-center gap-1.5 text-[13px] text-slate">
+									<span className="inline-block size-1.5 animate-pulse rounded-full bg-primary" aria-hidden />
+									{question.step === "brief" ? "Synthesizing the cited brief from the survey." : "The survey is gathering evidence — reading, searching, probing."}
+								</span>
+								<button type="button" className="btn ghost" onClick={() => onCancel(question.id)}>
+									Cancel
+								</button>
+							</>
+						)}
 						{question.status === "promoted" && (
 							<button type="button" className="btn ghost" onClick={() => onOpenCard(question.promotedCardId as string)}>
 								Open the card

@@ -184,6 +184,10 @@ const MIGRATIONS: string[] = [
 		promoted_project_id TEXT
 	);
 	`,
+	`
+	-- Which research step is in flight (survey or brief), so the lane can show progress, not just "running".
+	ALTER TABLE research_questions ADD COLUMN step TEXT;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

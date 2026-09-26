@@ -46,6 +46,39 @@ const researchScript = (failFirstBrief = false): FakeScript => {
 
 const addProject = async (): Promise<{ id: string }> => (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The first survey hangs until cancelled; the retried run behaves like the standard script. */
+const cancelScript = (): FakeScript => {
+	let surveyRuns = 0;
+	return (spec) => {
+		if (spec.sessionId.includes("research-survey")) {
+			surveyRuns += 1;
+			if (surveyRuns === 1) return [{ events: [], hang: true }];
+			return [
+				{
+					events: [{ type: "message", message: { role: "assistant", text: "Survey written.", thinking: "", toolCalls: [] } }],
+					effect: ({ prompt }) => {
+						const report = prompt.match(/absolute path `([^`]+)`/)?.[1];
+						if (report) writeFileSync(report, "# Survey notes\n\n- Finding one, sourced.");
+					},
+				},
+			];
+		}
+		if (spec.sessionId.includes("research-brief"))
+			return [
+				{
+					events: [{ type: "message", message: { role: "assistant", text: "Brief written.", thinking: "", toolCalls: [] } }],
+					effect: ({ prompt }) => {
+						const report = prompt.match(/absolute path `([^`]+)`/)?.[1];
+						if (report) writeFileSync(report, "# Research brief\n\n## Recommendation\n\n- Event-sourced sync.\n\nSource: <https://example.com/crdt>");
+					},
+				},
+			];
+		return byStage()(spec);
+	};
+};
+
 describe("the research lane", () => {
 	it("researches a question with no project, and the brief waits in the lane", async () => {
 		h = await bootHarness(researchScript(), ENV);
@@ -84,6 +117,33 @@ describe("the research lane", () => {
 
 		// A running or already-brief question refuses a second run.
 		expect((await h.api("POST", `/api/research/${asked.body.question.id}/run`)).status).toBe(409);
+	});
+
+	it("shows which step is in flight, and a cancel returns the question to open", async () => {
+		h = await bootHarness(cancelScript(), ENV);
+		const asked = await h.api("POST", "/api/research", { question: "CRDT or event log for offline notes sync?" });
+		const id = asked.body.question.id;
+
+		// While the survey runs, the lane can say what is happening — not just "running".
+		let step: string | null = null;
+		for (let i = 0; i < 100 && step === null; i++) {
+			await sleep(20);
+			step = (await h.api("GET", "/api/research")).body.questions[0].step;
+		}
+		expect(step).toBe("survey");
+
+		expect((await h.api("POST", `/api/research/${id}/cancel`)).status).toBe(202);
+		await h.daemon.whenIdle();
+		expect((await h.api("GET", "/api/research")).body.questions[0]).toMatchObject({ status: "open", step: null });
+		// A question that is not running refuses a cancel.
+		expect((await h.api("POST", `/api/research/${id}/cancel`)).status).toBe(409);
+
+		// And the question can still be asked again, all the way to its brief.
+		await h.api("POST", `/api/research/${id}/run`);
+		await h.daemon.whenIdle();
+		const brief = (await h.api("GET", "/api/research")).body.questions[0];
+		expect(brief).toMatchObject({ status: "brief", step: null });
+		expect(brief.brief).toContain("example.com");
 	});
 
 	it("promotion files the brief as a card the planner will read", async () => {

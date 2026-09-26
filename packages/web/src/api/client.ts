@@ -190,6 +190,7 @@ export const api = {
 	research: () => request<{ questions: ResearchQuestion[] }>("GET", "/api/research"),
 	askResearch: (question: string) => request<{ question: ResearchQuestion }>("POST", "/api/research", { question }),
 	runResearch: (id: string) => request<{ ok: true }>("POST", `/api/research/${id}/run`),
+	cancelResearch: (id: string) => request<{ ok: true }>("POST", `/api/research/${id}/cancel`),
 	promoteResearch: (id: string, projectId: string, title?: string) => request<{ card: Card }>("POST", `/api/research/${id}/promote`, { projectId, ...(title ? { title } : {}) }),
 	usage: () => request<Usage>("GET", "/api/usage"),
 	adhoc: (cardId: string, body: Record<string, string | undefined>) => request<{ run: StageRun }>("POST", `/api/cards/${cardId}/adhoc`, body),

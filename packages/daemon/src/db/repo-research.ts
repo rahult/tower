@@ -7,6 +7,7 @@ const toQuestion = (row: Row): ResearchQuestion => ({
 	id: row.id as string,
 	question: row.question as string,
 	status: row.status as ResearchQuestion["status"],
+	step: (row.step as ResearchQuestion["step"]) ?? null,
 	brief: row.brief as string | null,
 	promotedCardId: row.promoted_card_id as string | null,
 	promotedProjectId: row.promoted_project_id as string | null,
@@ -31,8 +32,17 @@ export function setQuestionStatus(db: Db, id: string, status: ResearchQuestion["
 	db.prepare("UPDATE research_questions SET status = ? WHERE id = ?").run(status, id);
 }
 
+export function setQuestionStep(db: Db, id: string, step: ResearchQuestion["step"]): void {
+	db.prepare("UPDATE research_questions SET step = ? WHERE id = ?").run(step, id);
+}
+
+/** Stops a run in its tracks: back to open, no step in flight. */
+export function resetQuestionRun(db: Db, id: string): void {
+	db.prepare("UPDATE research_questions SET status = 'open', step = NULL WHERE id = ?").run(id);
+}
+
 export function setQuestionBrief(db: Db, id: string, brief: string): void {
-	db.prepare("UPDATE research_questions SET brief = ?, status = 'brief' WHERE id = ?").run(brief, id);
+	db.prepare("UPDATE research_questions SET brief = ?, status = 'brief', step = NULL WHERE id = ?").run(brief, id);
 }
 
 export function markQuestionPromoted(db: Db, id: string, cardId: string, projectId: string): void {
