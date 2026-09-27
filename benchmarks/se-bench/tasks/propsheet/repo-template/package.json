@@ -1,0 +1,9 @@
+{
+	"name": "propsheet",
+	"version": "0.1.0",
+	"description": "An INI-style config parser.",
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/"
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"name": "sluglib",
+	"version": "0.1.0",
+	"description": "Convert arbitrary strings into URL-safe slugs.",
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/"
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"name": "tasknote",
+	"version": "0.1.0",
+	"description": "A tiny todo CLI.",
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/"
+	}
+}

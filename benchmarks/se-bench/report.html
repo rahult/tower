@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower vs. the field — SE benchmark</title>
+<style>
+		:root { color-scheme: dark; }
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #0e1116; color: #e3e6ea; font: 15px/1.55 Inter, -apple-system, "SF Pro Text", "Segoe UI", sans-serif; }
+		.wrap { max-width: 1180px; margin: 0 auto; padding: 48px 28px 80px; }
+		h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 6px; }
+		.sub { color: #8a8f98; margin: 0 0 34px; }
+		h2 { font-size: 19px; letter-spacing: -0.01em; margin: 40px 0 12px; }
+		.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 18px; }
+		.chart { background: #141920; border: 1px solid #1f242c; border-radius: 14px; padding: 10px 16px 4px; }
+		.chart svg { display: block; max-width: 100%; margin: 0 auto; }
+		.chart h2 { margin: 10px 4px 0; }
+		.legend { display: flex; gap: 16px; padding: 0 6px 12px; color: #aeb6c2; font-size: 13px; }
+		.key { display: inline-flex; align-items: center; gap: 7px; }
+		.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+		table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+		.table-wrap { overflow-x: auto; }
+		th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #1f242c; white-space: nowrap; vertical-align: middle; }
+		th { color: #8a8f98; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+		td.wrap { white-space: normal; min-width: 160px; }
+		td.strong { font-weight: 600; }
+		.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+		.pill { border: 1px solid; border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+		.blurb { color: #8a8f98; font-size: 13.5px; margin: 4px 0 0; }
+		.armdefs { margin: 0 0 8px; padding: 0; list-style: none; }
+		.armdefs li { margin: 6px 0; color: #c6cbd2; }
+		.method { background: #141920; border: 1px solid #1f242c; border-radius: 14px; padding: 4px 22px 14px; max-width: 900px; }
+		.method li { margin: 7px 0; }
+		a { color: #7fb0ff; }
+		.total-cards { display: flex; gap: 14px; flex-wrap: wrap; margin: 26px 0 6px; }
+		.card { background: #141920; border: 1px solid #1f242c; border-radius: 14px; padding: 16px 22px; min-width: 200px; }
+		.card .n { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; }
+		.card .t { color: #8a8f98; font-size: 13px; }
+	</style>
+</head>
+<body><div class="wrap">
+<h1>Delegate the building. Keep the discipline?</h1>
+<p class="sub">Same tasks, same local models, three amounts of scaffolding — benchmarked on September 26, 2026.</p>
+
+<div class="total-cards">
+	<div class="card"><div class="n">18</div><div class="t">scored runs</div></div>
+	<div class="card"><div class="n" style="color:#8a8f98">Raw model</div><div class="t">highest mean score, 6.3/10 across all dimensions</div></div>
+	<div class="card"><div class="n">2</div><div class="t">ollama models</div></div>
+	<div class="card"><div class="n">3</div><div class="t">tasks</div></div>
+</div>
+
+<h2>The three contestants</h2>
+<ul class="armdefs"><li><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span> — one chat completion, no tools — output pasted to disk</li><li><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span> — minimal agent: file + shell tools, no gates, no reviews</li><li><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span> — full pipeline: plan coach, plan gate, verify gate, acceptance gates, testing stage, review flows, feedback gate</li></ul>
+
+<h2>Spider charts — six software-engineering dimensions</h2>
+<div class="charts"><section class="chart"><h2>All models, average</h2><svg viewBox="0 0 520 564" width="520" height="564" xmlns="http://www.w3.org/2000/svg" role="img">
+<polygon points="260.0,228.8 292.2,247.4 292.2,284.6 260.0,303.2 227.8,284.6 227.8,247.4" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,191.6 324.4,228.8 324.4,303.2 260.0,340.4 195.6,303.2 195.6,228.8" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,154.4 356.6,210.2 356.6,321.8 260.0,377.6 163.4,321.8 163.4,210.2" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,117.2 388.9,191.6 388.9,340.4 260.0,414.8 131.1,340.4 131.1,191.6" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,80.0 421.1,173.0 421.1,359.0 260.0,452.0 98.9,359.0 98.9,173.0" fill="none" stroke="#262b33" stroke-width="1"/>
+<line x1="260" y1="266" x2="260.0" y2="80.0" stroke="#262b33" stroke-width="1"/>
+<text x="260.0" y="58.0" fill="#aeb6c2" font-size="13" text-anchor="middle">correctness</text>
+<line x1="260" y1="266" x2="421.1" y2="173.0" stroke="#262b33" stroke-width="1"/>
+<text x="443.6" y="164.0" fill="#aeb6c2" font-size="13" text-anchor="start">spec fit</text>
+<line x1="260" y1="266" x2="421.1" y2="359.0" stroke="#262b33" stroke-width="1"/>
+<text x="443.6" y="376.0" fill="#aeb6c2" font-size="13" text-anchor="start">code quality</text>
+<line x1="260" y1="266" x2="260.0" y2="452.0" stroke="#262b33" stroke-width="1"/>
+<text x="260.0" y="482.0" fill="#aeb6c2" font-size="13" text-anchor="middle">testing</text>
+<line x1="260" y1="266" x2="98.9" y2="359.0" stroke="#262b33" stroke-width="1"/>
+<text x="76.4" y="376.0" fill="#aeb6c2" font-size="13" text-anchor="end">robustness</text>
+<line x1="260" y1="266" x2="98.9" y2="173.0" stroke="#262b33" stroke-width="1"/>
+<text x="76.4" y="164.0" fill="#aeb6c2" font-size="13" text-anchor="end">docs</text>
+<polygon points="260.0,190.1 391.5,190.1 378.1,334.2 260.0,360.2 141.9,334.2 163.4,210.2" fill="#8a8f98" fill-opacity="0.14" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="190.1" r="3" fill="#8a8f98"/>
+<circle cx="391.5" cy="190.1" r="3" fill="#8a8f98"/>
+<circle cx="378.1" cy="334.2" r="3" fill="#8a8f98"/>
+<circle cx="260.0" cy="360.2" r="3" fill="#8a8f98"/>
+<circle cx="141.9" cy="334.2" r="3" fill="#8a8f98"/>
+<circle cx="163.4" cy="210.2" r="3" fill="#8a8f98"/>
+<polygon points="260.0,248.9 362.0,207.1 354.0,320.3 260.0,323.0 166.0,320.3 139.2,196.3" fill="#4d9fff" fill-opacity="0.14" stroke="#4d9fff" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="248.9" r="3" fill="#4d9fff"/>
+<circle cx="362.0" cy="207.1" r="3" fill="#4d9fff"/>
+<circle cx="354.0" cy="320.3" r="3" fill="#4d9fff"/>
+<circle cx="260.0" cy="323.0" r="3" fill="#4d9fff"/>
+<circle cx="166.0" cy="320.3" r="3" fill="#4d9fff"/>
+<circle cx="139.2" cy="196.3" r="3" fill="#4d9fff"/>
+<polygon points="260.0,257.9 313.7,235.0 313.7,297.0 260.0,268.8 206.3,297.0 206.3,235.0" fill="#f4b63f" fill-opacity="0.14" stroke="#f4b63f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="257.9" r="3" fill="#f4b63f"/>
+<circle cx="313.7" cy="235.0" r="3" fill="#f4b63f"/>
+<circle cx="313.7" cy="297.0" r="3" fill="#f4b63f"/>
+<circle cx="260.0" cy="268.8" r="3" fill="#f4b63f"/>
+<circle cx="206.3" cy="297.0" r="3" fill="#f4b63f"/>
+<circle cx="206.3" cy="235.0" r="3" fill="#f4b63f"/>
+<text x="264" y="115.19999999999999" fill="#565d68" font-size="10">8</text>
+<text x="264" y="189.6" fill="#565d68" font-size="10">4</text>
+</svg><div class="legend"><span class="key"><span class="swatch" style="background:#8a8f98"></span>Raw model</span><span class="key"><span class="swatch" style="background:#4d9fff"></span>Basic loop</span><span class="key"><span class="swatch" style="background:#f4b63f"></span>Tower</span></div></section>
+<section class="chart"><h2 class="mono">llama3.1:8b</h2><svg viewBox="0 0 520 564" width="520" height="564" xmlns="http://www.w3.org/2000/svg" role="img">
+<polygon points="260.0,228.8 292.2,247.4 292.2,284.6 260.0,303.2 227.8,284.6 227.8,247.4" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,191.6 324.4,228.8 324.4,303.2 260.0,340.4 195.6,303.2 195.6,228.8" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,154.4 356.6,210.2 356.6,321.8 260.0,377.6 163.4,321.8 163.4,210.2" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,117.2 388.9,191.6 388.9,340.4 260.0,414.8 131.1,340.4 131.1,191.6" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,80.0 421.1,173.0 421.1,359.0 260.0,452.0 98.9,359.0 98.9,173.0" fill="none" stroke="#262b33" stroke-width="1"/>
+<line x1="260" y1="266" x2="260.0" y2="80.0" stroke="#262b33" stroke-width="1"/>
+<text x="260.0" y="58.0" fill="#aeb6c2" font-size="13" text-anchor="middle">correctness</text>
+<line x1="260" y1="266" x2="421.1" y2="173.0" stroke="#262b33" stroke-width="1"/>
+<text x="443.6" y="164.0" fill="#aeb6c2" font-size="13" text-anchor="start">spec fit</text>
+<line x1="260" y1="266" x2="421.1" y2="359.0" stroke="#262b33" stroke-width="1"/>
+<text x="443.6" y="376.0" fill="#aeb6c2" font-size="13" text-anchor="start">code quality</text>
+<line x1="260" y1="266" x2="260.0" y2="452.0" stroke="#262b33" stroke-width="1"/>
+<text x="260.0" y="482.0" fill="#aeb6c2" font-size="13" text-anchor="middle">testing</text>
+<line x1="260" y1="266" x2="98.9" y2="359.0" stroke="#262b33" stroke-width="1"/>
+<text x="76.4" y="376.0" fill="#aeb6c2" font-size="13" text-anchor="end">robustness</text>
+<line x1="260" y1="266" x2="98.9" y2="173.0" stroke="#262b33" stroke-width="1"/>
+<text x="76.4" y="164.0" fill="#aeb6c2" font-size="13" text-anchor="end">docs</text>
+<polygon points="260.0,191.6 388.9,191.6 378.1,334.2 260.0,362.7 141.9,334.2 163.4,210.2" fill="#8a8f98" fill-opacity="0.14" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="191.6" r="3" fill="#8a8f98"/>
+<circle cx="388.9" cy="191.6" r="3" fill="#8a8f98"/>
+<circle cx="378.1" cy="334.2" r="3" fill="#8a8f98"/>
+<circle cx="260.0" cy="362.7" r="3" fill="#8a8f98"/>
+<circle cx="141.9" cy="334.2" r="3" fill="#8a8f98"/>
+<circle cx="163.4" cy="210.2" r="3" fill="#8a8f98"/>
+<polygon points="260.0,257.9 356.6,210.2 351.3,318.7 260.0,345.4 168.7,318.7 147.2,200.9" fill="#4d9fff" fill-opacity="0.14" stroke="#4d9fff" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="257.9" r="3" fill="#4d9fff"/>
+<circle cx="356.6" cy="210.2" r="3" fill="#4d9fff"/>
+<circle cx="351.3" cy="318.7" r="3" fill="#4d9fff"/>
+<circle cx="260.0" cy="345.4" r="3" fill="#4d9fff"/>
+<circle cx="168.7" cy="318.7" r="3" fill="#4d9fff"/>
+<circle cx="147.2" cy="200.9" r="3" fill="#4d9fff"/>
+<polygon points="260.0,257.9 313.7,235.0 313.7,297.0 260.0,268.8 206.3,297.0 206.3,235.0" fill="#f4b63f" fill-opacity="0.14" stroke="#f4b63f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="257.9" r="3" fill="#f4b63f"/>
+<circle cx="313.7" cy="235.0" r="3" fill="#f4b63f"/>
+<circle cx="313.7" cy="297.0" r="3" fill="#f4b63f"/>
+<circle cx="260.0" cy="268.8" r="3" fill="#f4b63f"/>
+<circle cx="206.3" cy="297.0" r="3" fill="#f4b63f"/>
+<circle cx="206.3" cy="235.0" r="3" fill="#f4b63f"/>
+<text x="264" y="115.19999999999999" fill="#565d68" font-size="10">8</text>
+<text x="264" y="189.6" fill="#565d68" font-size="10">4</text>
+</svg><div class="legend"><span class="key"><span class="swatch" style="background:#8a8f98"></span>Raw model</span><span class="key"><span class="swatch" style="background:#4d9fff"></span>Basic loop</span><span class="key"><span class="swatch" style="background:#f4b63f"></span>Tower</span></div></section>
+<section class="chart"><h2 class="mono">qwen2.5-coder:7b</h2><svg viewBox="0 0 520 564" width="520" height="564" xmlns="http://www.w3.org/2000/svg" role="img">
+<polygon points="260.0,228.8 292.2,247.4 292.2,284.6 260.0,303.2 227.8,284.6 227.8,247.4" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,191.6 324.4,228.8 324.4,303.2 260.0,340.4 195.6,303.2 195.6,228.8" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,154.4 356.6,210.2 356.6,321.8 260.0,377.6 163.4,321.8 163.4,210.2" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,117.2 388.9,191.6 388.9,340.4 260.0,414.8 131.1,340.4 131.1,191.6" fill="none" stroke="#262b33" stroke-width="1"/>
+<polygon points="260.0,80.0 421.1,173.0 421.1,359.0 260.0,452.0 98.9,359.0 98.9,173.0" fill="none" stroke="#262b33" stroke-width="1"/>
+<line x1="260" y1="266" x2="260.0" y2="80.0" stroke="#262b33" stroke-width="1"/>
+<text x="260.0" y="58.0" fill="#aeb6c2" font-size="13" text-anchor="middle">correctness</text>
+<line x1="260" y1="266" x2="421.1" y2="173.0" stroke="#262b33" stroke-width="1"/>
+<text x="443.6" y="164.0" fill="#aeb6c2" font-size="13" text-anchor="start">spec fit</text>
+<line x1="260" y1="266" x2="421.1" y2="359.0" stroke="#262b33" stroke-width="1"/>
+<text x="443.6" y="376.0" fill="#aeb6c2" font-size="13" text-anchor="start">code quality</text>
+<line x1="260" y1="266" x2="260.0" y2="452.0" stroke="#262b33" stroke-width="1"/>
+<text x="260.0" y="482.0" fill="#aeb6c2" font-size="13" text-anchor="middle">testing</text>
+<line x1="260" y1="266" x2="98.9" y2="359.0" stroke="#262b33" stroke-width="1"/>
+<text x="76.4" y="376.0" fill="#aeb6c2" font-size="13" text-anchor="end">robustness</text>
+<line x1="260" y1="266" x2="98.9" y2="173.0" stroke="#262b33" stroke-width="1"/>
+<text x="76.4" y="164.0" fill="#aeb6c2" font-size="13" text-anchor="end">docs</text>
+<polygon points="260.0,188.5 394.2,188.5 378.1,334.2 260.0,357.8 141.9,334.2 163.4,210.2" fill="#8a8f98" fill-opacity="0.14" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="188.5" r="3" fill="#8a8f98"/>
+<circle cx="394.2" cy="188.5" r="3" fill="#8a8f98"/>
+<circle cx="378.1" cy="334.2" r="3" fill="#8a8f98"/>
+<circle cx="260.0" cy="357.8" r="3" fill="#8a8f98"/>
+<circle cx="141.9" cy="334.2" r="3" fill="#8a8f98"/>
+<circle cx="163.4" cy="210.2" r="3" fill="#8a8f98"/>
+<polygon points="260.0,240.0 367.4,204.0 356.6,321.8 260.0,300.7 163.4,321.8 131.1,191.6" fill="#4d9fff" fill-opacity="0.14" stroke="#4d9fff" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="240.0" r="3" fill="#4d9fff"/>
+<circle cx="367.4" cy="204.0" r="3" fill="#4d9fff"/>
+<circle cx="356.6" cy="321.8" r="3" fill="#4d9fff"/>
+<circle cx="260.0" cy="300.7" r="3" fill="#4d9fff"/>
+<circle cx="163.4" cy="321.8" r="3" fill="#4d9fff"/>
+<circle cx="131.1" cy="191.6" r="3" fill="#4d9fff"/>
+<polygon points="260.0,257.9 313.7,235.0 313.7,297.0 260.0,268.8 206.3,297.0 206.3,235.0" fill="#f4b63f" fill-opacity="0.14" stroke="#f4b63f" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="260.0" cy="257.9" r="3" fill="#f4b63f"/>
+<circle cx="313.7" cy="235.0" r="3" fill="#f4b63f"/>
+<circle cx="313.7" cy="297.0" r="3" fill="#f4b63f"/>
+<circle cx="260.0" cy="268.8" r="3" fill="#f4b63f"/>
+<circle cx="206.3" cy="297.0" r="3" fill="#f4b63f"/>
+<circle cx="206.3" cy="235.0" r="3" fill="#f4b63f"/>
+<text x="264" y="115.19999999999999" fill="#565d68" font-size="10">8</text>
+<text x="264" y="189.6" fill="#565d68" font-size="10">4</text>
+</svg><div class="legend"><span class="key"><span class="swatch" style="background:#8a8f98"></span>Raw model</span><span class="key"><span class="swatch" style="background:#4d9fff"></span>Basic loop</span><span class="key"><span class="swatch" style="background:#f4b63f"></span>Tower</span></div></section></div>
+
+<h2>What the numbers say</h2>
+<div class="method"><ul><li><strong>Raw model</strong> takes the highest mean across all six dimensions (6.3/10), ahead of Basic loop (4.9) and Tower (2.3).</li><li>On hidden acceptance tests, Raw model ships the most working software (correctness 4.1 vs 0.9 for Basic loop, 0.4 for Tower).</li><li>Tower's pipeline — plan coach, verify gate demanding passing tests, acceptance red/green, review flows — asks the builder for iterative, tool-precise work. At 7–8B parameters that is a capability floor the models sit below: the discipline harness behaves as a <em>multiplier</em> on builder capability, and below the floor it taxes instead of boosting. Nothing stuck or crashed; the runs end honestly in <span class="mono">needs_attention</span> after their retry budgets.</li><li>Caveat kept in view: the tower arm ran fully headless with rubber-stamped gates and a scripted answerer — a real person answers questions better than a script, which would narrow but not close these gaps at this model size.</li></ul></div>
+
+<h2>Every run</h2>
+<div class="table-wrap">
+<table><thead><tr><th>model</th><th>task</th><th>arm</th><th>end state</th><th>corr</th><th>spec</th><th>qual</th><th>test</th><th>rob</th><th>docs</th><th>Σ</th><th>accept.</th><th>own tests</th><th>tok</th><th>wall</th></tr></thead><tbody><tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>propsheet</td>
+				<td><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span></td>
+				<td class="mono">—</td>
+				<td>0.0</td><td>5.0</td><td>5.0</td><td>4.0</td><td>5.0</td><td>8.0</td>
+				<td class="strong">4.5</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">fail</td>
+				<td class="mono">13k</td>
+				<td class="mono">3m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>propsheet</td>
+				<td><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span></td>
+				<td class="mono">—</td>
+				<td>2.9</td><td>8.0</td><td>7.0</td><td>5.2</td><td>7.0</td><td>5.0</td>
+				<td class="strong">5.8</td>
+				<td class="mono">5/17</td>
+				<td class="wrap">fail</td>
+				<td class="mono">2k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>propsheet</td>
+				<td><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span></td>
+				<td class="mono">testing·attn</td>
+				<td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td>
+				<td class="strong">0.0</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">none</td>
+				<td class="mono">0k</td>
+				<td class="mono">9m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>sluglib</td>
+				<td><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span></td>
+				<td class="mono">—</td>
+				<td>0.0</td><td>8.0</td><td>7.0</td><td>4.8</td><td>7.0</td><td>8.0</td>
+				<td class="strong">5.8</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">fail</td>
+				<td class="mono">9k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>sluglib</td>
+				<td><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span></td>
+				<td class="mono">—</td>
+				<td>7.8</td><td>8.0</td><td>7.0</td><td>5.2</td><td>7.0</td><td>5.0</td>
+				<td class="strong">6.7</td>
+				<td class="mono">14/18</td>
+				<td class="wrap">fail</td>
+				<td class="mono">1k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>sluglib</td>
+				<td><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span></td>
+				<td class="mono">testing·attn</td>
+				<td>0.0</td><td>5.0</td><td>5.0</td><td>0.0</td><td>5.0</td><td>5.0</td>
+				<td class="strong">3.3</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">none</td>
+				<td class="mono">0k</td>
+				<td class="mono">7m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>tasknote</td>
+				<td><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span></td>
+				<td class="mono">—</td>
+				<td>1.3</td><td>5.0</td><td>5.0</td><td>4.0</td><td>5.0</td><td>5.0</td>
+				<td class="strong">4.2</td>
+				<td class="mono">2/15</td>
+				<td class="wrap">fail</td>
+				<td class="mono">33k</td>
+				<td class="mono">3m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>tasknote</td>
+				<td><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span></td>
+				<td class="mono">—</td>
+				<td>1.3</td><td>8.0</td><td>8.0</td><td>5.2</td><td>8.0</td><td>8.0</td>
+				<td class="strong">6.4</td>
+				<td class="mono">2/15</td>
+				<td class="wrap">fail</td>
+				<td class="mono">2k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="llama3.1:8b">llama 8b</td><td>tasknote</td>
+				<td><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span></td>
+				<td class="mono">testing·attn</td>
+				<td>1.3</td><td>5.0</td><td>5.0</td><td>0.0</td><td>5.0</td><td>5.0</td>
+				<td class="strong">3.6</td>
+				<td class="mono">2/15</td>
+				<td class="wrap">none</td>
+				<td class="mono">0k</td>
+				<td class="mono">12m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>propsheet</td>
+				<td><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span></td>
+				<td class="mono">—</td>
+				<td>2.9</td><td>7.0</td><td>5.0</td><td>4.0</td><td>5.0</td><td>8.0</td>
+				<td class="strong">5.3</td>
+				<td class="mono">5/17</td>
+				<td class="wrap">fail</td>
+				<td class="mono">218k</td>
+				<td class="mono">3m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>propsheet</td>
+				<td><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span></td>
+				<td class="mono">—</td>
+				<td>2.9</td><td>8.0</td><td>7.0</td><td>4.8</td><td>7.0</td><td>5.0</td>
+				<td class="strong">5.8</td>
+				<td class="mono">5/17</td>
+				<td class="wrap">fail</td>
+				<td class="mono">2k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>propsheet</td>
+				<td><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span></td>
+				<td class="mono">building·attn</td>
+				<td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td><td>0.0</td>
+				<td class="strong">0.0</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">none</td>
+				<td class="mono">0k</td>
+				<td class="mono">4m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>sluglib</td>
+				<td><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span></td>
+				<td class="mono">—</td>
+				<td>0.0</td><td>8.0</td><td>8.0</td><td>1.6</td><td>8.0</td><td>8.0</td>
+				<td class="strong">5.6</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">none</td>
+				<td class="mono">9k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>sluglib</td>
+				<td><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span></td>
+				<td class="mono">—</td>
+				<td>8.3</td><td>9.0</td><td>8.0</td><td>5.2</td><td>8.0</td><td>8.0</td>
+				<td class="strong">7.8</td>
+				<td class="mono">15/18</td>
+				<td class="wrap">fail</td>
+				<td class="mono">1k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>sluglib</td>
+				<td><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span></td>
+				<td class="mono">building·attn</td>
+				<td>0.0</td><td>5.0</td><td>5.0</td><td>0.0</td><td>5.0</td><td>5.0</td>
+				<td class="strong">3.3</td>
+				<td class="mono">0/0</td>
+				<td class="wrap">none</td>
+				<td class="mono">0k</td>
+				<td class="mono">5m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>tasknote</td>
+				<td><span class="pill" style="border-color:#4d9fff;color:#4d9fff">Basic loop</span></td>
+				<td class="mono">—</td>
+				<td>1.3</td><td>5.0</td><td>5.0</td><td>0.0</td><td>5.0</td><td>8.0</td>
+				<td class="strong">4.0</td>
+				<td class="mono">2/15</td>
+				<td class="wrap">none</td>
+				<td class="mono">17k</td>
+				<td class="mono">2m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>tasknote</td>
+				<td><span class="pill" style="border-color:#8a8f98;color:#8a8f98">Raw model</span></td>
+				<td class="mono">—</td>
+				<td>1.3</td><td>8.0</td><td>7.0</td><td>4.8</td><td>7.0</td><td>5.0</td>
+				<td class="strong">5.5</td>
+				<td class="mono">2/15</td>
+				<td class="wrap">fail</td>
+				<td class="mono">2k</td>
+				<td class="mono">1m</td>
+			</tr>
+<tr>
+				<td class="mono" title="qwen2.5-coder:7b">qwen 7b</td><td>tasknote</td>
+				<td><span class="pill" style="border-color:#f4b63f;color:#f4b63f">Tower</span></td>
+				<td class="mono">building·attn</td>
+				<td>1.3</td><td>5.0</td><td>5.0</td><td>0.0</td><td>5.0</td><td>5.0</td>
+				<td class="strong">3.6</td>
+				<td class="mono">2/15</td>
+				<td class="wrap">none</td>
+				<td class="mono">0k</td>
+				<td class="mono">3m</td>
+			</tr></tbody></table>
+</div>
+
+<h2>Method</h2>
+<div class="method">
+<ul>
+<li><strong>Tasks.</strong> Three fresh Node.js projects with pinned layouts and precisely specified behaviour: <span class="mono">sluglib</span> (string library), <span class="mono">tasknote</span> (JSON-backed CLI), <span class="mono">propsheet</span> (INI-style parser). Every arm gets the identical brief.</li>
+<li><strong>Correctness</strong> is programmatic: a hidden acceptance suite written from the spec, run against whatever the arm produced (0–10 by pass rate). <strong>Testing</strong> blends whether the run's own test suite exists and passes (60%) with the judge's quality read (40%).</li>
+<li><strong>Judged dimensions</strong> (spec fit, code quality, robustness, docs) are scored 0–10 by <span class="mono">qwen2.5-coder:7b</span> against a fixed anchored rubric, with the brief, all produced files, and both test outcomes in view. A single local judge is a known limitation — same judge for every arm, so bias is at least shared.</li>
+<li><strong>Models.</strong> Ollama, 16k context (derived model tags), temperature 0.2 for the loops. Tower's stages all pointed at the same model; thinking off.</li>
+<li><strong>No human anywhere.</strong> Tower's plan and feedback gates were decided by a script that approves everything; its stage questions got a generic "use your best judgement". Tower ran as shipped: plan coach, verify gate, acceptance red/green gates, testing stage, adversarial + SOLID review flows.</li>
+<li><strong>Tokens</strong> for the tower arm are Tower's own session accounting across all its stages; raw/basic count ollama prompt+output tokens. Wall time is per-run and includes local model load.</li>
+<li>One machine, runs sequential. Small task set, one judge, 7–8B models: read this as a disciplined smoke test of the thesis, not leaderboard truth.</li>
+</ul>
+</div>
+
+</div></body></html>

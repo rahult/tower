@@ -5,3 +5,5 @@ dist/
 *.sqlite*
 spikes/.tmp/
 .playwright-mcp/
+benchmarks/se-bench/.state/
+.zcode/
