@@ -1,0 +1,14 @@
+{
+	"name": "production-ready",
+	"title": "Production-ready audit",
+	"description": "Judges the change against a production bar with per-criterion verdicts: behavior, security and data-handling are blocking; performance, observability, docs and accessibility are nudges. Fails only when a blocking criterion is unmet. Promote it into the default reviews by copying it to ~/.tower/flows with \"when\": [\"after-tests\"].",
+	"when": ["manual"],
+	"steps": [
+		{
+			"name": "audit",
+			"text": "Decide whether this change is ready to run in production, criterion by criterion — not whether it is elegant. The card: {{title}}.\n\n{{brief}}\n\nRead the diff against the base branch, and the plan at `{{planPath}}` if it exists. Judge seven criteria, each with its own verdict and one grounded justification quoting the code:\n\nBlocking — the change does not ship until met. Behavior: does what the card says, and the edge cases the brief names are handled. Security: the new surface's trust boundaries are checked; no new injection, secret, or permission risk. Data: writes are valid, migrations are reversible, nothing crosses tenants or users.\n\nNudges — worth saying, never worth blocking. Performance: obviously wasteful paths only. Observability: would an on-call engineer see this fail. Docs: does a future reader have what they need. Accessibility: if user-facing.\n\nWrite the audit to the absolute path `{{reportPath}}` as a seven-row table: criterion, verdict (met / unmet / n-a), evidence, and for each unmet blocking row the one change that would meet it. Fail the stage only if a BLOCKING criterion is unmet; pass otherwise, with the nudges named in your summary. A criterion that does not apply to this change is n-a, not unmet.",
+			"model": "planning",
+			"access": "read-only"
+		}
+	]
+}

@@ -1,0 +1,15 @@
+{
+	"name": "dependency-watch",
+	"title": "Dependency watch",
+	"description": "A recurring audit of the project's dependencies: advisories that stand right now, grouped and ranked, with the smallest upgrade path that clears them. Runs on its own scheduled card — no worktree needed. Put it on the calendar by copying it to ~/.tower/flows (it ships manual so no project is watched without asking).",
+	"when": ["manual"],
+	"intervalHours": 168,
+	"steps": [
+		{
+			"name": "watch",
+			"text": "Weekly dependency watch. Work in the project checkout ({{worktreePath}} is empty — this runs on a scheduled card; modify nothing).\n\nInventory the manifests and lockfiles that exist — npm/pnpm, Cargo, Python, Go, and vendored notices — and run the audit tool each ecosystem ships with (npm audit, cargo audit, pip-audit, osv-scanner), only tools that are installed; skip the rest with a note. For every advisory, check whether the vulnerable code is actually reachable from this project's own source: a dependency flagged but never imported is standing, not urgent.\n\nWrite the report to the absolute path `{{reportPath}}`: advisories grouped as reachable / flagged-only / informational (package, installed version → fixed version, severity, exploited-in-the-wild if known), then the upgrade path — the smallest set of version bumps or commands that clears the reachable ones, and what each could break. Fail the stage only for a reachable critical advisory with a known exploit; pass otherwise. Empty and clean are normal, healthy results — say so and pass.",
+			"model": "testing",
+			"access": "read-and-run"
+		}
+	]
+}

@@ -1,0 +1,14 @@
+{
+	"name": "threat-model",
+	"title": "Threat model",
+	"description": "A shift-left security pass over the plan: who could abuse what this builds, and which tests must exist to prove they cannot. Fails only for a critical, plausible threat the plan leaves completely unaddressed. Promote it to run after every plan by copying it to ~/.tower/flows with \"when\": [\"after-plan\"].",
+	"when": ["manual"],
+	"steps": [
+		{
+			"name": "model",
+			"text": "Threat-model the planned work before it is built. The card: {{title}}.\n\n{{brief}}\n\nRead the plan at the absolute path `{{planPath}}`; if it does not exist yet, work from the brief and the repository as it stands. Walk the change's new surface: inputs, outputs, trust boundaries, stored data, and what becomes reachable that was not before. For each, ask the quick questions — can it be spoofed, tampered with, repurposed, disclosed, repudiated, or elevated? Write the model to the absolute path `{{reportPath}}`: a table of threats (threat, entry point, who, worst credible outcome, what the plan already does, what test would prove it handled), then a short list titled \"The plan must name\" — the tests or decisions still missing. Severity honestly: most threats are low, and inflating them erodes the alarm. Fail the stage only for a critical threat that is both plausible and completely unaddressed by the plan; pass otherwise, with the must-name list as your payload. If the change adds no new surface (a refactor, a copy edit), say exactly that and pass.",
+			"model": "testing",
+			"access": "read-only"
+		}
+	]
+}

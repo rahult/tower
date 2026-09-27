@@ -182,6 +182,19 @@ Not every line of work starts with a task; some start with a question. The shipp
 
 Research belongs before the lifecycle: the flow is read-only, so it runs on a **backlog card with no worktree**, straight in the project checkout — start it from the card's Run tab, or type an exploring line into the ⌘K box ("research local-first sync @remembero") and the intent reader files the card and starts the research. When a brief exists, the planner is pointed at it, so the research flows into the plan without a copy-paste. Flows that run commands or write code still need a worktree and are refused on backlog cards.
 
+### The SDLC suite
+
+Six shipped flows cover the road from idea to production, each one opt-in and honest about what it can check:
+
+- **Idea to brief** — takes a raw idea on a backlog card and turns it into a buildable brief: problem, scope, how we would know it works, the first slice to merge. Grounded in the repository and the wider world, with sources.
+- **Threat model** — a shift-left security pass over the plan: who could abuse what this builds, which tests must exist to prove they cannot. Fails only for a critical threat the plan leaves completely unaddressed.
+- **Security sweep** — runs the dependency and secret scanners the repository actually has, scopes findings to the change, and tries to *disprove* each one before it counts. Never fails on missing tooling.
+- **Stability check** — runs the test suite three times; a flake that passes twice is still a flake.
+- **Production-ready audit** — judges the change against a production bar with per-criterion verdicts: behavior, security and data-handling are blocking; performance, observability, docs and accessibility are nudges.
+- **Dependency watch** — a recurring audit of dependencies with the smallest upgrade path that clears what stands. Put it on the calendar by copying it to `~/.tower/flows` with `"when": ["schedule"]`.
+
+Everything ships `manual` — each flow appears in every card's Run tab the moment it exists, and nothing runs on a lifecycle hook until you promote it (copy the file to `~/.tower/flows` and add the trigger; the descriptions say which). Design your own in the **Flows** editor — a flow is a small state machine of command gates and agent steps, and an agent can draft one for a task from its Run tab.
+
 ### From an idea, and into an existing system
 
 Two doors, one harness. **New from idea** (Projects wall, or the ⌘K box: "create a todo app") scaffolds a fresh project from an **archetype** — `archetypes/web-app/` ships a Vite + React frontend, a zero-dependency Node + `node:sqlite` backend, vitest and an acceptance runner, with the house conventions in its README. The scaffold owns the toolchain and the practices, so the first card plans the *app*; the plan gate is where the person steers. Archetypes declare their commands in `archetype.json`, and `"acceptance": true` marks the ones that carry the acceptance contract.

@@ -1,0 +1,22 @@
+{
+	"name": "idea-to-brief",
+	"title": "Idea to brief",
+	"description": "Takes a raw idea on a backlog card and turns it into a buildable brief — problem, scope, how we would know it works — grounded in what this repository already has and what the wider world knows. Read-only, safe before any work starts.",
+	"when": ["manual"],
+	"steps": [
+		{
+			"name": "explore",
+			"text": "An idea is on the table: {{title}}.\n\n{{brief}}\n\nGround it. First read this repository enough to know what already exists that the idea touches, extends, or collides with — naming, structure, prior art in the code, half-built versions of the same thing. If a file named deep-research-synthesize.md exists in the same directory as your report, read it first: it is prior research on this question. Then look one level out: the standard ways this problem is solved, one or two comparable implementations, and the sharpest known pitfall of the obvious approach. Use curl for the wider world and cite every non-obvious claim with a link. Write your evidence notes to the absolute path `{{reportPath}}` as you go — findings with sources, not prose. If the idea is a pure local change with nothing to research, say exactly that and note what you read instead. Never fail for absence of material: an honest \"here is all there is\" passes.",
+			"model": "planning",
+			"thinking": "high",
+			"access": "read-and-run"
+		},
+		{
+			"name": "brief",
+			"text": "You are turning research into a brief a planner can build from. The idea: {{title}}.\n\n{{brief}}\n\nRead the explore notes in the same directory as your report (idea-to-brief-explore.md) first. Then write the buildable brief to the absolute path `{{reportPath}}` with exactly these sections: Problem (for whom, and what bad thing happens without it); In scope / Out of scope (one line each, no hedging); Approach (the shape of the solution in this repository's idiom); How we know it works (the observable behavior a test could check); Risks (what would make this the wrong idea, or the hard part); First card (the smallest mergeable slice, with its verify command if you can name one). Be concrete: the planner that reads this brief sees nothing else. Where the evidence does not support a section, say what is missing rather than inventing it.",
+			"model": "planning",
+			"thinking": "high",
+			"access": "read-and-run"
+		}
+	]
+}

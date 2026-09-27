@@ -1,0 +1,14 @@
+{
+	"name": "stability-check",
+	"title": "Stability check",
+	"description": "Runs the project's test suite three times and fails if any run fails or the results disagree — a flake that passes twice is still a flake. Promote it to gate every build by copying it to ~/.tower/flows with \"when\": [\"after-build\"].",
+	"when": ["manual"],
+	"steps": [
+		{
+			"name": "rerun",
+			"text": "Prove the tests on this branch are stable, not lucky. Work in {{worktreePath}}; if that is empty, work in the project checkout, say so, and modify nothing.\n\nFind the project's real test command from its own configuration — package.json scripts, Makefile, pytest/tox config, cargo test — and do not invent one. Run it three times, back to back, the same command each time. Record per run: pass or fail, duration, and the failing cases if any. Then classify every failure: flaky (passes elsewhere — order, timing, network, or parallelism dependent; name the mechanism if you can) or broken (fails every run).\n\nWrite the report to the absolute path `{{reportPath}}`: the command, a three-row table (run, result, duration, failures), and the classification. Fail the stage if ANY of the three runs failed, or if results differed between runs; pass only on three identical green runs. If the project has no runnable test command, say exactly that and pass — the absence of tests is a finding for the review, not a failure of this check.",
+			"model": "testing",
+			"access": "read-and-run"
+		}
+	]
+}

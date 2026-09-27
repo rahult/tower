@@ -1,0 +1,14 @@
+{
+	"name": "sec-sweep",
+	"title": "Security sweep",
+	"description": "Runs the dependency and secret scanners this repository actually has, scopes findings to this change, and tries to disprove each one before it counts. Fails only for confirmed, actionable vulnerabilities in the change. Promote it to gate every build by copying it to ~/.tower/flows with \"when\": [\"after-build\"].",
+	"when": ["manual"],
+	"steps": [
+		{
+			"name": "sweep",
+			"text": "Sweep this change for security problems that are real. The card: {{title}}.\n\n{{brief}}\n\nWork in {{worktreePath}}; if that is empty you are auditing the project checkout as it stands — say so in the report.\n\nThree passes. Dependencies: find the manifests and lockfiles that actually exist (package-lock, pnpm-lock, Cargo.lock, requirements/poetry, go.sum) and run the audit tool each one ships with — npm audit, cargo audit, pip-audit, osv-scanner — only tools that are installed; note and skip the rest. Secrets and injection: scan the diff against the base branch for credentials, tokens, and private URLs, and the new or changed code for injection-shaped sinks — shell, SQL, paths joined from user input, unsafe deserialization, unvalidated redirects, HTML bound for the page. Disprove: for every finding, try to kill it — is the flagged dependency reachable from code this change ships? is the \"secret\" a test fixture or example? is that sink fed by anything attacker-controlled? A finding you cannot disprove stands.\n\nWrite the report to the absolute path `{{reportPath}}`, one row per finding: what, where, why it stands or was disproven, and the fix in one line. Fail the stage only for findings that stand AND are actionable in this change (a fix, pin, or removal exists). Never fail merely because a tool was missing or a scan came back empty — an honest clean bill passes.",
+			"model": "testing",
+			"access": "read-and-run"
+		}
+	]
+}
