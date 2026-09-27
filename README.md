@@ -193,7 +193,7 @@ Six shipped flows cover the road from idea to production, each one opt-in and ho
 - **Production-ready audit** — judges the change against a production bar with per-criterion verdicts: behavior, security and data-handling are blocking; performance, observability, docs and accessibility are nudges.
 - **Dependency watch** — a recurring audit of dependencies with the smallest upgrade path that clears what stands. Put it on the calendar by copying it to `~/.tower/flows` with `"when": ["schedule"]`.
 
-Everything ships `manual` — each flow appears in every card's Run tab the moment it exists, and nothing runs on a lifecycle hook until you promote it (copy the file to `~/.tower/flows` and add the trigger; the descriptions say which). Design your own in the **Flows** editor — a flow is a small state machine of command gates and agent steps, and an agent can draft one for a task from its Run tab.
+Everything ships `manual` — each flow appears in every card's Run tab the moment it exists, and nothing runs on a lifecycle hook until you promote it. Promotion is a per-project choice: **Gates on the way** in a project's settings names exactly which flows run after its plan and after its build (checking a manual flow there *is* the promotion — no file copying), an empty list turns that gate off, and leaving it on Tower's default runs every flow that declares the trigger. Design your own in the **Flows** editor — a flow is a small state machine of command gates and agent steps, and an agent can draft one for a task from its Run tab.
 
 ### From an idea, and into an existing system
 

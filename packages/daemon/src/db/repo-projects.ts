@@ -22,6 +22,8 @@ function toProject(row: Row): Project {
 		concurrencyLimit: row.concurrency_limit as number,
 		stageConfig: JSON.parse(row.stage_config_json as string),
 		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
+		afterPlanFlows: row.after_plan_flows_json ? JSON.parse(row.after_plan_flows_json as string) : null,
+		afterBuildFlows: row.after_build_flows_json ? JSON.parse(row.after_build_flows_json as string) : null,
 		invariantSimulation: row.invariant_simulation == null ? null : row.invariant_simulation === 1,
 		subagents: row.subagents == null ? null : row.subagents === 1,
 		understandBeforePlan: row.understand_before_plan == null ? null : row.understand_before_plan === 1,
@@ -78,7 +80,7 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates" | "sources">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "afterPlanFlows" | "afterBuildFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates" | "sources">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", previewCheck: "preview_check", budgetUsd: "budget_usd", concurrencyLimit: "concurrency_limit" } as const;
 
@@ -86,9 +88,12 @@ const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCom
 const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates", parallelReviews: "parallel_reviews" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, sources, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
+	const { reviewFlows, afterPlanFlows, afterBuildFlows, sources, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
 	// null reviewFlows means "Tower's default set" and must stay SQL NULL; sources are always a list.
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
+	// Same for the hook gates: null = every flow that declares the trigger, [] = none.
+	if (afterPlanFlows !== undefined) db.prepare("UPDATE projects SET after_plan_flows_json = ? WHERE id = ?").run(afterPlanFlows ? JSON.stringify(afterPlanFlows) : null, id);
+	if (afterBuildFlows !== undefined) db.prepare("UPDATE projects SET after_build_flows_json = ? WHERE id = ?").run(afterBuildFlows ? JSON.stringify(afterBuildFlows) : null, id);
 	if (sources !== undefined) db.prepare("UPDATE projects SET sources_json = ? WHERE id = ?").run(JSON.stringify(sources), id);
 	for (const [key, column] of Object.entries(TOGGLE_COLUMNS)) {
 		const value = settings[key as keyof typeof TOGGLE_COLUMNS] as boolean | null | undefined;

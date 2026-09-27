@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null; sources: string[] };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; afterPlanFlows: string[] | null; afterBuildFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null; sources: string[] };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -26,6 +26,8 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
 	const [reviewFlows, setReviewFlows] = useState<string[] | null>(project.reviewFlows);
 	const chosen = reviewFlows ?? flows.data?.defaults ?? [];
+	const [afterPlanFlows, setAfterPlanFlows] = useState<string[] | null>(project.afterPlanFlows);
+	const [afterBuildFlows, setAfterBuildFlows] = useState<string[] | null>(project.afterBuildFlows);
 	const daemonSettings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
 	const [invariantSimulation, setInvariantSimulation] = useState<boolean | null>(project.invariantSimulation);
 	const [subagents, setSubagents] = useState<boolean | null>(project.subagents);
@@ -35,7 +37,7 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [sources, setSources] = useState<string[]>(project.sources ?? []);
 	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, sources }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, afterPlanFlows, afterBuildFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, sources }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
@@ -202,6 +204,50 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 							</span>
 						</label>
 					)}
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">Gates on the way</div>
+					<div className="d">Flows that run as hooks on this project's pipeline, in place of every flow that declares the trigger. A checked flow gates even if it ships manual — this is the no-file-copy promotion. A failing gate stops the card for you, and retrying feeds it what the gate said.</div>
+				</div>
+				<div className="v grid gap-4 sm:grid-cols-2">
+					{(["afterPlanFlows", "afterBuildFlows"] as const).map((phase) => {
+						const selected = phase === "afterPlanFlows" ? afterPlanFlows : afterBuildFlows;
+						const set = phase === "afterPlanFlows" ? setAfterPlanFlows : setAfterBuildFlows;
+						const list = selected ?? [];
+						return (
+							<fieldset key={phase} className="flex flex-col gap-2">
+								<legend className="text-[14px] font-semibold">{phase === "afterPlanFlows" ? "After the plan passes" : "After the build passes"}</legend>
+								{flows.data?.flows.map((flow) => (
+									<label key={flow.name} className="flex cursor-pointer items-start gap-2 text-[14px]">
+										<input
+											type="checkbox"
+											className="mt-1 size-4 accent-[var(--primary)]"
+											checked={list.includes(flow.name)}
+											onChange={(event) =>
+												set(event.target.checked ? [...list, flow.name] : list.filter((name) => name !== flow.name))
+											}
+										/>
+										<span>
+											<span className="font-semibold">{flow.title}</span>
+											<span className="block text-[13px] text-slate">{flow.description}</span>
+										</span>
+									</label>
+								))}
+								{!flows.data && <span className="hint">Loading the available flows…</span>}
+								<label className="flex cursor-pointer items-center gap-2 text-[14px]">
+									<input
+										type="checkbox"
+										className="size-4 accent-[var(--primary)]"
+										checked={selected === null}
+										onChange={(event) => set(event.target.checked ? null : [])}
+									/>
+									<span className="text-[13px] text-slate">Tower default — every flow that declares this trigger runs.</span>
+								</label>
+							</fieldset>
+						);
+					})}
 				</div>
 			</div>
 			<div className="setting">

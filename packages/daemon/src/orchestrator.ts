@@ -402,9 +402,13 @@ export class Orchestrator {
 		return this.triggeredFlows("after-tests");
 	}
 
-	/** The flows that run at a lifecycle moment, whatever their source directory. Acceptance gates run only where opted in. */
+	/** The flows that run at a lifecycle moment, whatever their source directory. A project's own hook list, when set, replaces the trigger entirely; acceptance gates run only where opted in. */
 	private triggeredFlows(trigger: FlowTrigger, projectId?: string): string[] {
 		const project = projectId ? getProject(this.deps.db, projectId) : null;
+		// A project that chose its gate list runs exactly that — the names were validated against
+		// known flows when the list was saved, so an explicit list never quietly widens.
+		const chosen = trigger === "after-plan" ? project?.afterPlanFlows : trigger === "after-build" ? project?.afterBuildFlows : null;
+		if (chosen !== null && chosen !== undefined) return [...chosen];
 		return flowsTriggered(loadFlows(this.deps.config), trigger)
 			.filter((flow) => this.flowAllowed(flow, project))
 			.map((flow) => flow.name);

@@ -84,6 +84,54 @@ describe("the sdlc flow suite", () => {
 	});
 });
 
+describe("per-project hook gates", () => {
+	async function addCard(projectId: string, title = "Add retry with backoff"): Promise<{ id: string }> {
+		return (await h.api("POST", "/api/cards", { projectId, title, brief: "5xx responses should be retried." })).body;
+	}
+
+	async function approvePlanGate(cardId: string): Promise<void> {
+		const detail = (await h.api("GET", `/api/cards/${cardId}`)).body;
+		const gate = detail.gates.find((gate: { status: string }) => gate.status === "pending");
+		if (gate) await h.api("POST", `/api/cards/${cardId}/gates/${gate.id}`, { decision: "approve", feedback: "" });
+		await h.daemon.whenIdle();
+	}
+
+	it("a project runs exactly the flows it names at each gate, and validation refuses ghosts", async () => {
+		h = await bootHarness(scriptedFlows(), ENV);
+		const project = (await h.api("POST", "/api/projects", { repoPath: h.repo })).body;
+		const patched = await h.api("PATCH", `/api/projects/${project.id}`, { afterPlanFlows: ["threat-model"], afterBuildFlows: ["stability-check"] });
+		expect(patched.status).toBe(200);
+		expect(patched.body).toMatchObject({ afterPlanFlows: ["threat-model"], afterBuildFlows: ["stability-check"] });
+		expect((await h.api("PATCH", `/api/projects/${project.id}`, { afterPlanFlows: ["ghost"] })).status).toBe(400);
+
+		// After the plan: the named gate runs between the plan and its approval.
+		const planned = await addCard(project.id);
+		await h.api("POST", `/api/cards/${planned.id}/enqueue`);
+		await h.daemon.whenIdle();
+		let detail = (await h.api("GET", `/api/cards/${planned.id}`)).body;
+		expect(detail.runs.find((run: { id: string }) => run.id.startsWith(`c${planned.id}-threat-model-`))).toBeTruthy();
+		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+
+		// After the build: the named gate runs, passes, and the card moves on to testing.
+		const built = await addCard(project.id, "Add request timeouts");
+		await h.api("POST", `/api/cards/${built.id}/enqueue`);
+		await h.daemon.whenIdle();
+		await approvePlanGate(built.id);
+		detail = (await h.api("GET", `/api/cards/${built.id}`)).body;
+		expect(detail.runs.find((run: { id: string }) => run.id.startsWith(`c${built.id}-stability-check-`))).toMatchObject({ resultStatus: "pass" });
+		expect(detail.card.stage).not.toBe("building");
+
+		// An empty list is the off switch: no gate runs at all.
+		await h.api("PATCH", `/api/projects/${project.id}`, { afterPlanFlows: [] });
+		const quiet = await addCard(project.id, "Rename a label");
+		await h.api("POST", `/api/cards/${quiet.id}/enqueue`);
+		await h.daemon.whenIdle();
+		detail = (await h.api("GET", `/api/cards/${quiet.id}`)).body;
+		expect(detail.runs.some((run: { id: string }) => run.id.includes("threat-model"))).toBe(false);
+		expect(detail.card).toMatchObject({ stage: "planning", status: "awaiting_gate" });
+	});
+});
+
 /** One scripted session per flow step that matters here: reports land, verdicts come home. */
 function scriptedFlows(): FakeScript {
 	const turn = (label: string, verdict: "pass" | "fail" = "pass"): FakeTurn[] => [

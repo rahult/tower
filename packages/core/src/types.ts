@@ -49,6 +49,9 @@ export interface Project {
 	stageConfig: StageConfigOverrides;
 	/** Review flows run after tests pass. null = Tower's default set; [] = none. */
 	reviewFlows: string[] | null;
+	/** Exactly which flows gate after the plan and after the build. null = every flow that declares the trigger; [] = none. */
+	afterPlanFlows: string[] | null;
+	afterBuildFlows: string[] | null;
 	/** Invariant simulation in planning and testing. null = Tower's default. */
 	invariantSimulation: boolean | null;
 	/** Parallel sub-agents: scouts and stream crews fanned out from the plan. null = Tower's default. */

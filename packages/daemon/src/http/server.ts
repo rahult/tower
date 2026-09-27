@@ -162,6 +162,8 @@ export function createApp(deps: AppDeps): Hono {
 			concurrencyLimit: 1,
 			stageConfig: {},
 			reviewFlows: null,
+			afterPlanFlows: null,
+			afterBuildFlows: null,
 			invariantSimulation: null,
 			subagents: null,
 			understandBeforePlan: null,
@@ -322,6 +324,15 @@ export function createApp(deps: AppDeps): Hono {
 			if (unknown.length > 0) throw new HttpError(400, `There is no flow called ${unknown.map((name) => `"${name}"`).join(", ")}. Known flows: ${[...known].join(", ")}`);
 			settings.reviewFlows = body.reviewFlows as string[] | null;
 		}
+		// The hook gates take the same shape: null = every flow that declares the trigger, [] = none.
+		for (const key of ["afterPlanFlows", "afterBuildFlows"] as const) {
+			if (body[key] === undefined) continue;
+			if (body[key] !== null && !(Array.isArray(body[key]) && (body[key] as unknown[]).every((name) => typeof name === "string"))) throw new HttpError(400, `"${key}" must be a list of flow names, or null for the default`);
+			const known = new Set(loadFlows(config).map((flow) => flow.name));
+			const unknown = ((body[key] as string[] | null) ?? []).filter((name) => !known.has(name));
+			if (unknown.length > 0) throw new HttpError(400, `There is no flow called ${unknown.map((name) => `"${name}"`).join(", ")}. Known flows: ${[...known].join(", ")}`);
+			settings[key] = body[key] as string[] | null;
+		}
 		if (body.sources !== undefined) {
 			// The project's source tray: repository paths or URLs research steps read before the network.
 			if (!Array.isArray(body.sources) || body.sources.some((source) => typeof source !== "string")) throw new HttpError(400, '"sources" must be a list of repository paths or URLs');
@@ -452,6 +463,8 @@ export function createApp(deps: AppDeps): Hono {
 			concurrencyLimit: 1,
 			stageConfig: {},
 			reviewFlows: null,
+			afterPlanFlows: null,
+			afterBuildFlows: null,
 			invariantSimulation: null,
 			subagents: null,
 			// Nothing exists yet, so there is no system to understand first; a manifest that carries the

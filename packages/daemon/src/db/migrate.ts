@@ -188,6 +188,12 @@ const MIGRATIONS: string[] = [
 	-- Which research step is in flight (survey or brief), so the lane can show progress, not just "running".
 	ALTER TABLE research_questions ADD COLUMN step TEXT;
 	`,
+	`
+	-- Exactly which flows gate after the plan and after the build, per project. NULL means Tower's
+	-- default (every flow that declares the trigger); [] means none.
+	ALTER TABLE projects ADD COLUMN after_plan_flows_json TEXT;
+	ALTER TABLE projects ADD COLUMN after_build_flows_json TEXT;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */
