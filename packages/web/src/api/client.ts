@@ -78,12 +78,39 @@ export interface ModelCheck {
 	ms: number;
 }
 
+/** One node of a flow: a command gate ("run") or an agent session (prompt file, inline "text", skill, agent role). */
+export interface FlowStepInfo {
+	name: string;
+	prompt?: string;
+	text?: string;
+	skill?: string;
+	agent?: string;
+	run?: string;
+	expect?: "pass" | "note";
+	timeoutSec?: number;
+	task?: string;
+	model?: string;
+	thinking?: string;
+	access?: "read-only" | "read-and-run" | "write" | "probe";
+	/** Where the walk goes on each verdict; a missing key falls through to the next step in file order. */
+	on?: Partial<Record<"pass" | "fail", string>>;
+	maxRuns?: number;
+}
+
+/** A flow: a small state machine of deterministic and agent steps. */
 export interface FlowInfo {
 	name: string;
 	title: string;
 	description: string;
 	/** When the flow runs: manual, and any lifecycle hooks it has attached itself to. */
 	when: string[];
+	intervalHours?: number;
+	steps: FlowStepInfo[];
+	start?: string;
+	/** The editor's node positions; the runner never reads it. */
+	layout?: Record<string, { x: number; y: number }>;
+	/** Whether the file is Tower's own or the person's (<home>/flows — an override counts as theirs). */
+	source?: "shipped" | "custom";
 }
 
 export interface UsageRow {
@@ -185,6 +212,9 @@ export const api = {
 	card: (id: string) => request<CardDetail>("GET", `/api/cards/${id}`),
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
 	flows: () => request<{ flows: FlowInfo[]; defaults: string[] }>("GET", "/api/flows"),
+	saveFlow: (flow: FlowInfo) => request<{ flow: FlowInfo; overridden: boolean }>("POST", "/api/flows", { flow }),
+	deleteFlow: (name: string) => request<{ ok: true }>("DELETE", `/api/flows/${encodeURIComponent(name)}`),
+	composeFlow: (cardId: string) => request<{ draft: FlowInfo }>("POST", `/api/cards/${cardId}/compose-flow`, {}),
 	dirList: (path?: string) => request<DirListing>("GET", `/api/fs/dirs${path ? `?path=${encodeURIComponent(path)}` : ""}`),
 	suggestCommands: (projectId: string) => request<CommandSuggestions>("POST", `/api/projects/${projectId}/suggest-commands`),
 	planToBacklog: (projectId: string, body: { plan?: string; cardId?: string }) => request<{ cards: PlanCard[] }>("POST", `/api/projects/${projectId}/plan-to-backlog`, body),

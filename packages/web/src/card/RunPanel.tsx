@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import type { Project } from "@tower/core";
 import { type Preview, api } from "../api/client.ts";
+import { ComposeDialog } from "../flows/ComposeDialog.tsx";
 import { button, field, monoField } from "../ui.ts";
 
 const KINDS = [
@@ -36,6 +37,7 @@ export function RunPanel({ cardId, project, hasWorktree, bench, busy, onStarted 
 	const [access, setAccess] = useState("read-only");
 	const flows = useQuery({ queryKey: ["flows"], queryFn: api.flows });
 	const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
+	const [composing, setComposing] = useState(false);
 	const flowName = name || flows.data?.flows[0]?.name || "";
 	// Without a worktree only read-only flows run — everything else waits for the card to start.
 	const kinds = hasWorktree ? KINDS : KINDS.filter((option) => option.kind === "flow");
@@ -138,17 +140,22 @@ export function RunPanel({ cardId, project, hasWorktree, bench, busy, onStarted 
 			{activeKind === "flow" ? (
 				<label className="block font-semibold">
 					Flow
-					<select value={flowName} onChange={(event) => setName(event.target.value)} className={`mt-1 ${field}`}>
-						{flows.data?.flows.map((flow) => {
-							const hooks = flow.when.filter((trigger) => trigger !== "manual").map((trigger) => TRIGGER_LABEL[trigger] ?? trigger);
-							return (
-								<option key={flow.name} value={flow.name}>
-									{flow.title}
-									{hooks.length > 0 ? ` — runs ${hooks.join(" and ")}` : ""}
-								</option>
-							);
-						})}
-					</select>
+					<div className="mt-1 flex gap-2">
+						<select value={flowName} onChange={(event) => setName(event.target.value)} className={field}>
+							{flows.data?.flows.map((flow) => {
+								const hooks = flow.when.filter((trigger) => trigger !== "manual").map((trigger) => TRIGGER_LABEL[trigger] ?? trigger);
+								return (
+									<option key={flow.name} value={flow.name}>
+										{flow.title}
+										{hooks.length > 0 ? ` — runs ${hooks.join(" and ")}` : ""}
+									</option>
+								);
+							})}
+						</select>
+						<button type="button" className={`${button.quiet} shrink-0`} onClick={() => setComposing(true)} title="An agent designs a flow for this task; you confirm it before it saves">
+							Compose…
+						</button>
+					</div>
 					<span className="mt-1 block text-[13px] font-normal text-slate">{flows.data?.flows.find((flow) => flow.name === flowName)?.description}</span>
 				</label>
 			) : (
@@ -197,6 +204,16 @@ export function RunPanel({ cardId, project, hasWorktree, bench, busy, onStarted 
 				{busy && <span className="text-[13px] text-slate">Something is already running for this card.</span>}
 				{run.error && <span className="text-[14px] text-danger">{run.error.message}</span>}
 			</div>
+			{composing && (
+				<ComposeDialog
+					pickedCardId={cardId}
+					onClose={() => setComposing(false)}
+					onSaved={() => {
+						setComposing(false);
+						refreshCard();
+					}}
+				/>
+			)}
 		</form>
 	);
 }

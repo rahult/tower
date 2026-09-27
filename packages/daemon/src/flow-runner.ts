@@ -7,7 +7,7 @@ import { getCard } from "./db/repo-cards.ts";
 import { getProject } from "./db/repo-projects.ts";
 import { getRun, insertRun, listRunsForCard, updateRun } from "./db/repo-runs.ts";
 import type { Bus } from "./events/bus.ts";
-import { type Flow, type FlowStep, loadFlows, readAgentFile, runsOnBacklogCard, toolsFor } from "./flows.ts";
+import { DEFAULT_MAX_NODE_RUNS, type Flow, type FlowStep, loadFlows, nextStep, readAgentFile, runsOnBacklogCard, toolsFor } from "./flows.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { CustomRun, RunOutcome, StageRunner } from "./stage-runner.ts";
 import { runCommand } from "./verifier.ts";
@@ -86,7 +86,15 @@ export class FlowRunner {
 		return { kind: "settled", stage: "testing", result: "pass", summary: outcomes.map((outcome) => (outcome.kind === "settled" ? outcome.summary : "")).filter(Boolean).join(" · "), hasQuestions: false };
 	}
 
-	/** One flow, start to finish: its steps in order, its own verdict. */
+	/**
+	 * One flow, start to finish: a walk of its graph. Each node runs, then its verdict picks the next
+	 * node — an explicit edge, else the next step in file order, else the flow ends with that verdict.
+	 * A crash or abort stops early. A deterministic step that fails with no `on.fail` edge also stops
+	 * the flow — a failed gate says the work is not worth the next step — while an agent's "fail"
+	 * verdict is a finding, not a crash, so the walk continues. A node run past its `maxRuns` fails the
+	 * flow: a repair loop has to be able to lose. `feedback` carries what a previous failed run of this
+	 * hook said, so the rerun's agent steps fix the cause instead of repeating it.
+	 */
 	private async runOneFlow(cardId: string, name: string, feedback?: string, shared = false): Promise<RunOutcome> {
 		const flow = this.flow(name);
 		// A card with no worktree (research on a backlog card) may only run flows that touch no code.
@@ -95,14 +103,24 @@ export class FlowRunner {
 			throw new Error(`"${name}" runs commands or changes code, so it needs the card's worktree — start the card first.`);
 		}
 		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
-		for (const step of flow.steps) {
+		const visits = new Map<string, number>();
+		let step: FlowStep | null = flow.start ? (flow.steps.find((candidate) => candidate.name === flow.start) ?? null) : (flow.steps[0] ?? null);
+		while (step) {
+			const run = (visits.get(step.name) ?? 0) + 1;
+			visits.set(step.name, run);
+			const cap = step.maxRuns ?? DEFAULT_MAX_NODE_RUNS;
+			if (run > cap) {
+				return { kind: "settled", stage: "testing", result: "fail", summary: `"${step.name}" ran ${run - 1} times without passing — stopping the loop.`, hasQuestions: false };
+			}
 			last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback, shared }));
 			if (last.kind !== "settled") return last;
-			// A step that stopped to ask has parked the work on a decision: later steps must not run past
+			// A step that stopped to ask has parked the work on a decision: the walk must not run past
 			// it, or the questions dangle while the flow reports success (observed live: a red gate
 			// "passed" while the spec writer waited for an answer).
 			if (last.result === "blocked" && last.hasQuestions) return last;
-			if (step.run !== undefined && last.result !== "pass") return last;
+			// The old stop-on-failed-gate rule, skipped only where an edge says where failure goes.
+			if (step.run !== undefined && last.result === "fail" && !step.on?.fail) return last;
+			step = nextStep(flow, step, last.result === "fail" ? "fail" : "pass");
 		}
 		return last;
 	}
@@ -273,12 +291,15 @@ export class FlowRunner {
 		if (existsSync(shipped)) return readFileSync(shipped, "utf8");
 		return readFileSync(join(config.home, ...parts), "utf8");
 	};
-		// A flow step names a prompt file; an ad hoc request carries the text itself.
-		const template = reportPath ? read("flows", step.prompt as string) : (step.prompt as string);
+		// A flow step names a prompt file, or carries its instructions inline ("text"); an ad hoc request
+		// carries the text itself. Inline steps get the result contract appended — they have no template
+		// to include it, and without it their verdict never lands.
+		const template = step.text !== undefined || !reportPath ? ((step.text ?? step.prompt) as string) : read("flows", step.prompt as string);
 		if (!reportPath) return template;
 		const resultContract = read("partials", "stage-result-contract.md");
+		const body = step.text !== undefined ? `${template}\n\n${resultContract.trim()}` : template;
 		return renderPrompt(
-			template,
+			body,
 			{
 				title: card.title,
 				brief: card.brief || "(no further description)",

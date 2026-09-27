@@ -3,7 +3,7 @@
  * every state. Run: node packages/daemon/test/demo.ts   then open http://127.0.0.1:4720
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { STAGE_RESULT_FILE } from "@tower/core";
@@ -293,6 +293,46 @@ const driver = new FakeSessionDriver((spec) => {
 	if (spec.sessionId.includes("-scout-")) return [scoutTurn()];
 	if (spec.sessionId.includes("-ws-")) return [streamBuilderTurn()];
 	if (spec.sessionId.includes("-integrator")) return [integratorTurn()];
+	// The flow composer: a drafted state machine comes back as ONE JSON object, the way a real reply would.
+	if (spec.sessionId.startsWith("flow-compose"))
+		return [
+			{
+				events: [{ type: "message", message: { role: "assistant", text: JSON.stringify({
+					name: "release-check",
+					title: "Release check",
+					description: "A reviewer reads the diff, the suite proves it, and a failed gate gets one repair before it stops the line.",
+					when: ["manual"],
+					start: "review",
+					steps: [
+						{ name: "review", text: "Read the diff on this branch for release blockers: unfinished TODOs, swallowed errors, missing validation. Report what you find.", access: "read-and-run", on: { pass: "suite" } },
+						{ name: "suite", run: "npm test --silent", on: { pass: "ship", fail: "mend" } },
+						{ name: "mend", text: "The suite failed. Fix the smallest cause and report what broke.", access: "write", maxRuns: 1, on: { pass: "suite" } },
+						{ name: "ship", run: "echo ready", expect: "note" },
+					],
+				}), thinking: "", toolCalls: [] } }],
+			},
+		];
+	// The harden flow's repair step: the agent writes its fix and reports a pass.
+	if (spec.sessionId.includes("harden-repair"))
+		return [
+			{
+				events: [{ type: "message", message: { role: "assistant", text: "Repaired.", thinking: "", toolCalls: [] } }],
+				effect: ({ spec }) => {
+					appendFileSync(join(spec.cwd, "REPAIRS.md"), "- hardened by the repair step\n");
+					writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Repair applied." }));
+				},
+			},
+		];
+	if (spec.sessionId.includes("harden-scan") || spec.sessionId.includes("harden-review"))
+		return [
+			{
+				events: [{ type: "message", message: { role: "assistant", text: "Scanned.", thinking: "", toolCalls: [] } }],
+				effect: ({ spec }) => {
+					appendFileSync(join(spec.cwd, "REPAIRS.md"), "- scan noted a brittleness and adjusted the guard\n");
+					writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Scan complete." }));
+				},
+			},
+		];
 	// The deep-research flow's two steps, so exploring-before-committing is scriptable on the demo board.
 	if (spec.sessionId.includes("deep-research-survey")) return [researchTurn("Survey notes")];
 	if (spec.sessionId.includes("deep-research-synthesize")) return [researchTurn("Research brief")];
@@ -398,6 +438,33 @@ writeFileSync(
 			description: "Records the shape of every build before it is tested — informational, it never blocks.",
 			when: ["after-build"],
 			steps: [{ name: "shape", run: "git log -1 --stat --oneline | tail -4", expect: "note", timeoutSec: 30 }],
+		},
+		null,
+		"\t",
+	) + "\n",
+);
+// A branching flow: the gate's fail edge routes to a repair agent whose pass returns to the gate,
+// capped at two repairs — a state machine, not a pipeline. The editor draws the loop.
+writeFileSync(
+	join(root, "home", "flows", "harden.flow.json"),
+	JSON.stringify(
+		{
+			name: "harden",
+			title: "Harden the diff",
+			description: "An agent hunts for brittleness, a gate proves the fix — the loop runs at most twice before it loses.",
+			when: ["manual"],
+			start: "scan",
+			layout: { scan: { x: 0, y: 118 }, gate: { x: 268, y: 118 }, repair: { x: 536, y: 240 }, done: { x: 536, y: 0 } },
+			steps: [
+				{ name: "scan", text: "Read the diff on this branch. Name the one change most likely to break in production, and fix it directly. Then report.", access: "write", on: { pass: "gate" } },
+				{
+					name: "gate",
+					run: "test -n \"$(git -C {{worktreePath}} status --porcelain)\" || { echo 'the scan changed nothing'; exit 3; }",
+					on: { pass: "done", fail: "repair" },
+				},
+				{ name: "repair", text: "The gate failed. Make the smallest change that lets it pass, then report.", access: "write", maxRuns: 2, on: { pass: "gate" } },
+				{ name: "done", run: "echo hardened", expect: "note" },
+			],
 		},
 		null,
 		"\t",

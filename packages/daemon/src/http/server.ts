@@ -18,7 +18,8 @@ import { addAnnotation, AnnotationError, deleteAnnotation, loadAnnotations, setA
 import { PLAN_CARDS_MAX, splitPlan } from "../plan-splitter.ts";
 import { suggestCommands } from "../project-probe.ts";
 import { type FeedbackKind, feedbackFallbackUrl, fileFeedback } from "../feedback.ts";
-import { flowsTriggered, loadFlows, runsOnBacklogCard } from "../flows.ts";
+import { deleteFlow, flowSource, flowsTriggered, loadFlows, runsOnBacklogCard, saveFlow } from "../flows.ts";
+import { composeFlow } from "../flow-composer.ts";
 import { listArchetypes, scaffoldFromArchetype, targetDir } from "../greenfield.ts";
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
@@ -655,7 +656,49 @@ export function createApp(deps: AppDeps): Hono {
 		const flows = loadFlows(config);
 		// What actually runs after tests: the person's explicit list, or the flows that ask for the trigger.
 		const defaults = config.defaultReviewFlows ?? flowsTriggered(flows, "after-tests").map((flow) => flow.name);
-		return c.json({ flows, defaults });
+		return c.json({ flows: flows.map((flow) => ({ ...flow, source: flowSource(config, flow.name) })), defaults });
+	});
+
+	// Author a flow: validated, then written as the person's own. A shipped name becomes an override —
+	// the file order in loadFlows already gives the person's copy the last word.
+	app.post("/api/flows", async (c) => {
+		const body = (await c.req.json()) as Record<string, unknown>;
+		const text = typeof body.flow === "string" ? body.flow : typeof body.flow === "object" && body.flow !== null ? JSON.stringify(body.flow) : null;
+		if (!text) throw new HttpError(400, 'Send the flow as JSON in a "flow" field — object or string');
+		try {
+			return c.json(saveFlow(config, text), 201);
+		} catch (error) {
+			throw new HttpError(400, error instanceof Error ? error.message : String(error));
+		}
+	});
+
+	app.delete("/api/flows/:name", (c) => {
+		if (!deleteFlow(config, c.req.param("name"))) throw new HttpError(404, "No flow of yours carries that name — a shipped original can only have its override removed");
+		return c.json({ ok: true });
+	});
+
+	// Compose a flow for a task: an agent designs the state machine the task should pass through.
+	// Nothing saves or runs — the draft comes back for the person to confirm first.
+	app.post("/api/cards/:id/compose-flow", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const project = getProject(db, card.projectId);
+		const planFile = join(paths.cardDir(config, card.id), "plan.md");
+		try {
+			const draft = await composeFlow({
+				config,
+				driver,
+				projectName: project?.name ?? "this repository",
+				cardTitle: card.title,
+				brief: card.brief,
+				plan: existsSync(planFile) ? readFileSync(planFile, "utf8") : null,
+				verifyCommand: project?.verifyCommand ?? null,
+				testCommand: project?.testCommand ?? null,
+				readOnly: !card.worktreePath,
+			});
+			return c.json({ draft });
+		} catch (error) {
+			throw new HttpError(400, error instanceof Error ? error.message : String(error));
+		}
 	});
 
 	app.get("/api/usage", (c) => c.json({ byDay: usageBy(db, "day"), byProject: usageBy(db, "project"), byModel: usageBy(db, "model"), byCard: usageBy(db, "card") }));

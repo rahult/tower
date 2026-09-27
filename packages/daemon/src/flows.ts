@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentStage, ThinkingLevel } from "@tower/core";
@@ -20,6 +20,8 @@ export interface FlowStep {
 	name: string;
 	/** Exactly one of these says what the step does. */
 	prompt?: string;
+	/** Inline instructions for an agent step — a model session without a template file. What composed flows use. */
+	text?: string;
 	skill?: string;
 	agent?: string;
 	/** A shell command instead of a model session: deterministic, no spend, the exit code is the verdict. */
@@ -34,7 +36,14 @@ export interface FlowStep {
 	model?: AgentStage | string;
 	thinking?: ThinkingLevel;
 	access?: Access;
+	/** Where the walk goes on each verdict. A missing key falls through to the next step in file order; no next step ends the flow. Absent entirely, the flow is linear. */
+	on?: Partial<Record<StepVerdict, string>>;
+	/** How many times one flow execution may run this node. Default 3 — a repair loop has to be able to fail. */
+	maxRuns?: number;
 }
+
+/** The verdicts an edge can route on. A "blocked" step never takes an edge — it falls through or parks the card. */
+export type StepVerdict = "pass" | "fail";
 
 /** When a flow runs. Manual flows appear in the drawer's Run tab; the others are lifecycle hooks. */
 export type FlowTrigger = "manual" | "after-plan" | "after-build" | "after-tests" | "schedule";
@@ -48,6 +57,10 @@ export interface Flow {
 	/** For scheduled flows: how often to fire, in hours (0 = every tick). Default 24. */
 	intervalHours?: number;
 	steps: FlowStep[];
+	/** Where the walk begins. Default: the first step. */
+	start?: string;
+	/** The editor's node positions. The runner never reads it. */
+	layout?: Record<string, { x: number; y: number }>;
 }
 
 /** Flows shipped with Tower, overridden or extended by the person's own in <home>/flows. */
@@ -76,22 +89,56 @@ export function parseFlow(text: string, source: string): Flow {
 	if (!Array.isArray(when) || when.length === 0 || when.some((trigger) => !TRIGGERS.has(trigger as FlowTrigger))) {
 		throw new Error(`${source}: "when" must be a non-empty list of ${[...TRIGGERS].join(", ")}`);
 	}
+	const names = new Set(raw.steps.map((step) => step.name as string));
 	raw.steps.forEach((step, index) => {
-		const kinds = [step.prompt, step.skill, step.agent, step.run].filter((value) => typeof value === "string" && value !== "");
-		if (kinds.length !== 1) throw new Error(`${source}: step ${index + 1} must have exactly one of "prompt", "skill", "agent" or "run"`);
+		const kinds = [step.prompt, step.text, step.skill, step.agent, step.run].filter((value) => typeof value === "string" && value !== "");
+		if (kinds.length !== 1) throw new Error(`${source}: step ${index + 1} must have exactly one of "prompt", "text", "skill", "agent" or "run"`);
 		if (typeof step.name !== "string" || !/^[a-z0-9][a-z0-9-]*$/.test(step.name)) throw new Error(`${source}: step ${index + 1} needs a "name" of lower-case words joined by dashes`);
 		if (step.access !== undefined && !(step.access in TOOLS)) throw new Error(`${source}: step "${step.name}" has unknown access "${step.access}"`);
 		if (step.expect !== undefined && step.expect !== "pass" && step.expect !== "note") throw new Error(`${source}: step "${step.name}" has unknown expect "${step.expect}" (pass or note)`);
 		if (step.timeoutSec !== undefined && (!Number.isFinite(step.timeoutSec) || step.timeoutSec <= 0)) throw new Error(`${source}: step "${step.name}" needs a positive "timeoutSec"`);
+		if (step.on !== undefined) {
+			const edges = Object.entries(step.on);
+			if (edges.length === 0) throw new Error(`${source}: step "${step.name}" has an empty "on" — drop it, or edge "pass" or "fail" to a step`);
+			for (const [verdict, target] of edges) {
+				if (verdict !== "pass" && verdict !== "fail") throw new Error(`${source}: step "${step.name}" edges on "${verdict}" — only "pass" and "fail" are verdicts`);
+				if (typeof target !== "string" || !names.has(target)) throw new Error(`${source}: step "${step.name}" edges "${verdict}" to "${String(target)}", which is not a step of this flow`);
+			}
+		}
+		if (step.maxRuns !== undefined && (!Number.isInteger(step.maxRuns) || step.maxRuns < 1)) throw new Error(`${source}: step "${step.name}" needs a whole number of at least 1 for "maxRuns"`);
 	});
+	if (raw.start !== undefined && (typeof raw.start !== "string" || !names.has(raw.start))) throw new Error(`${source}: "start" must name a step of this flow`);
 	if (raw.intervalHours !== undefined && (!Number.isFinite(raw.intervalHours) || raw.intervalHours < 0 || raw.intervalHours > 8760)) {
 		throw new Error(`${source}: "intervalHours" must be a number from 0 (every tick) to 8760 (a year)`);
 	}
-	return { name: raw.name, title: raw.title ?? raw.name, description: raw.description ?? "", when: [...new Set(when)], steps: raw.steps, ...(raw.intervalHours !== undefined ? { intervalHours: raw.intervalHours } : {}) };
+	return {
+		name: raw.name,
+		title: raw.title ?? raw.name,
+		description: raw.description ?? "",
+		when: [...new Set(when)],
+		steps: raw.steps,
+		...(raw.start !== undefined ? { start: raw.start } : {}),
+		...(raw.intervalHours !== undefined ? { intervalHours: raw.intervalHours } : {}),
+		...(raw.layout !== undefined ? { layout: raw.layout } : {}),
+	};
 }
 
 /** The flows that run at a lifecycle moment, in file order — deterministic because the names sort them. */
 export const flowsTriggered = (flows: Flow[], trigger: FlowTrigger): Flow[] => flows.filter((flow) => flow.when.includes(trigger));
+
+/** How often a node may run before the walk calls the loop stuck. */
+export const DEFAULT_MAX_NODE_RUNS = 3;
+
+/**
+ * The next node after a verdict: the explicit edge wins, else the next step in file order (a linear
+ * flow), else the flow ends. `blocked` never reaches here — the runner parks the card first.
+ */
+export function nextStep(flow: Flow, step: FlowStep, verdict: StepVerdict): FlowStep | null {
+	const target = step.on?.[verdict];
+	if (target) return flow.steps.find((candidate) => candidate.name === target) ?? null;
+	const index = flow.steps.indexOf(step);
+	return (index >= 0 ? flow.steps[index + 1] : undefined) ?? null;
+}
 
 /**
  * Whether a flow is safe on a card with no worktree (a backlog card): no commands, no writes —
@@ -125,6 +172,29 @@ export function readAgentFile(name: string, env: NodeJS.ProcessEnv = process.env
 			.filter((m): m is RegExpMatchArray => m !== null)
 			.map((m) => [m[1], (m[2] as string).trim().replace(/^["']|["']$/g, "")]),
 	);
-	const tools = fields.tools ? fields.tools.split(",").map((tool: string) => tool.trim().toLowerCase()).filter(Boolean) : undefined;
-	return { model: fields.model || undefined, thinking: (fields.thinking as ThinkingLevel) || undefined, tools, body: (match[2] as string).trim() };
+		const tools = fields.tools ? fields.tools.split(",").map((tool: string) => tool.trim().toLowerCase()).filter(Boolean) : undefined;
+		return { model: fields.model || undefined, thinking: (fields.thinking as ThinkingLevel) || undefined, tools, body: (match[2] as string).trim() };
+}
+
+/** Where a flow's file lives: shipped with Tower, or the person's own (<home>/flows — an override counts as their own). */
+export function flowSource(config: Config, name: string): "shipped" | "custom" {
+	return existsSync(join(config.home, "flows", `${name}.flow.json`)) ? "custom" : "shipped";
+}
+
+/** Validates and writes a flow as the person's own; a shipped name becomes an override. */
+export function saveFlow(config: Config, text: string): { flow: Flow; overridden: boolean } {
+	const flow = parseFlow(text, "the submitted flow");
+	const overridden = existsSync(join(config.flowsDir, `${flow.name}.flow.json`));
+	const dir = join(config.home, "flows");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, `${flow.name}.flow.json`), `${JSON.stringify(flow, null, "\t")}\n`);
+	return { flow, overridden };
+}
+
+/** Removes the person's copy of a flow. A shipped original survives — the override just falls back to it. */
+export function deleteFlow(config: Config, name: string): boolean {
+	const file = join(config.home, "flows", `${name}.flow.json`);
+	if (!existsSync(file)) return false;
+	unlinkSync(file);
+	return true;
 }

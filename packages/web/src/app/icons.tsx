@@ -33,12 +33,13 @@ export function IconSprite() {
 				<symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m14 6-6 6 6 6" /></symbol>
 				<symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6" /></symbol>
 				<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" /></symbol>
+				<symbol id="i-flow" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><path d="M10 6.5h5.5a2 2 0 0 1 2 2V14" /></symbol>
 			</defs>
 		</svg>
 	);
 }
 
-export type IconName = "tower" | "search" | "plus" | "bell" | "sun" | "moon" | "x" | "check" | "back" | "play" | "branch" | "pr" | "issue" | "ext" | "send" | "retry" | "board" | "folder" | "chart" | "focus" | "density" | "density-compact" | "chev-l" | "chev-r" | "spark";
+export type IconName = "tower" | "search" | "plus" | "bell" | "sun" | "moon" | "x" | "check" | "back" | "play" | "branch" | "pr" | "issue" | "ext" | "send" | "retry" | "board" | "folder" | "chart" | "focus" | "density" | "density-compact" | "chev-l" | "chev-r" | "spark" | "flow";
 
 /** A stroke icon from the shared sprite; `className` defaults to the 16px `.icon` size. */
 export function Icon({ name, className = "icon" }: { name: IconName; className?: string }): JSX.Element {

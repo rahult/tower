@@ -2625,3 +2625,435 @@ textarea.input {
 	padding: 0 1px;
 	color: inherit;
 }
+
+/* ============================================================
+   12. Flow studio — the editor for flows as state machines
+   ============================================================ */
+.flow-page {
+	display: flex;
+	flex-direction: column;
+	gap: var(--d-page-gap);
+}
+.page-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--s5);
+	max-width: 1080px;
+	margin: 0 auto;
+	width: 100%;
+}
+.page-head h1 {
+	font-size: var(--fs-h1);
+	font-weight: 510;
+	letter-spacing: -0.02em;
+}
+.page-head .lead {
+	color: var(--muted);
+	max-width: 64ch;
+}
+.flow-wall {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+	gap: var(--s3);
+	max-width: 1080px;
+	margin: 0 auto;
+	width: 100%;
+}
+.flow-wall > li {
+	position: relative;
+}
+.flow-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s2);
+	height: 100%;
+	padding: var(--s4);
+	border: 1px solid var(--rule);
+	border-radius: var(--r-panel);
+	background: var(--sheet);
+	cursor: pointer;
+	transition: border-color var(--t-enter), background var(--t-enter);
+}
+.flow-card:hover {
+	border-color: var(--rule-strong);
+	background: var(--wash);
+}
+.flow-card:focus-visible {
+	outline: none;
+	box-shadow: var(--focus-ring);
+}
+.flow-card header {
+	display: flex;
+	align-items: center;
+	gap: var(--s2);
+}
+.flow-card p {
+	color: var(--muted);
+	font-size: var(--fs-meta);
+	min-height: 3.2em;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.flow-card footer {
+	display: flex;
+	align-items: center;
+	gap: var(--s2);
+	font-size: var(--fs-label);
+	color: var(--muted);
+}
+.flow-card-actions {
+	position: absolute;
+	top: var(--s2);
+	right: var(--s2);
+}
+.chip.yours {
+	background: var(--primary-soft);
+	color: var(--ink);
+}
+.chip.amber {
+	background: var(--caution-soft);
+	color: var(--caution-text);
+}
+.chip.toggle {
+	cursor: pointer;
+	height: auto;
+	padding: 3px var(--s2);
+	user-select: none;
+}
+.chip.toggle input {
+	accent-color: var(--primary);
+	margin: 0;
+}
+.chip.toggle:has(input:checked) {
+	background: var(--primary-soft);
+	color: var(--ink);
+}
+
+/* The one-flow editor: meta in the header, workbench beneath. */
+.flow-editor {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s3);
+	height: 100%;
+	min-height: 0;
+}
+.flow-page:has(.flow-editor) {
+	max-width: none;
+	padding-top: var(--s4);
+}
+.flow-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--s2);
+	flex-wrap: wrap;
+}
+.flow-meta-title {
+	width: 16rem;
+	font-weight: 590;
+}
+.flow-meta-name {
+	width: 12rem;
+}
+.flow-when {
+	display: inline-flex;
+	gap: var(--s1);
+	flex-wrap: wrap;
+}
+.flow-meta-desc input {
+	max-width: 760px;
+}
+.flow-workbench {
+	display: grid;
+	grid-template-columns: 13rem minmax(0, 1fr) 20rem;
+	gap: var(--s3);
+	flex: 1;
+	min-height: 26rem;
+}
+.flow-nodes,
+.flow-insp {
+	border: 1px solid var(--rule);
+	border-radius: var(--r-panel);
+	background: var(--sheet);
+	padding: var(--s3);
+	display: flex;
+	flex-direction: column;
+	gap: var(--s2);
+	overflow-y: auto;
+}
+.flow-nodes > header,
+.flow-insp > header,
+.flow-insp-head {
+	font-size: var(--fs-label);
+	text-transform: uppercase;
+	letter-spacing: var(--track);
+	color: var(--muted);
+}
+.flow-insp-head {
+	display: flex;
+	align-items: center;
+	gap: var(--s2);
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: var(--fs-body);
+	color: var(--ink);
+}
+.flow-node-row {
+	display: flex;
+	align-items: center;
+	gap: var(--s2);
+	width: 100%;
+	padding: 6px var(--s2);
+	border-radius: var(--r-control);
+	text-align: left;
+	font-size: var(--fs-meta);
+	color: var(--ink);
+}
+.flow-node-row:hover {
+	background: var(--wash);
+}
+.flow-node-row.on {
+	background: var(--primary-soft);
+}
+.flow-node-row.start .name::before {
+	content: "▸ ";
+	color: var(--ok);
+}
+.flow-node-row .name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.glyph {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 1.7em;
+	flex-shrink: 0;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	border-radius: 4px;
+	background: var(--wash);
+	color: var(--muted);
+}
+.glyph.command {
+	background: var(--wash);
+	color: var(--ink);
+}
+.glyph.text,
+.glyph.prompt,
+.glyph.skill,
+.glyph.agent {
+	background: var(--primary-soft);
+	color: var(--primary-hover);
+}
+.flow-board {
+	border: 1px solid var(--rule);
+	border-radius: var(--r-panel);
+	background: var(--paper);
+	overflow: auto;
+}
+.flow-canvas {
+	display: block;
+}
+.flow-hint {
+	font-size: var(--fs-label);
+	color: var(--caution-text);
+}
+
+/* SVG pieces */
+.flow-node {
+	cursor: grab;
+}
+.flow-node:active {
+	cursor: grabbing;
+}
+.flow-node > rect {
+	fill: var(--sheet);
+	stroke: var(--rule-strong);
+	stroke-width: 1;
+}
+.flow-node.command > rect {
+	fill: var(--sheet);
+}
+.flow-node.text > rect,
+.flow-node.prompt > rect,
+.flow-node.skill > rect,
+.flow-node.agent > rect {
+	fill: var(--primary-soft);
+	stroke: var(--primary);
+}
+.flow-node.selected > rect {
+	stroke: var(--primary-hover);
+	stroke-width: 2;
+}
+.flow-node.broken > rect {
+	stroke: var(--danger);
+	stroke-dasharray: 4 3;
+}
+.flow-node-name {
+	fill: var(--ink);
+	font-size: 14px;
+	font-weight: 590;
+}
+.flow-node-sub {
+	fill: var(--muted);
+	font-size: 11px;
+}
+.flow-node-glyph text {
+	fill: var(--muted);
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+.flow-node-glyph.command text {
+	fill: var(--ink);
+}
+.flow-node-glyph.text text,
+.flow-node-glyph.prompt text,
+.flow-node-glyph.skill text,
+.flow-node-glyph.agent text {
+	fill: var(--primary-hover);
+}
+.flow-node-start {
+	fill: var(--ok);
+}
+.flow-node-cap {
+	fill: var(--wash);
+	stroke: var(--rule-strong);
+}
+.flow-node-cap-text {
+	fill: var(--muted);
+	font-size: 10px;
+	font-family: var(--font-mono);
+}
+.flow-edge path,
+.flow-edge {
+	fill: none;
+}
+.flow-edge > path {
+	stroke: var(--rule-strong);
+	stroke-width: 1.5;
+}
+.flow-edge.implicit > path {
+	stroke: var(--rule-strong);
+	stroke-width: 1;
+	opacity: 0.55;
+}
+.flow-edge.fail > path {
+	stroke: var(--danger);
+	stroke-dasharray: 5 4;
+}
+.flow-arrow {
+	stroke-width: 1.5;
+	fill: none;
+}
+.flow-arrow.pass {
+	stroke: var(--rule-strong);
+}
+.flow-arrow.fail {
+	stroke: var(--danger);
+}
+.flow-edge-chip {
+	fill: var(--wash);
+	stroke: var(--rule-strong);
+}
+.flow-edge-chip.fail {
+	fill: var(--danger-soft);
+	stroke: var(--danger);
+}
+.flow-edge-text {
+	fill: var(--muted);
+	font-size: 10px;
+	font-family: var(--font-mono);
+}
+.flow-edge-text.fail {
+	fill: var(--danger);
+}
+.flow-wire {
+	fill: none;
+	stroke: var(--primary-hover);
+	stroke-width: 1.5;
+	stroke-dasharray: 4 3;
+}
+.flow-port {
+	cursor: crosshair;
+}
+.flow-port-hit {
+	fill: transparent;
+}
+.flow-port-dot.pass {
+	fill: var(--ok);
+}
+.flow-port-dot.fail {
+	fill: var(--danger);
+}
+
+/* The inspector's fields */
+.flow-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: var(--fs-meta);
+}
+.flow-field > span {
+	font-size: var(--fs-label);
+	color: var(--muted);
+}
+.flow-pair {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: var(--s2);
+}
+.flow-kinds {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--s1);
+	border: 0;
+	padding: 0;
+}
+.flow-text {
+	resize: vertical;
+	font-size: var(--fs-meta);
+}
+.flow-json {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s2);
+	flex: 1;
+	min-height: 24rem;
+}
+.flow-json textarea {
+	resize: none;
+}
+
+/* The composer's dialog */
+.flow-compose-pick,
+.flow-compose-draft {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s3);
+}
+.flow-compose-graph {
+	border: 1px solid var(--rule);
+	border-radius: var(--r-panel);
+	background: var(--paper);
+	overflow: auto;
+	max-height: 20rem;
+}
+.flow-compose-graph svg {
+	max-width: 100%;
+	height: auto;
+}
+.flow-compose-steps {
+	display: flex;
+	flex-direction: column;
+	gap: var(--s1);
+	font-size: var(--fs-meta);
+}
+.flow-compose-steps li {
+	display: flex;
+	align-items: center;
+	gap: var(--s2);
+}

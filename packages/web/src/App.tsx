@@ -16,6 +16,7 @@ import { ToastHost, toast } from "./app/toasts.tsx";
 import { Board } from "./board/Board.tsx";
 import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
+import { Flows } from "./flows/Flows.tsx";
 import { AddProject } from "./projects/AddProject.tsx";
 import { NewFromIdea } from "./projects/NewFromIdea.tsx";
 import { PlanToBacklog } from "./projects/PlanToBacklog.tsx";
@@ -27,9 +28,9 @@ import { ModelSettings } from "./settings/ModelSettings.tsx";
 import { Usage } from "./usage/Usage.tsx";
 import { useDensity, usePrefersDark, useTheme, type Theme } from "./theme.ts";
 
-const VIEW_ORDER: View[] = ["focus", "board", "projects", "usage", "review", "research"];
-const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", usage: "chart", review: "check", research: "spark" } as const;
-const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", usage: "Usage", review: "Review", research: "Research" };
+const VIEW_ORDER: View[] = ["focus", "board", "projects", "flows", "usage", "review", "research"];
+const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", flows: "flow", usage: "chart", review: "check", research: "spark" } as const;
+const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", flows: "Flows", usage: "Usage", review: "Review", research: "Research" };
 
 const FILTER_KEY = "tower-filter";
 
@@ -329,6 +330,7 @@ export function App() {
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
 						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenProject={(project) => setEditing({ project })} />}
+						{board.data && route.view === "flows" && <Flows cards={cards} onOpenCard={openCard} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 						{board.data && route.view === "review" && <PassThrough gates={board.data.gates} projects={projects} cards={cards} onOpen={openCard} />}
 						{board.data && route.view === "research" && <Research projects={projects} onOpenCard={openCard} />}
