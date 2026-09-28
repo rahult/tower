@@ -24,7 +24,8 @@ import { listArchetypes, scaffoldFromArchetype, targetDir } from "../greenfield.
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { listRemotes } from "../pr/gh.ts";
-import { ConflictError, type Orchestrator } from "../orchestrator.ts";
+import { type Orchestrator } from "../orchestrator.ts";
+import { ConflictError } from "../errors.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
 import type { ResearchRunner } from "../research.ts";
 import { checkModels } from "../preflight.ts";

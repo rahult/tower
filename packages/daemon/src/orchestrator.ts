@@ -33,6 +33,7 @@ import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
 import { type Issue, closeIssue, commentOnIssue, createPullRequest, listIssues, listRemotes, originSlug, pushBranch, viewPullRequest } from "./pr/gh.ts";
 import { feedbackWithAnnotations } from "./annotations.ts";
 import { learnFromCard } from "./memory-proposals.ts";
+import { ConflictError } from "./errors.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
 import { modelState, promoteSystemModel, headCommit } from "./system-model.ts";
@@ -47,8 +48,6 @@ export interface OrchestratorDeps {
 	flows: FlowRunner;
 }
 
-/** The request is well-formed but conflicts with the card's current state. */
-export class ConflictError extends Error {}
 
 const verifyOutputFile = (attempt: number) => `verify-output-${attempt}.txt`;
 

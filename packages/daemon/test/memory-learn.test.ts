@@ -167,6 +167,9 @@ describe("the memory graph learns from finished cards", () => {
 
 		// Nothing pending, and the decisions survive a restart.
 		expect((await h.api("GET", `/api/projects/${project.id}/proposals`)).body.proposals.filter((p: { status: string }) => p.status === "pending")).toHaveLength(0);
+		// A second decision on a decided proposal conflicts instead of silently re-applying.
+		const again = await h.api("POST", `/api/projects/${project.id}/proposals/${byAction.add_node}/decide`, { decision: "accept" });
+		expect(again.status).toBe(409);
 		await h.restart(script());
 		const persisted = (await h.api("GET", `/api/projects/${project.id}/proposals`)).body;
 		expect(persisted.proposals.filter((p: { status: string }) => p.status === "accepted")).toHaveLength(3);
@@ -188,6 +191,30 @@ describe("the memory graph learns from finished cards", () => {
 		expect(result.proposal.status).toBe("rejected");
 		expect(result.applied).toBe(false);
 		expect(graphFile(project.id).nodes.some((n: { id: string }) => n.id === "gotcha:toggle-mutates-in-place")).toBe(false);
+	});
+
+	it("an accept the graph refuses stays pending; the human rejects it there", async () => {
+		const ghost = JSON.stringify({ proposals: [{ action: "update_node", kind: "invariant", name: "INV-9", summary: "The graph never held this one.", evidence: "a guess, not a finding" }] });
+		h = await bootHarness(script(ghost), ENV);
+		seedTodoApp();
+		const { project, card } = await toFeedbackGate();
+		const gate = (await h.api("GET", `/api/cards/${card.id}`)).body.gates.find((g: { status: string }) => g.status === "pending");
+		await h.api("POST", `/api/cards/${card.id}/gates/${gate.id}`, { decision: "approve" });
+		await h.daemon.whenIdle();
+
+		const { proposals } = await waitForPending(project.id, 1);
+		const refused = (await h.api("POST", `/api/projects/${project.id}/proposals/${proposals[0]!.id}/decide`, { decision: "accept" })).body;
+		expect(refused.applied).toBe(false);
+		expect(refused.reason).toContain("not found");
+		// Not applied, so not decided: it waits for a real decision instead of half-entering the graph.
+		let list = (await h.api("GET", `/api/projects/${project.id}/proposals`)).body;
+		expect(list.proposals[0]).toMatchObject({ status: "pending" });
+		expect(graphFile(project.id).nodes.some((n: { id: string }) => n.id === "invariant:inv-9")).toBe(false);
+
+		await h.api("POST", `/api/projects/${project.id}/proposals/${proposals[0]!.id}/decide`, { decision: "reject" });
+		list = (await h.api("GET", `/api/projects/${project.id}/proposals`)).body;
+		expect(list.proposals[0].status).toBe("rejected");
+		expect((await h.api("POST", `/api/projects/${project.id}/proposals/${proposals[0]!.id}/decide`, { decision: "reject" })).status).toBe(409);
 	});
 
 	it("malformed learn.json never blocks the finish line", async () => {

@@ -98,33 +98,52 @@ export const seedFromMarkdown = (
 	};
 
 	let current: NodeKind | null = null;
-	for (const raw of markdown.split(/\r?\n/)) {
-		const heading = raw.match(/^#{1,3}\s+(.+?)\s*$/);
-		if (heading) {
-			const key = (heading[1] ?? "").trim().toLowerCase().replace(/[:.]+$/, "");
-			current = headingKind[key] ?? null;
-			continue;
-		}
-		if (!current) continue;
-		const item = raw.match(/^[-*]\s+\*\*(.+?)\*\*\s*[—–:\-]\s*(.+)$/) ?? raw.match(/^[-*]\s+(.+)$/);
-		if (!item) continue;
-		const name = (item[1] ?? "").replace(/\*+/g, "").trim();
-		if (!name || name.length > 80) continue;
-		const summary = (item[2] ?? name).trim();
+	const addNode = (rawName: string, rawSummary: string): void => {
+		if (!current) return;
+		const name = rawName.replace(/\*+/g, "").trim();
+		if (!name || name.length > 80) return;
+		const summary = (rawSummary.trim() || name).slice(0, 280);
 		const sourceMatch = summary.match(/`([^`]+:\d+)`/);
 		const key = `${current}:${name.toLowerCase()}`;
-		if (byKey.has(key)) continue;
+		if (byKey.has(key)) return;
 		const node: MemoryNode = {
 			id: slug(current, name),
 			kind: current,
 			name,
-			summary: summary.slice(0, 280),
+			summary,
 			source: sourceMatch?.[1] ?? "seeded from system-model.md",
 			provenance,
 			details: {},
 		};
 		graph.nodes.push(node);
 		byKey.set(key, node);
+	};
+	for (const raw of markdown.split(/\r?\n/)) {
+		const heading = raw.match(/^#{1,3}\s+(.+?)\s*$/);
+		if (heading) {
+			const key = (heading[1] ?? "").trim().toLowerCase().replace(/[:.]+$/, "");
+			// Models number their sections ("2. Domains"); the kind is the last words.
+			const bare = key.replace(/^\d+(\.\d+)*\.?\s+/, "");
+			current = headingKind[key] ?? headingKind[bare] ?? null;
+			continue;
+		}
+		if (!current) continue;
+		const item = raw.match(/^[-*]\s+\*\*(.+?)\*\*\s*[—–:\-]\s*(.+)$/) ?? raw.match(/^[-*]\s+(.+)$/);
+		if (item) {
+			addNode(item[1] ?? "", item[2] ?? "");
+			continue;
+		}
+		// Models often render findings as tables: first cell is the name, the rest is the summary.
+		const row = raw.match(/^\s*\|(.+)\|\s*$/);
+		if (row) {
+			const cells = (row[1] ?? "")
+				.split("|")
+				.map((cell) => cell.trim())
+				.filter((cell) => cell !== "" && !/^:?-{2,}:?$/.test(cell));
+			// A table's header row names its columns, not a node — skip the usual labels.
+			if (cells.length >= 2 && /^(domain|actor|flow|entity|state|invariant|gotcha|risk|failure mode|name|kind|carrier|responsibility|code path)$/i.test(cells[0]!)) continue;
+			if (cells.length >= 2) addNode(cells[0]!, cells.slice(1).join(" — "));
+		}
 	}
 	return graph;
 };

@@ -11,6 +11,21 @@ describe("parseStageResult", () => {
 	});
 
 	it.each([
+		["done", "pass"],
+		["complete", "pass"],
+		["completed", "pass"],
+		["success", "pass"],
+		["successful", "pass"],
+		["passed", "pass"],
+		["ok", "pass"],
+		["Done", "pass"],
+		["failed", "fail"],
+		["failure", "fail"],
+	])("reads the %j alias as %s", (alias, status) => {
+		expect(parseStageResult(`{"status":"${alias}","summary":"ok"}`)).toEqual({ ok: true, result: { status, summary: "ok" } });
+	});
+
+	it.each([
 		[null, "was not written"],
 		["not json", "not valid JSON"],
 		["[]", "invalid status"],

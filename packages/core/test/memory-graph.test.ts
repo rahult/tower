@@ -84,6 +84,32 @@ describe("seedFromMarkdown", () => {
 		const second = seedFromMarkdown(md, "p", { cardId: "c2", commit: "def", now: 2 }, first);
 		expect(second.nodes.length).toBe(first.nodes.length);
 	});
+
+	it("seeds from tables and numbered headings, the shapes models actually write", () => {
+		const tabled = `# System model
+
+## 2. Domains
+
+| Domain | Responsibility | Carrier |
+|---|---|---|
+| Todo state | Hold todos in memory | \`src/store.js\` |
+| Command dispatch | Map CLI argv onto store calls | \`src/cli.js:4\` |
+
+## 3. Actors
+
+| Actor | What it wants | Code path |
+|---|---|---|
+| Human driving the CLI | Add a todo | \`src/cli.js:5\` |
+`;
+		const graph = seedFromMarkdown(tabled, "p", { cardId: "c", commit: "abc", now: 1 });
+		const names = graph.nodes.map((n) => `${n.kind}:${n.name}`);
+		expect(names).toContain("domain:Todo state");
+		expect(names).toContain("domain:Command dispatch");
+		expect(names).toContain("actor:Human driving the CLI");
+		// The header row is a column label, not a node.
+		expect(names.some((n) => n.endsWith(":Domain") || n.endsWith(":Actor"))).toBe(false);
+		expect(graph.nodes.find((n) => n.name === "Command dispatch")!.source).toBe("src/cli.js:4");
+	});
 });
 
 describe("render and seeds", () => {

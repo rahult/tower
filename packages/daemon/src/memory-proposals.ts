@@ -12,6 +12,7 @@ import {
 } from "@tower/core";
 import type { Config } from "./config.ts";
 import { paths } from "./config.ts";
+import { ConflictError } from "./errors.ts";
 import { readGraph, writeGraph, writeProjectedModel } from "./memory-graph.ts";
 
 export const proposalsPath = (config: Config, projectId: string): string =>
@@ -83,23 +84,24 @@ export const decideProposal = (options: {
 	const file = readProposals(config, projectId);
 	const proposal = file.proposals.find((p) => p.id === proposalId);
 	if (!proposal) throw new Error(`Proposal not found: ${proposalId}`);
-	if (proposal.status !== "pending") throw new Error(`Proposal ${proposalId} is already ${proposal.status}`);
+	if (proposal.status !== "pending") throw new ConflictError(`Proposal ${proposalId} is already ${proposal.status}`);
 
-	let applied = false;
-	let reason: string | null = null;
 	if (decision === "accept") {
 		const graph = readGraph(config, projectId) ?? emptyGraph(projectId);
 		const result = applyProposal(graph, proposal, Date.now());
-		applied = result.applied;
-		reason = result.reason;
-		// The graph changed only when the change landed; the projection re-renders with it.
-		if (result.applied) {
-			writeGraph(config, projectId, result.graph);
-			writeProjectedModel(config, projectId, result.graph);
-		}
+		// The codebase wins on conflict: a refused change stays pending for the human to reject or a
+		// later card to fix, and never half-enters the graph.
+		if (!result.applied) return { proposal, applied: false, reason: result.reason };
+		writeGraph(config, projectId, result.graph);
+		writeProjectedModel(config, projectId, result.graph);
+		proposal.status = "accepted";
+	} else {
+		proposal.status = "rejected";
+		proposal.decidedAt = Date.now();
+		writeProposals(config, projectId, file);
+		return { proposal, applied: false, reason: null };
 	}
-	proposal.status = decision === "accept" ? "accepted" : "rejected";
 	proposal.decidedAt = Date.now();
 	writeProposals(config, projectId, file);
-	return { proposal, applied, reason };
+	return { proposal, applied: true, reason: null };
 };
