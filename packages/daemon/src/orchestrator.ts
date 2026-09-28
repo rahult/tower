@@ -32,9 +32,10 @@ import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
 import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
 import { type Issue, closeIssue, commentOnIssue, createPullRequest, listIssues, listRemotes, originSlug, pushBranch, viewPullRequest } from "./pr/gh.ts";
 import { feedbackWithAnnotations } from "./annotations.ts";
+import { learnFromCard } from "./memory-proposals.ts";
 import type { RunManager } from "./run/run-manager.ts";
 import type { RunOutcome, StageRunner } from "./stage-runner.ts";
-import { modelState, promoteSystemModel } from "./system-model.ts";
+import { modelState, promoteSystemModel, headCommit } from "./system-model.ts";
 import { runVerify } from "./verifier.ts";
 
 export interface OrchestratorDeps {
@@ -87,6 +88,8 @@ export class Orchestrator {
 		let patch: CardPatch = next;
 		if (next.stage === "done") {
 			patch = { ...next, finishNote: next.needsAttentionReason ?? card.finishNote, needsAttentionReason: null };
+			// The card has finished; what it learned becomes pending memory-graph proposals.
+			this.learn(card);
 		} else if (card.finishNote !== null) {
 			patch = { ...next, finishNote: null };
 		}
@@ -96,6 +99,25 @@ export class Orchestrator {
 		// Any transition can free a slot or add work, so let the scheduler look again.
 		this.schedule();
 		return updated;
+	}
+
+	/** The learn step: a finished card's learn.json becomes pending graph proposals (spec Phase 2).
+	 *  Best-effort and async — learning must never stand between the card and the finish line. */
+	private learn(card: Card): void {
+		const run = async (): Promise<void> => {
+			try {
+				const project = getProject(this.deps.db, card.projectId);
+				if (!project) return;
+				const commit = await headCommit(project.repoPath, project.defaultBranch).catch(() => card.baseCommit ?? "unknown");
+				const filed = learnFromCard({ config: this.deps.config, card, commit });
+				if (filed.length > 0) {
+					this.deps.bus.publish({ topic: "board", type: "proposals_updated", data: { projectId: card.projectId, filed: filed.length } });
+				}
+			} catch (error) {
+				console.error(`Learn step failed for card ${card.id}:`, error);
+			}
+		};
+		void run();
 	}
 
 	resume(cardId: string): Card {

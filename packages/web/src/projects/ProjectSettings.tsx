@@ -66,6 +66,21 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 					? `Fresh${model.data.builtAt ? `, built ${new Date(model.data.builtAt).toLocaleDateString()} at ${model.data.commit?.slice(0, 10)}` : ""}.`
 					: `Stale — the code has moved past ${model.data.commit?.slice(0, 10)} since it was built.`;
 
+	// The memory graph: what finished cards proposed from what they learned, waiting on a person.
+	const proposals = useQuery({ queryKey: ["project-proposals", project.id], queryFn: () => api.projectProposals(project.id), refetchInterval: 15_000 });
+	const pendingProposals = proposals.data?.proposals.filter((p) => p.status === "pending") ?? [];
+	const decide = useMutation({
+		mutationFn: ({ proposalId, decision }: { proposalId: string; decision: "accept" | "reject" }) => api.decideProposal(project.id, proposalId, decision),
+		onSuccess: (result) => {
+			toast(result.applied ? "Accepted — the graph and its projection now carry it." : result.reason ? `Not applied: ${result.reason}.` : "Rejected.");
+			void queryClient.invalidateQueries({ queryKey: ["project-proposals", project.id] });
+		},
+		onError: (error: Error) => toast(error.message),
+	});
+	const proposalAction: Record<string, string> = { add_node: "Add", update_node: "Update", retire_node: "Retire", add_edge: "Link", retire_edge: "Unlink" };
+	const proposalTarget = (p: (typeof pendingProposals)[number]): string =>
+		p.node ? `${p.node.kind}: ${p.node.name}` : `${p.edge!.from} → ${p.edge!.to}`;
+
 	// The agent reads the repository and drafts the commands. Only blank fields are filled, so a
 	// considered verify command is never overwritten by a draft.
 	const [draftNote, setDraftNote] = useState<string | null>(null);
@@ -319,6 +334,34 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 						<Icon name="focus" />
 						{understand.isPending ? "Understanding…" : model.data?.state === "missing" ? "Build the model" : "Rebuild the model"}
 					</button>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">Memory</div>
+					<div className="d">Finished cards propose what they learned — gotchas, coupling, failure modes — as changes to the project's memory graph. Nothing enters it without your word.</div>
+				</div>
+				<div className="v">
+					<p className="!mt-0 text-[14px]">
+						{proposals.data === undefined ? "Checking…" : `${proposals.data.graph.nodes} nodes, ${proposals.data.graph.edges} edges${pendingProposals.length > 0 ? ` — ${pendingProposals.length} proposal${pendingProposals.length === 1 ? "" : "s"} waiting` : ""}.`}
+					</p>
+					{pendingProposals.map((p) => (
+						<div key={p.id} className="flex items-start gap-2">
+							<div className="min-w-0 flex-1">
+								<p className="!mt-0 text-[14px]">
+									<span className="font-semibold">{proposalAction[p.action] ?? p.action}</span> {proposalTarget(p)}
+									<span className="block text-[13px] text-slate">{p.evidence}</span>
+								</p>
+							</div>
+							<button type="button" className="btn sm" disabled={decide.isPending} onClick={() => decide.mutate({ proposalId: p.id, decision: "accept" })}>
+								Accept
+							</button>
+							<button type="button" className="btn sm" disabled={decide.isPending} onClick={() => decide.mutate({ proposalId: p.id, decision: "reject" })}>
+								Reject
+							</button>
+						</div>
+					))}
+					{proposals.data && pendingProposals.length === 0 && <span className="hint">Nothing waiting — the graph holds only what a person confirmed.</span>}
 				</div>
 			</div>
 			<div className="setting">

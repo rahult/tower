@@ -9,7 +9,7 @@ import {
 	type Subgraph,
 } from "./memory-graph.ts";
 
-const slug = (kind: string, name: string): string =>
+export const slug = (kind: string, name: string): string =>
 	`${kind}:${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
 
 /** BFS from seeds, capped at depth. Pure. */
