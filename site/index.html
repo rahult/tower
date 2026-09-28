@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="theme-color" content="#08090a" />
 		<title>Tower: delegate the building. Keep the discipline.</title>
-		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: ideas become scaffolded projects, research precedes plans, a strong model plans, a cheap one builds, and gates you write in a sentence decide what ships — with a budget on every card and one amber row for every decision that is yours." />
+		<meta name="description" content="Tower runs the whole software life cycle for pi coding-agent sessions from one board: ideas become scaffolded projects, research precedes plans, a strong model plans against a living memory of your system, a cheap one builds, and gates you write in a sentence decide what ships — finished cards propose what they learn, you confirm what the graph keeps, and one amber row carries every decision that is yours." />
 		<meta property="og:title" content="Tower: delegate the building. Keep the discipline." />
 		<meta property="og:description" content="The whole software life cycle, run by coding agents from one board. Ideas become scaffolded projects, research maps the unknowns, a strong model plans, a cheap one builds, your gates and tests judge — and every decision that is yours lands on one amber row, one click each." />
 		<meta property="og:image" content="https://tower.rahultrikha.com/assets/tower.png" />
@@ -77,9 +77,10 @@
 				</svg>
 				<p class="lede">
 					Tower runs <a href="https://pi.dev">pi</a> coding-agent sessions across all your projects from one board — the whole life cycle, idea to merged. Hand it an idea and it
-					scaffolds the project from an engineering archetype. Hand it a question and research maps the unknowns before a plan exists. Then a strong model plans against a model of
-					your system, a cheap one builds in its own worktree, gates you write in a sentence decide what is worth testing, and reviewers who never saw the work try to break it —
-					with a spend ceiling on every card. The agents fly; you work the tower: every decision that is yours lands on one amber row, one click each.
+					scaffolds the project from an engineering archetype. Hand it a question and research maps the unknowns before a plan exists. Then a strong model plans against a living
+					model of your system, a cheap one builds in its own worktree, gates you write in a sentence decide what is worth testing, and reviewers who never saw the work try to
+					break it — while the system model itself keeps learning: every finished card proposes what it discovered, and you confirm what the graph keeps. The agents fly; you work
+					the tower: every decision that is yours lands on one amber row, one click each.
 				</p>
 				<div class="install">
 					<code id="install-command">pi install git:github.com/rahult/tower</code>
@@ -154,8 +155,9 @@
 					</div>
 					<div>
 						<dt>The codebase briefing</dt>
-						<dd>A read-only pass maps an existing repository — domains, actors, state, invariants as built, with sources — and the planner starts from that model, not from
-						guesswork. When the model goes stale, a rebuild happens before planning, if you ask for it.</dd>
+						<dd>A read-only pass maps an existing repository — domains, actors, state, invariants as built, with sources — into a system model the planner starts from, not
+						guesswork. And it no longer goes stale: finished cards propose what they learned — a gotcha, a new coupling, a failure mode — as changes to the model's memory graph.
+						You confirm each proposal; the doc the planner reads is a projection of the graph, so it can never drift from what the work actually found.</dd>
 					</div>
 					<div>
 						<dt>Spec-to-tickets grooming</dt>
@@ -234,9 +236,10 @@
 						<h3>A strong model plans, grounded in the system</h3>
 						<p>
 							The planner explores your repository and writes <code>plan.md</code>. A research brief on the card is read first — its recommendation is context, not command.
-							So is the project's system model: a read-only pass that mapped the codebase as built — domains, actors, state, invariants with sources — and is rebuilt
-							before planning whenever it goes stale and the project asks. The constraints you wrote on the project bind: they reach the builder, the reviewer and the coach.
-							It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a wrong plan is the costliest mistake a cheap builder can inherit.
+							So is the project's system model: a living memory of the codebase as built — domains, actors, state, invariants with sources — that finished cards keep current and
+							that is rebuilt before planning whenever it goes stale and the project asks. The constraints you wrote on the project bind: they reach the builder, the reviewer
+							and the coach. It changes nothing. Planning defaults to <code>anthropic/claude-fable-5-1</code>, because a wrong plan is the costliest mistake a cheap builder
+							can inherit.
 						</p>
 					</li>
 					<li>
@@ -284,29 +287,45 @@
 							into Landed today. Done cards delete from the board when you are done reading them.
 						</p>
 					</li>
+					<li>
+						<h3>The card remembers what it learned</h3>
+						<p>
+							A card's discoveries used to evaporate when it closed. Now the builder files what it learned — a gotcha it hit, coupling only visible under change, a failure
+							mode it provoked, an invariant the code actually enforces — as a structured proposal with its evidence: file and line, test output. Nothing enters the graph on
+							the agent's word: each proposal waits in the project's Memory for you, one Accept or Reject each. Confirmed changes join the graph with their provenance, and the
+							system model the next planner reads is re-rendered from the graph — derived, never hand-edited, so it cannot drift. A proposal the evidence doesn't support is
+							refused, not invented: the graph stays honest even when a model is not.
+						</p>
+					</li>
 				</ol>
 			</section>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.04 — The coached gate</span>
+				<span class="fig">Fig.04 — The memory</span>
+				<img src="assets/memory.png" width="1600" height="1000" alt="A project's settings, scrolled to the Memory section. The line reads 10 nodes, 0 edges — 2 proposals waiting. Two proposals from a finished card sit with their evidence: Add flow: Toggle command (src/cli.js:6 adds the toggle branch to run()) and Add entity: Todo done state (src/store.js:16 mutates todo.done in place — subscribers see the same object change), each with Accept and Reject buttons." loading="lazy" />
+				<figcaption>The system model is a living memory graph. A finished card proposed what it learned; each proposal carries its evidence and waits for your word — nothing enters the graph without it, and the model the next planner reads is re-rendered from what you confirmed.</figcaption>
+			</figure>
+
+			<figure class="shot wide" data-reveal>
+				<span class="fig">Fig.05 — The coached gate</span>
 				<img src="assets/coach.png" width="1600" height="1000" alt="A card at its plan gate. The inspector shows the plan-coach report — What the plan doesn't answer — with numbered findings, the first highlighted and underlined where a margin note was pinned. The rail note reads: 1 open note — pinned to the plan and sent with a rejection until you resolve them. Buttons: Approve plan and build, Send back to planner." loading="lazy" />
 				<figcaption>The plan gate, coached: a rubric pass lists what the plan leaves unanswered, as advice — it never approves for you. Select text to pin a margin note; the note rides back to the agents until you resolve it.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.05 — The crew rail</span>
+				<span class="fig">Fig.06 — The crew rail</span>
 				<img src="assets/session.png" width="1600" height="1000" alt="A running card in the docked inspector, Session tab. The sessions rail reads planning, crew, scout auth shape, builder… — the crew that built it, each session with its own model and verdict. The planning transcript is selected, showing Plan and streams ready." loading="lazy" />
 				<figcaption>Every session streams to the board — and a card built by a crew keeps the whole crew in its rail: planning, scouts, stream builders, integrator, then your checks and the reviews. Steer a live run mid-flight, or read the diff under Changes.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.06 — The gate</span>
+				<span class="fig">Fig.07 — The gate</span>
 				<img src="assets/gates.png" width="1600" height="1000" alt="A card's Session tab with the change-audit run selected: the summary shows the shell command git log -1 --stat --oneline piped to tail -4, a green pass chip, and the words Recorded, exit 0 — informational, it never fails the flow, with the command's output below." loading="lazy" />
 				<figcaption>Gates you write in a sentence run inside the lifecycle, between the build and the tests. This one records the shape of every build; a lint or size gate would stop the card and send its own output back to the builder.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.07 — Modeling, on demand</span>
+				<span class="fig">Fig.08 — Modeling, on demand</span>
 				<img src="assets/invariants.png" width="1600" height="1000" alt="An invariant simulation run on a resting backlog card. The sessions rail shows the simulation run; the verdict line reads pass, Nothing blocking, with the model and token count above." loading="lazy" />
 				<figcaption>Any resting card can run an invariant simulation — domains, actors, scenarios — and report what would break before your tests do.</figcaption>
 			</figure>
@@ -330,6 +349,10 @@
 					<div>
 						<dt>It reads the system first</dt>
 						<dd>A read-only pass maps an existing codebase — domains, actors, state, invariants as built, with sources — into a system model the planner reads. The editor shows fresh or stale; when it is stale and the project asks, Tower rebuilds it before planning.</dd>
+					</div>
+					<div>
+						<dt>A memory that outlives the card</dt>
+						<dd>The system model is a living graph, and finished cards write to it: each proposes what it learned — gotchas, coupling, failure modes — with evidence, as pending changes you confirm one by one. The model the next planner reads is a projection of the graph, so the docs never drift from the work.</dd>
 					</div>
 					<div>
 						<dt>Test-first, enforced</dt>
@@ -399,31 +422,31 @@
 			</section>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.08 — The project's settings, one page</span>
+				<span class="fig">Fig.09 — The project's settings, one page</span>
 				<img src="assets/projects.png" width="1600" height="1000" alt="A project's editor modal: toggles for running the reviews at the same time, invariant simulation and parallel sub-agents; a System model section reading Fresh, built 9/26/2026 with a Rebuild the model button; Understand before plan; and Acceptance gates — test-first, enforced." loading="lazy" />
 				<figcaption>Each project carries its own judgement calls: whether reviews fan out, whether planning rebuilds a stale system model first, whether cards are gated test-first. An agent drafts the verify, test, setup and preview commands if you ask.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.09 — From an idea</span>
+				<span class="fig">Fig.10 — From an idea</span>
 				<img src="assets/idea.png" width="1600" height="1000" alt="The New from idea dialog. It explains: the archetype is the engineering baseline — layout, toolchain, tests, acceptance harness; your idea becomes the first card. Fields for a name, the idea, and an archetype select showing Web app with its description. A Scaffold and plan button." loading="lazy" />
 				<figcaption>New projects start from an idea and an archetype, not a blank repository: web app, CLI tool or JSON API today. Tower scaffolds the baseline, files the idea as card one, and planning begins.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.10 — The command box</span>
+				<span class="fig">Fig.11 — The command box</span>
 				<img src="assets/palette.png" width="1600" height="1000" alt="The command box open over the board. A typed line — research offline-first sync for remembero — matches an ASK TOWER action: an agent reads this and acts. Keyboard hints line the bottom: arrows move, enter runs, j/k cards, a approve, n add." loading="lazy" />
 				<figcaption>One box reaches everything: add work, jump to a card, filter, theme — and anything that reads like a question goes to an agent that files the card and starts the right flow. An @tag names the project.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.11 — The matrix</span>
+				<span class="fig">Fig.12 — The matrix</span>
 				<img src="assets/board.png" width="1600" height="1000" alt="The Board view: a matrix with a column per stage from Backlog to Pull request and a row per project. Amber-tinted mini cards mark where work needs you — plan approvals, questions, review work — while the rest stay quiet, and each lane reads main · merges locally." loading="lazy" />
 				<figcaption>Prefer the whole picture? The matrix keeps a column per stage and a row per project, with foldable columns and done folded away until you want it.</figcaption>
 			</figure>
 
 			<figure class="shot wide" data-reveal>
-				<span class="fig">Fig.12 — The ledger</span>
+				<span class="fig">Fig.13 — The ledger</span>
 				<img src="assets/usage.png" width="1600" height="1000" alt="The Usage view: stat cards for tokens and sessions today and all time, a by-day bar, and tables breaking spend down by project, model and costliest card." loading="lazy" />
 				<figcaption>Where the money goes, counted to the cent: by day, by project, by model, by card — the ask box and every card-less session included.</figcaption>
 			</figure>
@@ -523,13 +546,16 @@ export function pickNext(candidates, state) {
 				<p class="eyebrow">Logbook</p>
 				<h2>Where it stands</h2>
 				<p>
-					Tower is early, and complete from idea to merged. Three archetypes scaffold new projects from one line; a system-model pass grounds planning in the codebase as built;
-					acceptance gates make a card test-first; deep research runs on the backlog before any of it. The pipeline itself: planning, the plan gate with its coach and margin
-					notes, building — single-session, a parallel crew, or stacked on another card — testing with the retry loop and your own deterministic gates, adversarial and SOLID
-					reviews that fan out in parallel, the feedback gate, a spend budget that stops the line, and two ways to land: pull requests with CI repair, or a local merge when
-					there is no remote. Plans cut into queues of cards; schedules fire flows on a clock; model checks and honest previews keep the plumbing true; a reachability walk
-					proves the card machine has no stuck states. Tests run the whole daemon end to end, and planning, building, testing and questions have been run against real pi
-					sessions.
+					Tower is early, and complete from idea to merged. Three archetypes scaffold new projects from one line; a system-model pass grounds planning in the codebase as built —
+					and it is now a living memory: finished cards propose what they learned, gotchas, coupling, failure modes, as pending changes you confirm one by one, and the model the
+					next planner reads is re-rendered from the graph, never hand-edited. Acceptance gates make a card test-first; six opt-in workflows cover the road from idea to production —
+					research, a coached plan, a threat model, reviews, a production bar, a dependency watch — and flows are state machines you can draw on a canvas. Deep research runs on the
+					backlog before any of it. The pipeline itself: planning, the plan gate with its coach and margin notes, building — single-session, a parallel crew, or stacked on another
+					card — testing with the retry loop and your own deterministic gates, adversarial and SOLID reviews that fan out in parallel, the feedback gate, a spend budget that stops
+					the line, and two ways to land: pull requests with CI repair, or a local merge when there is no remote. Plans cut into queues of cards; schedules fire flows on a clock;
+					model checks and honest previews keep the plumbing true; a reachability walk proves the card machine has no stuck states. Tests run the whole daemon end to end — and the
+					discipline thesis was measured, not argued: the same small model run three ways against SE-bench tasks scored highest under Tower's harness. Planning, building, testing
+					and questions have been run against real pi sessions.
 				</p>
 				<p>
 					Not yet proven against the real thing: the pull request stage has only met a stand-in for GitHub. Expect rough edges there, and
