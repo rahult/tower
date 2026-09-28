@@ -71,9 +71,9 @@ const headingKind: Record<string, NodeKind> = {
 	"state and transitions": "entity",
 	state: "entity",
 	entities: "entity",
-	invariants as built: "invariant",
+	"invariants as built": "invariant",
 	invariants: "invariant",
-	risks and quirks: "gotcha",
+	"risks and quirks": "gotcha",
 	risks: "gotcha",
 	gotchas: "gotcha",
 };
@@ -101,7 +101,7 @@ export const seedFromMarkdown = (
 	for (const raw of markdown.split(/\r?\n/)) {
 		const heading = raw.match(/^#{1,3}\s+(.+?)\s*$/);
 		if (heading) {
-			const key = heading[1].trim().toLowerCase().replace(/[:.]+$/, "");
+			const key = (heading[1] ?? "").trim().toLowerCase().replace(/[:.]+$/, "");
 			current = headingKind[key] ?? null;
 			continue;
 		}

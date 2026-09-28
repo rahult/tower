@@ -41,10 +41,10 @@ describe("validateGraph", () => {
 
 	it("rejects dangling edges and bad confidence", () => {
 		const dangling = structuredClone(sample());
-		dangling.edges[0].to = "missing";
+		dangling.edges[0]!.to = "missing";
 		expect(validateGraph(dangling)).toBe(false);
 		const conf = structuredClone(sample());
-		conf.nodes[0].provenance.confidence = 1.5;
+		conf.nodes[0]!.provenance.confidence = 1.5;
 		expect(validateGraph(conf)).toBe(false);
 	});
 });
