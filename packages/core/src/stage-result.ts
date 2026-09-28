@@ -30,7 +30,12 @@ function parseQuestions(input: unknown): Question[] {
 
 export type ParsedStageResult = { ok: true; result: StageResult } | { ok: false; reason: string };
 
-const STATUSES = new Set(["pass", "fail", "blocked"]);
+const STATUSES = new Set<string>(["pass", "fail", "blocked"]);
+// Models rarely write the exact contract word for a completed stage ("done", "complete", "passed"…);
+// those all mean pass, and treating one as an error sends a good run back to the builder for nothing.
+// The fail side stays narrow on purpose: a vague status must never fail a stage that meant to pass.
+const PASS_ALIASES = new Set(["done", "complete", "completed", "success", "successful", "passed", "ok"]);
+const FAIL_ALIASES = new Set(["failed", "failure"]);
 
 /** Parses the stage-result.json an agent writes at the end of a stage. `raw` is null when the file is missing. */
 export function parseStageResult(raw: string | null): ParsedStageResult {
@@ -43,12 +48,18 @@ export function parseStageResult(raw: string | null): ParsedStageResult {
 	}
 	if (typeof value !== "object" || value === null) return { ok: false, reason: "stage-result.json is not an object" };
 	const { status, summary, questions } = value as Record<string, unknown>;
-	if (typeof status !== "string" || !STATUSES.has(status)) {
+	let normalized: StageResult["status"] | undefined;
+	if (typeof status === "string") {
+		if (STATUSES.has(status)) normalized = status as StageResult["status"];
+		else if (PASS_ALIASES.has(status.toLowerCase())) normalized = "pass";
+		else if (FAIL_ALIASES.has(status.toLowerCase())) normalized = "fail";
+	}
+	if (normalized === undefined) {
 		return { ok: false, reason: `stage-result.json has invalid status: ${JSON.stringify(status)}` };
 	}
-	const asked = status === "blocked" ? parseQuestions(questions) : [];
+	const asked = normalized === "blocked" ? parseQuestions(questions) : [];
 	return {
 		ok: true,
-		result: { status: status as StageResult["status"], summary: typeof summary === "string" ? summary : "", ...(asked.length > 0 ? { questions: asked } : {}) },
+		result: { status: normalized, summary: typeof summary === "string" ? summary : "", ...(asked.length > 0 ? { questions: asked } : {}) },
 	};
 }

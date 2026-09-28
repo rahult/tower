@@ -84,6 +84,7 @@ export function useEventStream(openRunId: string | null): void {
 			if (frame.topic === "board") {
 				void queryClient.invalidateQueries({ queryKey: ["board"] });
 				if (frame.type === "settings_changed") void queryClient.invalidateQueries({ queryKey: ["settings"] });
+				if (frame.type === "proposals_updated") void queryClient.invalidateQueries({ queryKey: ["project-proposals"] });
 				const cardId = frame.data?.cardId ?? (frame.type === "card_upserted" || frame.type === "card_deleted" ? frame.data?.id : null);
 				if (cardId) void queryClient.invalidateQueries({ queryKey: ["card", cardId] });
 			} else if (frame.topic.startsWith("run:")) {

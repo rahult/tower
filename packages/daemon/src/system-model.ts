@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { promisify } from "node:util";
 import type { Config } from "./config.ts";
 import { paths } from "./config.ts";
+import { seedGraphFromModel } from "./memory-graph.ts";
 
 const exec = promisify(execFile);
 
@@ -56,6 +57,7 @@ export const modelState = async (config: Config, projectId: string, repoPath: st
  * Promotes an understanding run's report to the project's system model. The report is the card's own
  * artifact; the model is the project-level copy every planner reads, stamped with the commit it
  * describes so the next enqueue can tell fresh from stale.
+ * Also seeds (or refreshes, idempotently) the project memory graph from that Markdown.
  */
 export const promoteSystemModel = async (options: { config: Config; projectId: string; repoPath: string; defaultBranch: string; cardId: string; reportPath: string }): Promise<SystemModelMeta> => {
 	const { config, projectId, repoPath, defaultBranch, cardId, reportPath } = options;
@@ -65,6 +67,11 @@ export const promoteSystemModel = async (options: { config: Config; projectId: s
 	writeFileSync(model, readFileSync(reportPath, "utf8"));
 	const meta: SystemModelMeta = { commit: await headCommit(repoPath, defaultBranch), builtAt: Date.now(), cardId };
 	writeFileSync(paths.systemModelMeta(config, projectId), `${JSON.stringify(meta, null, 2)}\n`);
+	try {
+		seedGraphFromModel({ config, projectId, cardId, commit: meta.commit });
+	} catch {
+		// Seeding is best-effort: a parse miss must not block promote.
+	}
 	return meta;
 };
 

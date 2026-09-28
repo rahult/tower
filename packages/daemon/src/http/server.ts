@@ -24,7 +24,8 @@ import { listArchetypes, scaffoldFromArchetype, targetDir } from "../greenfield.
 import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
 import { listRemotes } from "../pr/gh.ts";
-import { ConflictError, type Orchestrator } from "../orchestrator.ts";
+import { type Orchestrator } from "../orchestrator.ts";
+import { ConflictError } from "../errors.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
 import type { ResearchRunner } from "../research.ts";
 import { checkModels } from "../preflight.ts";
@@ -33,6 +34,8 @@ import type { SessionDriver } from "../pi/session-driver.ts";
 import { describeModels, knownModels, parseModels, SettingsError, settingsFile, writeModels } from "../settings.ts";
 import type { StageRunner } from "../stage-runner.ts";
 import { modelState } from "../system-model.ts";
+import { readGraph } from "../memory-graph.ts";
+import { decideProposal, readProposals } from "../memory-proposals.ts";
 import { serveWeb } from "./static.ts";
 
 export interface AppDeps {
@@ -212,6 +215,28 @@ export function createApp(deps: AppDeps): Hono {
 		const project = getProject(db, c.req.param("id"));
 		if (!project) throw new HttpError(404, "Project not found");
 		return c.json(orchestrator.understandProject(project.id), 202);
+	});
+
+	// The memory graph's write path: what finished cards proposed and a human has not decided yet,
+	// with the graph's size so the view can say "7 nodes, 1 edge" beside the pending list.
+	app.get("/api/projects/:id/proposals", (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const proposals = readProposals(config, project.id);
+		const graph = readGraph(config, project.id);
+		return c.json({ proposals: proposals.proposals, graph: { nodes: graph?.nodes.length ?? 0, edges: graph?.edges.length ?? 0 } });
+	});
+
+	// Confirm or reject one pending proposal. Accepting applies it to the graph and re-renders the
+	// system-model projection; the decision is recorded either way.
+	app.post("/api/projects/:id/proposals/:pid/decide", async (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const body = (await c.req.json()) as Record<string, unknown>;
+		if (body.decision !== "accept" && body.decision !== "reject") throw new HttpError(400, '"decision" must be "accept" or "reject"');
+		const result = decideProposal({ config, projectId: project.id, proposalId: c.req.param("pid"), decision: body.decision });
+		bus.publish({ topic: "board", type: "proposals_updated", data: { projectId: project.id, proposalId: result.proposal.id, decision: body.decision } });
+		return c.json(result);
 	});
 
 	// Plan to backlog: an agent cuts a plan — pasted text, or an existing card's plan.md — into

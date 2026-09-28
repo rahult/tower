@@ -400,6 +400,7 @@ export class StageRunner {
 					planPath: join(cardDir, "plan.md"),
 					reportPath: join(cardDir, "test-report.md"),
 					shippedPath: join(cardDir, "shipped.md"),
+					learnPath: join(cardDir, "learn.json"),
 					resultPath: join(cardDir, STAGE_RESULT_FILE),
 					feedbackSection: feedback ? `# Feedback on your previous attempt\n\n${feedback}` : "",
 				},
