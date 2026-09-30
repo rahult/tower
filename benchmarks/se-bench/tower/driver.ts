@@ -227,7 +227,7 @@ export async function runTowerArm(
 	await prepareRepo(task.id, repoPath);
 
 	const project = await daemon.api<{ id: string }>("POST", "/api/projects", { repoPath, name: `bench-${task.id}-${started}` });
-	await daemon.api("PATCH", `/api/projects/${project.id}`, { testCommand: "npm test", verifyCommand: "npm test" });
+	await daemon.api("PATCH", `/api/projects/${project.id}`, { testCommand: "npm test", verifyCommand: "npm test", parallelReviews: true });
 	const card = await daemon.api<Card>("POST", "/api/cards", { projectId: project.id, title: task.title, brief });
 	await daemon.api("POST", `/api/cards/${card.id}/enqueue`);
 	log(`card ${card.id} enqueued`);

@@ -17,7 +17,7 @@ const asksFirst = () => {
 	let sessions = 0;
 	return (spec: { sessionDir: string }) =>
 		++sessions === 1
-			? [{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Two decisions change the plan.", questions: QUESTIONS })) }]
+			? [{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Two decisions change the plan.", questions: QUESTIONS })) }]
 			: [planningTurn()];
 };
 
@@ -79,7 +79,7 @@ describe("a stage that asks questions", () => {
 	});
 
 	it("a blocked stage without questions still just asks for attention", async () => {
-		h = await bootHarness((spec) => [{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), '{"status":"blocked","summary":"No access to the staging database."}') }]);
+		h = await bootHarness((spec) => [{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), '{"status":"blocked","summary":"No access to the staging database."}') }]);
 		const card = await startCard(h);
 		expect((await h.api("GET", `/api/cards/${card.id}`)).body.card).toMatchObject({ status: "needs_attention", needsAttentionReason: "blocked: No access to the staging database." });
 	});

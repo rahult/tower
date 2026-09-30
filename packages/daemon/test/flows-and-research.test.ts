@@ -153,7 +153,7 @@ function researchTurn(label: string): FakeTurn {
 				mkdirSync(dirname(report), { recursive: true });
 				writeFileSync(report, `# ${label}\n\n## Findings\n\n- Something sourced from https://example.com\n`);
 			}
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: `${label} ready.` }));
+			writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: `${label} ready.` }));
 		},
 	};
 }
@@ -181,7 +181,7 @@ describe("plan coach", () => {
 								mkdirSync(dirname(report), { recursive: true });
 								writeFileSync(report, "# What the plan doesn't answer\n\n1. **Rollback** — blocking: no way back is named.\n\nReady to build.\n");
 							}
-							writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Ready to build." }));
+							writeFileSync(join(handle.sessionDir, "..", handle.resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Ready to build." }));
 						},
 					},
 				];
@@ -224,7 +224,7 @@ describe("a blocked hook step", () => {
 						{
 							events: [],
 							effect: ({ spec: handle }) => {
-								writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need a decision.", questions: [{ question: "Which semantics?", options: ["A", "B"] }] }));
+								writeFileSync(join(handle.sessionDir, "..", handle.resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need a decision.", questions: [{ question: "Which semantics?", options: ["A", "B"] }] }));
 							},
 						},
 					];
@@ -308,7 +308,7 @@ describe("answers at the feedback stage", () => {
 						{
 							events: [],
 							effect: ({ spec: handle }) => {
-								writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need the person's call.", questions: [{ question: "Is the retry budget acceptable?", options: ["Yes", "No"] }] }));
+								writeFileSync(join(handle.sessionDir, "..", handle.resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need the person's call.", questions: [{ question: "Is the retry budget acceptable?", options: ["Yes", "No"] }] }));
 							},
 						},
 					];
@@ -322,7 +322,7 @@ describe("answers at the feedback stage", () => {
 								mkdirSync(dirname(report), { recursive: true });
 								writeFileSync(report, "# Review with answers\n\nThe person decided.\n");
 							}
-							writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Reviewed with the person's decision." }));
+							writeFileSync(join(handle.sessionDir, "..", handle.resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Reviewed with the person's decision." }));
 						},
 					},
 				];
@@ -459,7 +459,7 @@ describe("live probes", () => {
 							probeTools = spec.tools;
 							const report = prompt.match(/absolute path `([^`]+)`/)?.[1];
 							if (report) writeFileSync(report, "# Spike\n\nCandidate A boots in 3ms.");
-							writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Spike run." }));
+							writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Spike run." }));
 						},
 					},
 				];
@@ -505,7 +505,7 @@ describe("invariant diff check", () => {
 							captured = { cwd: spec.cwd, model: spec.model, prompt };
 							const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
 							if (report) writeFileSync(report, "# Invariant diff\n\nViolated: 1\n");
-							writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "fail", summary: "Violated: 1" }));
+							writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "fail", summary: "Violated: 1" }));
 						},
 					},
 				];

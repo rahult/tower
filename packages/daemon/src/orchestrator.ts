@@ -571,10 +571,11 @@ export class Orchestrator {
 		this.dispatch(cardId, { type: "flows_started" });
 		const names = this.reviewFlowsFor(cardId);
 		const project = getProject(this.deps.db, getCard(this.deps.db, cardId)?.projectId ?? "");
-		// Reviews never see each other, so a project that opts in runs them at the same time.
+		// Reviews never see each other, so they run at the same time by default; a project that needs
+		// them strictly ordered (e.g. the second reacting to the first's written verdict) opts out.
 		const outcome =
-			project?.parallelReviews === true && names.length > 1
-				? await this.deps.flows.runFlowsConcurrently(cardId, names)
+			project?.parallelReviews !== false && names.length > 1
+				? await this.deps.flows.runFlowsConcurrently(cardId, names, feedback)
 				: await this.deps.flows.runFlows(cardId, names, feedback);
 		if (this.stopping) return;
 		if (outcome.kind === "aborted") this.dispatch(cardId, { type: "run_aborted" });

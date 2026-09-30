@@ -180,5 +180,7 @@ export interface RunSpec {
 	trustProject: boolean;
 	/** When true, pi discovers the user's environment (extensions, skills, prompt-templates); when false/undefined, all three are disabled. */
 	piDiscovery?: boolean;
+	/** Flow steps read their verdict from a per-flow file; regular stages use the default stage-result.json. */
+	resultPath?: string;
 	appendSystemPromptFiles: string[];
 }

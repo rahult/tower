@@ -70,7 +70,7 @@ describe("flow graphs run", () => {
 							expect(prompt).toContain("Create fixed.txt");
 							expect(prompt).toContain("Reporting your result");
 							writeFileSync(join(handle.cwd, "fixed.txt"), "repaired\n");
-							writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Repaired." }));
+							writeFileSync(join(handle.sessionDir, "..", handle.resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Repaired." }));
 						},
 					},
 				];

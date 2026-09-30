@@ -267,6 +267,7 @@ export class StageRunner {
 			tools: request.tools,
 			extensions: project.extensions,
 			trustProject: project.trustProjectPi,
+			resultPath: request.resultPath,
 			piDiscovery: project.piDiscovery ?? false,
 			appendSystemPromptFiles: request.appendSystemPromptFiles ?? [],
 		};

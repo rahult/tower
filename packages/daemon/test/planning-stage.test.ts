@@ -119,7 +119,7 @@ describe("planning stage through the HTTP surface", () => {
 	it("accepts the result when the nudge works", async () => {
 		h = await bootHarness((spec) => [
 			planningTurn({ writeResult: false }),
-			{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), '{"status":"pass","summary":"late"}') },
+			{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), '{"status":"pass","summary":"late"}') },
 		]);
 		const { card } = await seedCard(h);
 		await runToCompletion(h, card.id);
@@ -128,7 +128,7 @@ describe("planning stage through the HTTP surface", () => {
 
 	it("surfaces a blocked stage as needing attention, with the agent's question", async () => {
 		h = await bootHarness((spec) => [
-			{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), '{"status":"blocked","summary":"Which database?"}') },
+			{ events: [], effect: () => writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), '{"status":"blocked","summary":"Which database?"}') },
 		]);
 		const { card } = await seedCard(h);
 		await runToCompletion(h, card.id);

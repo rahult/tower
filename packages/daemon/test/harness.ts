@@ -207,6 +207,8 @@ export function planningTurn(options: { writeResult?: boolean; delayMs?: number 
 	};
 }
 
+/** Wherever a scripted session writes its verdict: flow steps use their per-flow file. */
+const resultFile = (spec: RunSpec) => join(spec.sessionDir, "..", spec.resultPath ?? STAGE_RESULT_FILE);
 /** A scripted building turn: changes a file in the worktree, commits it, and reports a pass. */
 export function buildingTurn(): FakeTurn {
 	return {
@@ -217,7 +219,7 @@ export function buildingTurn(): FakeTurn {
 			writeFileSync(join(spec.cwd, "scratch.tmp"), "left untracked\n");
 			execFileSync("git", ["add", "feature.txt"], { cwd: spec.cwd });
 			execFileSync("git", ["-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "Add feature"], { cwd: spec.cwd });
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Built." }));
+			writeFileSync(resultFile(spec), JSON.stringify({ status: "pass", summary: "Built." }));
 		},
 	};
 }
@@ -228,7 +230,7 @@ export function testerTurn(): FakeTurn {
 		events: [],
 		effect: ({ spec }) => {
 			writeFileSync(join(spec.sessionDir, "..", "test-report.md"), "# Report\n\nAll good.\n");
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Checks pass." }));
+			writeFileSync(resultFile(spec), JSON.stringify({ status: "pass", summary: "Checks pass." }));
 		},
 	};
 }
@@ -245,7 +247,7 @@ export function simulationTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
 					? "## Retries ignore idempotency\n\n**Severity: blocking.** `src/http/client.ts:42` — the model replays `POST /payouts` on timeout: the payout happens twice. Refinement: retry only idempotent methods.\n"
 					: "Nothing blocking. Two should-fix notes on actor ordering.\n";
 			if (report) writeFileSync(report, `# Invariant simulation\n\n## Invariants\n\n${invariants}\n\n## Findings\n\n${finding}\n## Test targets\n\n${invariants}`);
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
+			writeFileSync(resultFile(spec), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
 		},
 	};
 }
@@ -275,7 +277,7 @@ export function reviewTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
 		effect: ({ spec, prompt }) => {
 			const report = prompt.match(/absolute path `([^`]+reviews\/[^`]+)`/)?.[1];
 			if (report) writeFileSync(report, `# Review by ${spec.sessionId}\n\nOne finding.\n\n${verdict === "pass" ? CLEAR_REVIEW : BLOCKING_REVIEW}`);
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
+			writeFileSync(resultFile(spec), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Nothing blocking." : "1 blocking finding." }));
 		},
 	};
 }

@@ -20,7 +20,7 @@ function understandTurn(verdict: "pass" | "fail" = "pass"): FakeTurn {
 				mkdirSync(dirname(report), { recursive: true });
 				writeFileSync(report, "# System model\n\n## Domains\n\n- notes: storage of entries (`server/db.ts`).\n\n## Invariants as built\n\n- **INV-1** — a note's body is never empty (`server/app.ts:31`).\n");
 			}
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Model ready." : "Could not read the source." }));
+			writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "pass" ? "Model ready." : "Could not read the source." }));
 		},
 	};
 }

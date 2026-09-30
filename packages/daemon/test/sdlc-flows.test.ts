@@ -143,7 +143,7 @@ function scriptedFlows(): FakeScript {
 					mkdirSync(dirname(report), { recursive: true });
 					writeFileSync(report, `# ${label}\n\n- A finding with a source https://example.com\n`);
 				}
-				writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "fail" ? "1 confirmed" : `${label} ready.` }));
+				writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: verdict, summary: verdict === "fail" ? "1 confirmed" : `${label} ready.` }));
 			},
 		},
 	];

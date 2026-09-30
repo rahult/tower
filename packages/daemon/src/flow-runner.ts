@@ -76,14 +76,19 @@ export class FlowRunner {
 		return last;
 	}
 
-	/** Runs independent flows at the same time — a review fan-out. Verdicts combine; crashes and aborts win. */
-	async runFlowsConcurrently(cardId: string, names: string[]): Promise<RunOutcome> {
-		const outcomes = await Promise.all(names.map((name) => this.runOneFlow(cardId, name, undefined, true)));
+	/** Runs independent flows at the same time — a review fan-out. Verdicts combine exactly as the
+	 * sequential walk combines them: a blocking verdict or a set of questions from any flow is the
+	 * outcome (summary and all), so the feedback gate sees it; crashes and aborts win. */
+	async runFlowsConcurrently(cardId: string, names: string[], feedback?: string): Promise<RunOutcome> {
+		const outcomes = await Promise.all(names.map((name) => this.runOneFlow(cardId, name, feedback, true)));
 		const failed = outcomes.find((outcome) => outcome.kind === "failed");
 		if (failed) return failed;
 		const aborted = outcomes.find((outcome) => outcome.kind === "aborted");
 		if (aborted) return aborted;
-		return { kind: "settled", stage: "testing", result: "pass", summary: outcomes.map((outcome) => (outcome.kind === "settled" ? outcome.summary : "")).filter(Boolean).join(" · "), hasQuestions: false };
+		const settled = outcomes.filter((outcome) => outcome.kind === "settled") as Array<Extract<RunOutcome, { kind: "settled" }>>;
+		const trouble = settled.find((outcome) => outcome.result !== "pass" || outcome.hasQuestions);
+		if (trouble) return trouble;
+		return { kind: "settled", stage: "testing", result: "pass", summary: settled.map((outcome) => outcome.summary).filter(Boolean).join(" · "), hasQuestions: false };
 	}
 
 	/**
@@ -275,6 +280,8 @@ export class FlowRunner {
 		return {
 			sessionId: `c${cardId}-${label}-${attempt}`,
 			kind: options.flow ? "flow_step" : "adhoc",
+			// Concurrent flows must not share the default stage-result.json — each reads its own verdict.
+			...(options.flow ? { resultPath: `${label}.result.json` } : {}),
 			shared: options.shared === true,
 			attempt,
 			model,

@@ -57,7 +57,7 @@ function harnessTurn(specWorks: boolean): FakeTurn {
 			const specs = join(spec.cwd, "acceptance", "specs");
 			mkdirSync(specs, { recursive: true });
 			writeFileSync(join(specs, "generated.mjs"), specWorks ? SPEC.green : SPEC.red);
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "1 acceptance spec written." }));
+			writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "1 acceptance spec written." }));
 		},
 	};
 }
@@ -71,7 +71,7 @@ function greenBuilderTurn(): FakeTurn {
 			writeFileSync(join(spec.cwd, "feature.txt"), "the behavior\n");
 			execFileSync("git", ["add", "."], { cwd: spec.cwd });
 			execFileSync("git", ["-c", "user.name=tc", "-c", "user.email=tc@local", "commit", "-q", "-m", "Build the feature"], { cwd: spec.cwd });
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Built; acceptance green." }));
+			writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Built; acceptance green." }));
 		},
 	};
 }
@@ -148,7 +148,7 @@ describe("acceptance gates", () => {
 						{
 							events: [],
 							effect: ({ spec: handle }) => {
-								writeFileSync(join(handle.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need a decision on red-gate semantics.", questions: [{ question: "Red gate semantics: which option?", options: ["Extend the runner", "Scope the flow"] }] }));
+								writeFileSync(join(handle.sessionDir, "..", handle.resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "blocked", summary: "Need a decision on red-gate semantics.", questions: [{ question: "Red gate semantics: which option?", options: ["Extend the runner", "Scope the flow"] }] }));
 							},
 						},
 					];

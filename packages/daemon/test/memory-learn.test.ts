@@ -31,7 +31,7 @@ function understandTurn(): ReturnType<typeof planningTurn> {
 					"# System model\n\n## Domains\n\n- **API** — the HTTP routes (`src-routes.ts`).\n- **Storage** — the in-memory todo list (`src-store.ts`).\n\n## Invariants as built\n\n- **INV-1** — a todo's title is never empty (`src-store.ts:1`).\n",
 				);
 			}
-			writeFileSync(join(spec.sessionDir, "..", STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Model ready." }));
+			writeFileSync(join(spec.sessionDir, "..", (spec as { resultPath?: string }).resultPath ?? STAGE_RESULT_FILE), JSON.stringify({ status: "pass", summary: "Model ready." }));
 		},
 	};
 }
