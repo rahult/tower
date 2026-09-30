@@ -29,7 +29,7 @@ import { issueBrief } from "./feedback.ts";
 import { flowsTriggered, type Flow, type FlowTrigger, loadFlows, runsOnBacklogCard } from "./flows.ts";
 import type { AdhocRequest, FlowRunner } from "./flow-runner.ts";
 import { removeWorktree, streamWorktreePaths } from "./git/worktree-manager.ts";
-import { deleteMergedBranch, mergeBranchLocally } from "./git/merge.ts";
+import { deleteMergedBranch, mergeBranchLocally, uncommittedFiles } from "./git/merge.ts";
 import { type Issue, closeIssue, commentOnIssue, createPullRequest, listIssues, listRemotes, originSlug, pushBranch, viewPullRequest } from "./pr/gh.ts";
 import { feedbackWithAnnotations } from "./annotations.ts";
 import { learnFromCard } from "./memory-proposals.ts";
@@ -693,6 +693,22 @@ export class Orchestrator {
 
 		const remotes = await listRemotes(project.repoPath);
 		if (!remotes.includes("origin")) {
+			// A branch that never advanced past its base carries no work. Merging it would silently ship an empty
+			// change (a build that destroyed its own worktree reaches this point with gates green), so stop here
+			// instead — the error lands on the card as its needs-attention reason.
+			const branchHead = await headCommit(project.repoPath, card.branchName).catch(() => null);
+			if (card.baseCommit && branchHead === card.baseCommit) {
+				throw new Error(`build branch '${card.branchName}' has no commits beyond the base ${card.baseCommit.slice(0, 10)} — the work produced no changes, so there is nothing to merge. Retrying only helps if the build is fixed to actually commit its work.`);
+			}
+			// Uncommitted work in the worktree would be silently discarded once the worktree is removed
+			// after the merge. A build that wrote files but never committed them has not finished —
+			// stop and surface the leftover files instead of losing them.
+			if (existsSync(card.worktreePath)) {
+				const dirty = await uncommittedFiles(card.worktreePath).catch(() => [] as string[]);
+				if (dirty.length > 0) {
+					throw new Error(`worktree still has uncommitted changes that a merge would discard: ${dirty.slice(0, 8).join(", ")}${dirty.length > 8 ? ` … +${dirty.length - 8} more` : ""}. Commit the work on '${card.branchName}' (or delete it deliberately) before merging, then Retry.`);
+				}
+			}
 			const merge = await mergeBranchLocally({
 				repoPath: project.repoPath,
 				branch: card.branchName,

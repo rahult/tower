@@ -55,6 +55,15 @@ export interface LocalMerge {
 	commit: string;
 }
 
+/** Relative paths of tracked-but-uncommitted changes in a checkout (staged or not); empty when clean. Untracked files are excluded — build scratch survives as untracked debris and git already discards it with the worktree. */
+export async function uncommittedFiles(worktreePath: string): Promise<string[]> {
+	const { stdout } = await exec("git", ["status", "--porcelain"], { cwd: worktreePath, encoding: "utf8" });
+	return stdout
+		.split("\n")
+		.filter((line) => line !== "" && !line.startsWith("??"))
+		.map((line) => line.slice(3));
+}
+
 /**
  * Merges a card's branch into the project's default branch locally, the way the person would have: git's own merge,
  * fast-forwarding when the branch is simply ahead and making a merge commit when the histories diverged. The default
