@@ -7,3 +7,4 @@ spikes/.tmp/
 .playwright-mcp/
 benchmarks/se-bench/.state/
 .zcode/
+benchmarks/se-bench/.state-ollama-*/
