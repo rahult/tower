@@ -99,6 +99,10 @@ export interface UsageRow {
 	runs: number;
 	tokens: number;
 	costUsd: number;
+	/** Prompt tokens served from the provider's cache (cheap rate). */
+	cacheRead: number;
+	/** Prompt tokens written into the provider's cache. */
+	cacheWrite: number;
 }
 
 /** Token and cost totals grouped by card, project, model or day (local time). */
@@ -107,7 +111,9 @@ export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): Us
 	const cardSessions = db
 		.prepare(
 			`SELECT ${key} AS key, count(*) AS runs,
-				coalesce(sum(json_extract(r.tokens_json, '$.total')), 0) AS tokens, coalesce(sum(r.cost_usd), 0) AS costUsd
+				coalesce(sum(json_extract(r.tokens_json, '$.total')), 0) AS tokens, coalesce(sum(r.cost_usd), 0) AS costUsd,
+				coalesce(sum(json_extract(r.tokens_json, '$.cacheRead')), 0) AS cacheRead,
+				coalesce(sum(json_extract(r.tokens_json, '$.cacheWrite')), 0) AS cacheWrite
 			 FROM stage_runs r JOIN cards c ON c.id = r.card_id
 			 -- Usage counts model sessions only: daemon-run work (verify, a person's test runs) spends no tokens,
 			 -- and neither does the marker row that stands for a crew attempt — its members carry their own usage.
@@ -120,7 +126,9 @@ export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): Us
 		const oneoffs = db
 			.prepare(
 				`SELECT ${group === "day" ? "date(started_at / 1000, 'unixepoch', 'localtime')" : "model"} AS key, count(*) AS runs,
-				coalesce(sum(json_extract(tokens_json, '$.total')), 0) AS tokens, coalesce(sum(cost_usd), 0) AS costUsd
+				coalesce(sum(json_extract(tokens_json, '$.total')), 0) AS tokens, coalesce(sum(cost_usd), 0) AS costUsd,
+				coalesce(sum(json_extract(tokens_json, '$.cacheRead')), 0) AS cacheRead,
+				coalesce(sum(json_extract(tokens_json, '$.cacheWrite')), 0) AS cacheWrite
 			 FROM oneoff_runs WHERE tokens_json IS NOT NULL GROUP BY key ORDER BY tokens DESC`,
 			)
 			.all() as unknown as UsageRow[];
@@ -131,6 +139,8 @@ export function usageBy(db: Db, group: "card" | "project" | "model" | "day"): Us
 				held.runs += row.runs;
 				held.tokens += row.tokens;
 				held.costUsd += row.costUsd;
+				held.cacheRead += row.cacheRead;
+				held.cacheWrite += row.cacheWrite;
 			} else merged.set(row.key, { ...row });
 		}
 		return [...merged.values()].sort((a, b) => b.tokens - a.tokens);

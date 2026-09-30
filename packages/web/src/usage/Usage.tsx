@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { cacheSavingsUsd } from "@tower/core";
 import { api } from "../api/client.ts";
 import { formatMoney, formatTokens } from "../app/bits.tsx";
 
@@ -134,18 +135,26 @@ export function Usage({ onOpenCard, cardTitles, projectNames }: { onOpenCard: (i
 										<th>Model</th>
 										<th className="num hide-sm">Sessions</th>
 										<th className="num">Tokens</th>
+										<th className="num hide-sm">Cached</th>
 										<th className="num">Cost</th>
+										<th className="num">Cache saved</th>
 									</tr>
 								</thead>
 								<tbody>
-									{models.map((row) => (
-										<tr key={row.key}>
-											<td className="font-mono text-[13px]">{row.key}</td>
-											<td className="num hide-sm">{row.runs}</td>
-											<td className="num tnum">{formatTokens(row.tokens)}</td>
-											<td className="num tnum">{row.costUsd > 0 ? formatMoney(row.costUsd) : "—"}</td>
-										</tr>
-									))}
+									{models.map((row) => {
+										const cached = row.cacheRead + row.cacheWrite;
+										const saved = cacheSavingsUsd(row.key, { input: 0, output: 0, cacheRead: row.cacheRead, cacheWrite: row.cacheWrite });
+										return (
+											<tr key={row.key}>
+												<td className="font-mono text-[13px]">{row.key}</td>
+												<td className="num hide-sm">{row.runs}</td>
+												<td className="num tnum">{formatTokens(row.tokens)}</td>
+												<td className="num tnum hide-sm">{cached > 0 ? formatTokens(cached) : "—"}</td>
+												<td className="num tnum">{row.costUsd > 0 ? formatMoney(row.costUsd) : "—"}</td>
+												<td className="num tnum">{saved !== null && saved > 0 ? formatMoney(saved) : "—"}</td>
+											</tr>
+										);
+									})}
 								</tbody>
 							</table>
 						)}

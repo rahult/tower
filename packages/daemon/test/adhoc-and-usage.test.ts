@@ -84,7 +84,7 @@ describe("usage", () => {
 		h = await bootHarness(byStage());
 		const card = await plannedCard(h);
 		const usage = (await h.api("GET", "/api/usage")).body;
-		expect(usage.byCard).toEqual([{ key: card.id, runs: 1, tokens: 120, costUsd: 0.001 }]);
+		expect(usage.byCard).toEqual([{ key: card.id, runs: 1, tokens: 120, costUsd: 0.001, cacheRead: 0, cacheWrite: 0 }]);
 		expect(usage.byModel[0]).toMatchObject({ key: "anthropic/claude-fable-5-1", tokens: 120 });
 		expect(usage.byDay).toHaveLength(1);
 		expect(usage.byProject[0].key).toBe(card.projectId);

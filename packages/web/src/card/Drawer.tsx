@@ -1,4 +1,5 @@
 import type { Project, StageRun } from "@tower/core";
+import { cacheSavingsUsd } from "@tower/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api } from "../api/client.ts";
@@ -345,7 +346,10 @@ function runLabel(run: StageRun): string {
 const RESULT_CHIP: Record<string, string> = { pass: "bg-ok-soft text-ok", fail: "bg-danger-soft text-danger", blocked: "bg-caution-soft text-ink", missing: "bg-caution-soft text-ink" };
 
 function RunSummary({ run }: { run: StageRun }) {
+	const cached = run.tokens ? run.tokens.cacheRead + run.tokens.cacheWrite : 0;
 	const tokens = run.tokens ? `${run.tokens.total.toLocaleString()} tokens` : null;
+	const cacheNote = cached > 0 ? ` · ${cached.toLocaleString()} cached` : null;
+	const saved = cacheSavingsUsd(run.model, run.tokens);
 	// Subscription models report $0, so tokens lead and dollars only show when there is a real figure.
 	const cost = run.costUsd ? formatMoney(run.costUsd) : null;
 	// A deterministic flow step records its command as the "model"; "thinking off" after a shell pipeline reads as noise.
@@ -369,7 +373,9 @@ function RunSummary({ run }: { run: StageRun }) {
 					</span>
 				)}
 				{tokens && <span className="tnum">{tokens}</span>}
+				{cacheNote && <span className="tnum text-faint">{cacheNote}</span>}
 				{cost && <span className="tnum">{cost}</span>}
+				{saved !== null && saved > 0 && <span className="tnum text-ok">saved {formatMoney(saved)}</span>}
 			</p>
 			{run.resultSummary && (
 				<p className="mt-1 text-ink">

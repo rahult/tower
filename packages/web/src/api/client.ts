@@ -118,6 +118,8 @@ export interface UsageRow {
 	runs: number;
 	tokens: number;
 	costUsd: number;
+	cacheRead: number;
+	cacheWrite: number;
 }
 
 export interface Usage {
