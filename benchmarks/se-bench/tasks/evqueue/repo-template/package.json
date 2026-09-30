@@ -1,0 +1,9 @@
+{
+	"name": "evqueue",
+	"version": "0.1.0",
+	"description": "A durable FIFO event queue with at-least-once delivery, retry, and dead-lettering.",
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/"
+	}
+}

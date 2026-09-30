@@ -1,0 +1,14 @@
+remote call: 11358 prompt + 4080 completion tokens, cost $?
+### Build kvstore — pi vs tower
+
+| Dimension | pi | tower | Evidence |
+| --- | --- | --- | --- |
+| architecture | 7 | 8 | Both put all logic in closures inside openStore (src/index.js) with module-level helpers, but tower adds a clearer representation seam: the `map` always holds canonical JSON strings with parse/stringify only at the boundary, whereas pi stores parsed objects and re-runs JSON.parse/stringify on every get, blurring the boundary. |
+| solid | 7 | 8 | Neither is a god-object and both expose the same store surface; tower's `serialize`/`applyOps`/`validateKey` are single-purpose and `applyOps` is reused for both snapshot and WAL replay, while pi splits this into readSnapshot/replayLog/deepCopy with duplicated JSON logic, and pi's transaction discards `fn`'s return value unlike tower's. |
+| robustness | 6 | 8 | tower's serialize replacer throws for undefined at any depth, so `set('k',{a:undefined})` is rejected, whereas pi's serializeValue silently drops nested undefined and stores `{}`; tower also `break`s at the first torn WAL line (pi `continue`s past it), skips WAL writes for absent `del`/no-op transactions (pi writes a record for every `del` via applyChanges), and fsyncs the temp snapshot before rename while pi does not. |
+| testing | 7 | 9 | pi's tests in test/store.test.js and test/recovery.test.js cover happy path, rollback, deep-copy and torn-line recovery, but tower's test/kvstore.test.js and test/recovery.test.js add prototype-key keys (`__proto__`), falsy-vs-absent, nested-undefined rejection, empty-transaction-no-WAL, absent-del-no-WAL, idempotent close, snapshot+stale-WAL idempotency, and transaction return value — several of which would catch pi's real behavioural gaps. |
+| documentation | 6 | 6 | Both READMEs are identical placeholders ('Implementation to be written.'), giving a new user nothing; source-level comments are comparably good, with pi explaining the torn-line continue and single-record transaction commit and tower providing JSDoc on openStore/serialize plus a versioned snapshot payload. |
+
+**Verdict: tower (clear)** — Both pass the acceptance suite and share the same closure-based single-file design, but tower is more defensible: its serialization contract rejects nested non-JSON values, it avoids meaningless WAL appends, and its recovery/close paths are safer. pi is well-structured and correct on the tested surface but has real robustness gaps (nested-undefined coercion, no-op del WAL writes, continue-past-torn-line) that its own tests do not check.
+
+Key difference: tower enforces strict, depth-aware JSON-serializability and WAL-write hygiene (no writes for no-ops), whereas pi silently coerces invalid nested values and writes log records for operations that changed nothing.

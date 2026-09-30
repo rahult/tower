@@ -13,6 +13,8 @@ import { cpSync } from "node:fs";
 import { run as shell } from "../lib/shell.ts";
 import { readBrief, type TaskDef } from "../lib/tasks.ts";
 import type { ArmResult } from "../lib/types.ts";
+import { isRemoteModel, remoteModelId } from "../lib/openrouter.ts";
+import { startOpenRouterProxy, type RetryProxyHandle } from "../lib/openrouter-proxy.ts";
 import { startProxy, type ProxyHandle } from "./ollama-proxy.ts";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
@@ -49,6 +51,7 @@ interface CardDetail {
 export class TowerDaemon {
 	private child: ChildProcess | null = null;
 	private proxy: ProxyHandle | null = null;
+	private remoteProxy: RetryProxyHandle | null = null;
 	private model16k = "";
 	private readonly log: (line: string) => void;
 	readonly benchDir: string;
@@ -64,12 +67,39 @@ export class TowerDaemon {
 		return `http://127.0.0.1:${this.port}`;
 	}
 
-	/** Private pi config (models.json pointed at the tool-call proxy) + private TOWER_HOME with the stage-model override. */
+	/** Private pi config (models.json pointed at the tool-call proxy, or directly at OpenRouter) + private TOWER_HOME with the stage-model override. */
 	async prepare(model16k: string): Promise<void> {
 		this.model16k = model16k;
-		const proxyPort = this.port + 1;
 		const piDir = join(this.benchDir, ".pi-agent");
 		await mkdir(piDir, { recursive: true });
+		const home = join(this.benchDir, ".tower");
+		await mkdir(home, { recursive: true });
+		if (isRemoteModel(model16k)) {
+			// Free OpenRouter tier throttles hard; the local retry proxy keeps pi's print-mode run
+			// alive through 429/5xx storms (same role the ollama tool-call proxy plays for locals).
+			this.remoteProxy = await startOpenRouterProxy(this.port + 1, (line) => this.log(line));
+			await writeFile(
+				join(piDir, "models.json"),
+				JSON.stringify(
+					{
+						providers: {
+							openrouter: {
+								baseUrl: `http://127.0.0.1:${this.remoteProxy.port}/v1`,
+								api: "openai-completions",
+								apiKey: "openrouter",
+								models: [{ id: remoteModelId(model16k) }],
+							},
+						},
+					},
+					null,
+					2,
+				),
+			);
+			const stageModel = { model: model16k, thinking: "off" };
+			await writeFile(join(home, "config.json"), `${JSON.stringify({ models: { planning: stageModel, building: stageModel, testing: stageModel } }, null, 2)}\n`);
+			return;
+		}
+		const proxyPort = this.port + 1;
 		await writeFile(
 			join(piDir, "models.json"),
 			JSON.stringify(
@@ -88,14 +118,12 @@ export class TowerDaemon {
 				2,
 			),
 		);
-		const home = join(this.benchDir, ".tower");
-		await mkdir(home, { recursive: true });
 		const stageModel = { model: `ollama/${model16k}`, thinking: "off" };
 		await writeFile(join(home, "config.json"), `${JSON.stringify({ models: { planning: stageModel, building: stageModel, testing: stageModel } }, null, 2)}\n`);
 	}
 
 	async start(): Promise<void> {
-		this.proxy = await startProxy([this.model16k], this.port + 1);
+		if (!isRemoteModel(this.model16k)) this.proxy = await startProxy([this.model16k], this.port + 1);
 		const env: NodeJS.ProcessEnv = {
 			...process.env,
 			TOWER_HOME: join(this.benchDir, ".tower"),
@@ -121,6 +149,10 @@ export class TowerDaemon {
 	}
 
 	async stop(): Promise<void> {
+		if (this.remoteProxy) {
+			await this.remoteProxy.stop();
+			this.remoteProxy = null;
+		}
 		if (this.proxy) {
 			await this.proxy.stop();
 			this.proxy = null;

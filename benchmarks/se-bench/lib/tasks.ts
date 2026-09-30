@@ -15,6 +15,9 @@ export const TASKS: TaskDef[] = [
 	{ id: "sluglib", title: "Build sluglib", summary: "a slugify string library with unicode folding, separators and maxLength", acceptanceTest: "sluglib.acceptance.test.mjs" },
 	{ id: "tasknote", title: "Build tasknote CLI", summary: "a JSON-file-backed todo CLI with exact output formats and exit codes", acceptanceTest: "tasknote.acceptance.test.mjs" },
 	{ id: "propsheet", title: "Build propsheet", summary: "an INI-style config parser with typed values, quoting and a stringify round-trip", acceptanceTest: "propsheet.acceptance.test.mjs" },
+	{ id: "evqueue", title: "Build evqueue", summary: "a durable FIFO event queue with ack/nack retry, dead-lettering, and at-least-once recovery", acceptanceTest: "evqueue.acceptance.test.mjs" },
+	{ id: "kvstore", title: "Build kvstore", summary: "a transactional key-value store with atomic rollback and WAL crash recovery", acceptanceTest: "kvstore.acceptance.test.mjs" },
+	{ id: "tickets", title: "Build a ticket system", summary: "a JSON-persisted ticket tracker with a status workflow (start/close/reopen), comments, assignment, priorities, and filtering", acceptanceTest: "tickets.acceptance.test.mjs" },
 ];
 
 export function taskDir(taskId: string): string {

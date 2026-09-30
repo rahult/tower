@@ -15,8 +15,11 @@ const LABELS: Record<string, string> = {
 const ARM_STYLE: Record<string, { label: string; color: string; blurb: string }> = {
 	raw: { label: "Raw model", color: "#8a8f98", blurb: "one chat completion, no tools — output pasted to disk" },
 	basic: { label: "Basic loop", color: "#4d9fff", blurb: "minimal agent: file + shell tools, no gates, no reviews" },
+	pi: { label: "Stock pi", color: "#9a6cff", blurb: "pi -p as shipped: default coding prompt, default tools, no gates, no reviews" },
 	tower: { label: "Tower", color: "#f4b63f", blurb: "full pipeline: plan coach, plan gate, verify gate, acceptance gates, testing stage, review flows, feedback gate" },
 };
+
+const ARM_ORDER = ["raw", "basic", "pi", "tower"];
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -82,7 +85,7 @@ const SHORT_DIMS: Record<string, string> = {
 	documentation: "docs",
 };
 
-const shortModel = (model: string): string => (model.includes("qwen") ? "qwen 7b" : model.includes("llama") ? "llama 8b" : model);
+const shortModel = (model: string): string => (model.includes("qwen") ? "qwen 7b" : model.includes("llama") ? "llama 8b" : model.replace(/^openrouter\//, "").split("/").pop() ?? model);
 
 const shortOwnTests = (detail: string): string => {
 	if (/pass/.test(detail)) return `pass (${detail.match(/\((\d+ \w+)\)/)?.[1] ?? "suite"})`;
@@ -100,8 +103,12 @@ function runTable(rows: RunRecord[]): string {
 			const total = dims ? avg(DIMENSIONS.map((d) => dims[d] ?? 0)) : null;
 			const acc = r.score?.acceptance;
 			const tokens = r.result?.usage;
-			const color = r.arm === "tower" ? ARM_STYLE.tower.color : r.arm === "basic" ? ARM_STYLE.basic.color : ARM_STYLE.raw.color;
-			const endStage = r.result?.tower ? `${r.result.tower.endStage}·${r.result.tower.endStatus === "needs_attention" ? "attn" : r.result.tower.endStatus}` : "—";
+			const color = ARM_STYLE[r.arm]?.color ?? "#8a8f98";
+			const endStage = r.result?.tower
+				? `${r.result.tower.endStage}·${r.result.tower.endStatus === "needs_attention" ? "attn" : r.result.tower.endStatus}`
+				: r.result && r.arm === "pi"
+					? r.result.notes.some((n) => n.includes("exited cleanly")) ? "pi·done" : "pi·cut"
+					: "—";
 			return `<tr>
 				<td class="mono" title="${esc(r.model)}">${esc(shortModel(r.model))}</td><td>${esc(r.task)}</td>
 				<td><span class="pill" style="border-color:${color};color:${color}">${ARM_STYLE[r.arm]?.label ?? r.arm}</span></td>
@@ -118,14 +125,15 @@ function runTable(rows: RunRecord[]): string {
 	return `<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
-export async function buildReport(runs: Record<string, RunRecord>, outPath: string): Promise<void> {
+export async function buildReport(runs: Record<string, RunRecord>, outPath: string, info?: { judgeModel?: string }): Promise<void> {
 	const all = Object.values(runs).filter((r) => r.status === "done" && r.score);
 	const models = [...new Set(all.map((r) => r.model))].sort();
-	const armsPresent = [...new Set(all.map((r) => r.arm))];
+	const judgeModel = info?.judgeModel ?? "qwen2.5-coder:7b-16k";
+	const remote = models.some((m) => m.includes("/"));
 
 	const charts: string[] = [];
 	const combined: Record<string, number[]> = {};
-	for (const arm of ["raw", "basic", "tower"]) {
+	for (const arm of ARM_ORDER) {
 		const values = DIMENSIONS.map((d) => avg(models.map((m) => cell(runs, m, arm)?.[d] ?? NaN).filter((v) => Number.isFinite(v))));
 		if (values.some((v) => Number.isFinite(v))) combined[arm] = values;
 	}
@@ -134,7 +142,7 @@ export async function buildReport(runs: Record<string, RunRecord>, outPath: stri
 		charts.push(`<section class="chart"><h2>All models, average</h2>${spiderSVG(series)}${legend()}</section>`);
 	}
 	for (const model of models) {
-		const series = ["raw", "basic", "tower"]
+		const series = ARM_ORDER
 			.filter((arm) => cell(runs, model, arm))
 			.map((arm) => ({ label: ARM_STYLE[arm].label, color: ARM_STYLE[arm].color, values: DIMENSIONS.map((d) => cell(runs, model, arm)![d]) }));
 		if (series.length === 0) continue;
@@ -145,17 +153,20 @@ export async function buildReport(runs: Record<string, RunRecord>, outPath: stri
 	let findings = "";
 	if (Object.keys(combined).length >= 2) {
 		const byArm = Object.entries(combined)
-			.map(([arm, values]) => ({ arm, total: avg(values), correctness: combined[arm][0] }))
+			.map(([arm, values]) => ({ arm, total: avg(values), correctness: combined[arm][0], quality: combined[arm][2] }))
 			.sort((a, b) => b.total - a.total);
 		const lines: string[] = [];
 		lines.push(`<strong>${ARM_STYLE[byArm[0].arm].label}</strong> takes the highest mean across all six dimensions (${byArm[0].total.toFixed(1)}/10), ahead of ${byArm.slice(1).map((x) => `${ARM_STYLE[x.arm].label} (${x.total.toFixed(1)})`).join(" and ")}.`);
 		const byCorrect = [...byArm].sort((a, b) => b.correctness - a.correctness);
 		lines.push(`On hidden acceptance tests, ${ARM_STYLE[byCorrect[0].arm].label} ships the most working software (correctness ${byCorrect[0].correctness.toFixed(1)} vs ${byCorrect.slice(1).map((x) => `${x.correctness.toFixed(1)} for ${ARM_STYLE[x.arm].label}`).join(", ")}).`);
+		const byQuality = [...byArm].sort((a, b) => b.quality - a.quality);
+		lines.push(`On design quality — the code_quality dimension, where the rubric weighs architecture and SOLID explicitly — ${ARM_STYLE[byQuality[0].arm].label} leads (${byQuality[0].quality.toFixed(1)}/10), then ${byQuality.slice(1).map((x) => `${ARM_STYLE[x.arm].label} (${x.quality.toFixed(1)})`).join(", ")}.`);
 		const towerCell = byArm.find((x) => x.arm === "tower");
-		if (towerCell && towerCell.arm !== byArm[0].arm) {
-			lines.push(`Tower's pipeline — plan coach, verify gate demanding passing tests, acceptance red/green, review flows — asks the builder for iterative, tool-precise work. At 7–8B parameters that is a capability floor the models sit below: the discipline harness behaves as a <em>multiplier</em> on builder capability, and below the floor it taxes instead of boosting. Nothing stuck or crashed; the runs end honestly in <span class="mono">needs_attention</span> after their retry budgets.`);
+		const piCell = byArm.find((x) => x.arm === "pi");
+		if (towerCell && piCell && towerCell.arm !== byArm[0].arm) {
+			lines.push(`With a single coding model driving both, the comparison isolates the harness: stock pi improvises in one session, while Tower's pipeline — plan coach, verify gate demanding passing tests, acceptance red/green, review flows — structures the work into gated stages. In this run the discipline layer ${piCell.total > towerCell.total ? "taxed" : "multiplied"} the builder: pi's mean ${piCell.total.toFixed(1)} vs Tower's ${towerCell.total.toFixed(1)}.`);
 		}
-		lines.push(`Caveat kept in view: the tower arm ran fully headless with rubber-stamped gates and a scripted answerer — a real person answers questions better than a script, which would narrow but not close these gaps at this model size.`);
+		lines.push(`Caveat kept in view: the tower arm ran fully headless with rubber-stamped gates and a scripted answerer — a real person answers questions better than a script, which would narrow any gap seen here.`);
 		findings = `<div class="method"><ul>${lines.map((l) => `<li>${l}</li>`).join("")}</ul></div>`;
 	}
 
@@ -198,7 +209,8 @@ export async function buildReport(runs: Record<string, RunRecord>, outPath: stri
 		.card .t { color: #8a8f98; font-size: 13px; }
 	`;
 
-	const armDefs = `<ul class="armdefs">${["raw", "basic", "tower"].map((a) => `<li><span class="pill" style="border-color:${ARM_STYLE[a].color};color:${ARM_STYLE[a].color}">${ARM_STYLE[a].label}</span> — ${ARM_STYLE[a].blurb}</li>`).join("")}</ul>`;
+	const armsInRun = ARM_ORDER.filter((a) => all.some((r) => r.arm === a));
+	const armDefs = `<ul class="armdefs">${armsInRun.map((a) => `<li><span class="pill" style="border-color:${ARM_STYLE[a].color};color:${ARM_STYLE[a].color}">${ARM_STYLE[a].label}</span> — ${ARM_STYLE[a].blurb}</li>`).join("")}</ul>`;
 
 	const html = `<!doctype html>
 <html lang="en">
@@ -210,16 +222,16 @@ export async function buildReport(runs: Record<string, RunRecord>, outPath: stri
 </head>
 <body><div class="wrap">
 <h1>Delegate the building. Keep the discipline?</h1>
-<p class="sub">Same tasks, same local models, three amounts of scaffolding — benchmarked on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.</p>
+<p class="sub">Same tasks, same model${models.length > 1 ? "s" : ""}, ${armsInRun.length} amounts of scaffolding — benchmarked on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.</p>
 
 <div class="total-cards">
 	<div class="card"><div class="n">${all.length}</div><div class="t">scored runs</div></div>
 	${winner ? `<div class="card"><div class="n" style="color:${ARM_STYLE[winner[0]].color}">${ARM_STYLE[winner[0]].label}</div><div class="t">highest mean score, ${winner[1].toFixed(1)}/10 across all dimensions</div></div>` : ""}
-	<div class="card"><div class="n">${models.length}</div><div class="t">ollama models</div></div>
-	<div class="card"><div class="n">3</div><div class="t">tasks</div></div>
+	<div class="card"><div class="n">${models.length}</div><div class="t">${remote ? "OpenRouter models (verified $0)" : "ollama models"}</div></div>
+	<div class="card"><div class="n">${[...new Set(all.map((r) => r.task))].length}</div><div class="t">tasks</div></div>
 </div>
 
-<h2>The three contestants</h2>
+<h2>The contestants</h2>
 ${armDefs}
 
 <h2>Spider charts — six software-engineering dimensions</h2>
@@ -238,11 +250,11 @@ ${runTable(all)}
 <ul>
 <li><strong>Tasks.</strong> Three fresh Node.js projects with pinned layouts and precisely specified behaviour: <span class="mono">sluglib</span> (string library), <span class="mono">tasknote</span> (JSON-backed CLI), <span class="mono">propsheet</span> (INI-style parser). Every arm gets the identical brief.</li>
 <li><strong>Correctness</strong> is programmatic: a hidden acceptance suite written from the spec, run against whatever the arm produced (0–10 by pass rate). <strong>Testing</strong> blends whether the run's own test suite exists and passes (60%) with the judge's quality read (40%).</li>
-<li><strong>Judged dimensions</strong> (spec fit, code quality, robustness, docs) are scored 0–10 by <span class="mono">qwen2.5-coder:7b</span> against a fixed anchored rubric, with the brief, all produced files, and both test outcomes in view. A single local judge is a known limitation — same judge for every arm, so bias is at least shared.</li>
-<li><strong>Models.</strong> Ollama, 16k context (derived model tags), temperature 0.2 for the loops. Tower's stages all pointed at the same model; thinking off.</li>
+<li><strong>Judged dimensions</strong> (spec fit, code quality, robustness, docs) are scored 0–10 by <span class="mono">${esc(judgeModel)}</span> against a fixed anchored rubric, with the brief, all produced files, and both test outcomes in view. The code_quality anchor weighs architecture and SOLID explicitly (module seams, dependency direction, substitution, extension points). One judge for every arm, so its bias is at least shared.</li>
+<li><strong>Models.</strong> ${remote ? `OpenRouter, verified $0 pricing before the run (${models.map((m) => `<span class="mono">${esc(m.replace(/^openrouter\//, ""))}</span>`).join(", ")}); temperature 0.2 for the loops, thinking off. Tower's stages and the pi run both used the same model.` : `Ollama, 16k context (derived model tags), temperature 0.2 for the loops. Tower's stages all pointed at the same model; thinking off.`}</li>
 <li><strong>No human anywhere.</strong> Tower's plan and feedback gates were decided by a script that approves everything; its stage questions got a generic "use your best judgement". Tower ran as shipped: plan coach, verify gate, acceptance red/green gates, testing stage, adversarial + SOLID review flows.</li>
-<li><strong>Tokens</strong> for the tower arm are Tower's own session accounting across all its stages; raw/basic count ollama prompt+output tokens. Wall time is per-run and includes local model load.</li>
-<li>One machine, runs sequential. Small task set, one judge, 7–8B models: read this as a disciplined smoke test of the thesis, not leaderboard truth.</li>
+<li><strong>Tokens</strong> for the tower arm are Tower's own session accounting across all its stages; the pi arm's usage is pi's own (wall time shown; token counts are not scraped from pi's output). Wall time is per-run${remote ? "" : " and includes local model load"}.</li>
+<li>One machine, runs sequential. Small task set, one judge${remote ? ", one free model tier" : ", 7–8B models"}: read this as a disciplined smoke test of the thesis, not leaderboard truth.</li>
 </ul>
 </div>
 

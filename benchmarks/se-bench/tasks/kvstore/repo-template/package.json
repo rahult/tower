@@ -1,0 +1,9 @@
+{
+	"name": "kvstore",
+	"version": "0.1.0",
+	"description": "Embedded key-value store with atomic transactions and WAL crash recovery.",
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/"
+	}
+}

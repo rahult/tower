@@ -13,16 +13,18 @@ import { TASKS, prepareStartDir, readBrief, type TaskDef } from "./lib/tasks.ts"
 import type { ArmResult } from "./lib/types.ts";
 import { runRawArm } from "./arms/raw.ts";
 import { runBasicArm } from "./arms/basic.ts";
+import { runPiArm } from "./arms/pi.ts";
 import { TowerDaemon, runTowerArm } from "./tower/driver.ts";
 import { scoreRun, DIMENSIONS, type Scored } from "./score.ts";
 import { buildReport } from "./report.ts";
+import { isRemoteModel, hasRemoteCredentials } from "./lib/openrouter.ts";
 
 const BENCH = import.meta.dirname;
 const STATE_DIR = join(BENCH, ".state");
 
 export interface RunRecord {
 	id: string;
-	arm: "raw" | "basic" | "tower";
+	arm: "raw" | "basic" | "pi" | "tower";
 	model: string;
 	task: string;
 	status: "done" | "failed";
@@ -78,7 +80,7 @@ function logFile(name: string): (line: string) => void {
 }
 
 const MODELS = ["qwen2.5-coder:7b", "llama3.1:8b"];
-const ARMS = ["raw", "basic", "tower"] as const;
+const ARMS = ["raw", "basic", "pi", "tower"] as const;
 type Arm = (typeof ARMS)[number];
 
 async function main(): Promise<void> {
@@ -104,23 +106,31 @@ async function runBenchmark(args: Record<string, string>): Promise<void> {
 	const tasks = (args.tasks ?? (smoke ? "sluglib" : TASKS.map((t) => t.id).join(","))).split(",").filter(Boolean);
 	const arms = (args.arms ?? ARMS.join(",")).split(",") as Arm[];
 	const basicDeadline = Number(args["basic-minutes"] ?? (smoke ? 10 : 35)) * 60_000;
+	const piDeadline = Number(args["pi-minutes"] ?? (smoke ? 10 : 35)) * 60_000;
 	const towerDeadline = Number(args["tower-minutes"] ?? (smoke ? 30 : 90)) * 60_000;
 
 	if (args.only === "report") {
 		const state = await loadState();
-		await buildReport(state.runs, join(BENCH, "report.html"));
+		await buildReport(state.runs, join(BENCH, "report.html"), { judgeModel: args.judge ?? "?" });
 		console.log(`report written to ${join(BENCH, "report.html")}`);
 		return;
 	}
 
-	const judgeModel = await ensure16kVariant("qwen2.5-coder:7b");
-	for (const model of models) await ensure16kVariant(model);
+	const remote = models.some(isRemoteModel);
+	if (remote && !hasRemoteCredentials()) throw new Error("remote OpenRouter models requested but OPENROUTER_API_KEY is not set");
+	if (remote && arms.some((a) => a === "raw" || a === "basic")) {
+		throw new Error("the raw/basic arms are ollama-only — run them with a local model (or use --arms=pi,tower for a remote model)");
+	}
+	// Judge: explicit --judge wins; otherwise the same remote model judges remote runs (one strong
+	// judge, shared bias), local runs keep the local qwen judge.
+	const judgeModel = args.judge ?? (remote ? models.find(isRemoteModel)! : await ensure16kVariant("qwen2.5-coder:7b"));
+	for (const model of models) if (!isRemoteModel(model)) await ensure16kVariant(model);
 
 	const state = await loadState();
 	const taskDefs = tasks.map((id) => TASKS.find((t) => t.id === id)).filter((t): t is TaskDef => Boolean(t));
 
 	for (const model of models) {
-		const model16k = await ensure16kVariant(model);
+		const model16k = isRemoteModel(model) ? model : await ensure16kVariant(model);
 		for (const task of taskDefs) {
 			for (const arm of arms) {
 				const id = `${arm}:${model}:${task.id}`;
@@ -142,6 +152,9 @@ async function runBenchmark(args: Record<string, string>): Promise<void> {
 					} else if (arm === "basic") {
 						outDir = await prepareStartDir(task.id, join(runDir, "out"));
 						result = await runBasicArm(task, outDir, model16k, basicDeadline, (line) => log(line));
+					} else if (arm === "pi") {
+						outDir = await prepareStartDir(task.id, join(runDir, "out"));
+						result = await runPiArm(task, outDir, model16k, piDeadline, (line) => log(line));
 					} else {
 						const benchDir = join(runDir, "bench");
 						await mkdir(benchDir, { recursive: true });
@@ -170,7 +183,7 @@ async function runBenchmark(args: Record<string, string>): Promise<void> {
 		}
 	}
 
-	await buildReport(state.runs, join(BENCH, "report.html"));
+	await buildReport(state.runs, join(BENCH, "report.html"), { judgeModel });
 	console.log(`\nreport: ${join(BENCH, "report.html")}`);
 }
 
