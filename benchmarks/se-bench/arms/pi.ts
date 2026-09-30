@@ -53,7 +53,7 @@ export async function runPiArm(task: TaskDef, outDir: string, model: string, dea
 		);
 		env.PI_CODING_AGENT_DIR = piDir;
 	}
-	const args = ["-p", "--provider", "openrouter", "--model", remoteModelId(model), "--thinking", "off", "--no-session", "--", brief];
+	const args = ["-p", "--provider", "openrouter", "--model", remoteModelId(model), "--thinking", "off", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates", "--", brief];
 	log?.(`spawning: pi ${args.slice(0, -1).join(" ")} "<brief>"`);
 	const child = spawn("pi", args, { cwd: outDir, env, stdio: ["ignore", "pipe", "pipe"] });
 	let tail = "";

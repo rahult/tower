@@ -1,0 +1,14 @@
+remote call: 11594 prompt (0 cached) + 3633 completion tokens, cost $?
+### Build webnote — pi vs tower
+
+| Dimension | pi | tower | Evidence |
+| --- | --- | --- | --- |
+| architecture | 7 | 7 | Both use the identical, appropriate shape: createApp(notesFile) factory in src/server.js as a test seam, static INDEX_HTML, separate src/app.js client. tower factors URL handling into a requestPath() helper while pi inlines new URL() parsing in the handler; pi's parser is more standard, tower's split is cleaner — a wash. |
+| solid | 7 | 7 | In both, loadState/saveState/sendJson/readBody are tight single-responsibility units and the request handler is a shared god-function (routing + validation + persistence inline), acceptable at this size. Neither leaks state across createApp instances, so both are substitutable in tests. |
+| robustness | 6 | 8 | pi has three unguarded failure paths: decodeURIComponent on the DELETE id throws URIError → 500 for /api/notes/%zz; readBody rejects oversize bodies then calls req.destroy(), killing the socket before the 400 can be delivered (and the outer catch's sendJson can then throw unhandled); its 500 handler ignores res.headersSent. tower wraps decodeURIComponent (→404), drains with req.resume() guarded by a done flag, and checks headersSent before writing the 500. |
+| testing | 7 | 8 | Both suites are strong (pi: 13 tests incl. exact error bodies, ISO round-trip, durability-before-response). tower adds the failure modes pi leaves unverified: 'concurrent creates get distinct ids', 'corrupt data file starts as empty', and 'deleting every note and restarting does not reuse ids' — the last two directly exercise loadState's nextId recovery, which pi implements but never tests. |
+| documentation | 2 | 9 | pi's README is a stale placeholder — 'Self-contained notes web app. (Implementation to be written.)' — actively false against shipped code, with no run/test/API info. tower's README documents env vars, an API table with exact error bodies, the on-disk state shape {nextId, notes}, and the fsync/rename durability semantics, all matching saveState/loadState. |
+
+**Verdict: tower (clear)** — The happy-path architecture is effectively identical, but tower is engineered with consistent failure-path discipline — guarded decode, socket-preserving body rejection, headersSent-aware 500s — and it verifies those paths with concurrency, corrupt-file, and id-continuity tests, plus a real README. pi matches on the main flow but ships crash-prone edge handling and a placeholder README claiming the implementation doesn't exist.
+
+Key difference: tower treats error and recovery paths as first-class (guarded in code, covered by tests, documented in the README) while pi only handles the happy path robustly and leaves its edges unguarded, untested, and undocumented.

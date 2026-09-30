@@ -1,0 +1,9 @@
+{
+	"name": "webnote",
+	"version": "0.1.0",
+	"description": "A self-contained notes web app: zero-dependency server, single-page UI, JSON API, file persistence.",
+	"scripts": {
+		"start": "node src/server.js",
+		"test": "node --test test/"
+	}
+}

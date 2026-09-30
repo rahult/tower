@@ -232,3 +232,16 @@ Five fixes, each traced to a benchmark finding and kept principle-based:
 5. **Shipped-report doc debt** (building.md): an untouched placeholder README next to new API is a listed gap. From the stub-README pattern across all complex tasks.
 
 Plus the earlier DFMA partial and the cost UI (cached savings). Validation: 210/210 daemon tests (after making the dfma partial tolerant of custom prompts dirs — a real regression the suite caught), then a live tower/tickets run with all fixes: docs 9 (plan included the README), and the produced code is clean on both previously-shipped defect classes — `get`/`update`/`comment` return clones, `update` validates all fields before mutating any. Σ 8.8 (spec 9: still one point of unrequested strictness; quality 8: the DFMA-accepted single-module design). Not yet done (larger): flow-stall watchdog, stage-context elision, worktree-integrity pre-merge check.
+
+### Appendix 4 — the web-app benchmark: webnote (2026-09-30, user-requested showcase)
+
+Both arms on **truly stock, extension-free pi** (daemon already ships `--no-extensions`; the pi arm now runs `--no-extensions --no-skills --no-prompt-templates`), deepseek-flash, judge = the model itself plus an independent kimi-k3 pass. Task: a self-contained notes web app — zero-dependency Node server, offline single-page UI, JSON CRUD with exact contracts, restart-safe persistence. Hidden suite (11 tests) validated against a reference implementation and boots the real server.
+
+| Arm | Correctness (11 hidden) | Spec | Quality | Testing | Robustness | Docs | Σ |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| pi (extension-free) | 10 | 9 | 8 | 9.6 | 9 | 1 | **7.8** |
+| tower | 10 | 10 | 8 | 9.6 | 8 | 9 | **9.1** |
+
+**Both judges (deepseek in-matrix and kimi-k3 independent) gave tower (clear)** — 4 of 5 tasks now agree across judges. Cited evidence: pi ships a placeholder README *and* a `readBody` that can destroy the socket before its own 400 is sent (caught by both judges); tower's build has guarded decode, socket-preserving rejection, headersSent-aware 500s, and tests for concurrency, corrupt-file recovery, and id-counter durability. Costs (cache-aware): pi $0.007 / 1 min / 14 calls; tower $0.062 / 7.2 min / 69 calls — a 9× pipeline tax on a task this small, in exchange for the docs and failure-path discipline.
+
+**The headline learning**: pi's documentation discipline in earlier appendices was coming from *user-installed extensions and skills*, not pi itself — run truly stock (no extensions, no skills, no prompt templates), pi shipped a stub README (docs 1) while Tower's in-repo pipeline produced docs 9 with the same model and price card. "Stock pi" is environment-dependent; Tower's discipline ships with the repo and reproduces. Second learning: the day's hardening all held live — plan included the README without the brief requiring it, both review flows ran, merge was clean, and the new guards stayed silent (no false positives).

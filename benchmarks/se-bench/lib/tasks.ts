@@ -17,6 +17,7 @@ export const TASKS: TaskDef[] = [
 	{ id: "propsheet", title: "Build propsheet", summary: "an INI-style config parser with typed values, quoting and a stringify round-trip", acceptanceTest: "propsheet.acceptance.test.mjs" },
 	{ id: "evqueue", title: "Build evqueue", summary: "a durable FIFO event queue with ack/nack retry, dead-lettering, and at-least-once recovery", acceptanceTest: "evqueue.acceptance.test.mjs" },
 	{ id: "kvstore", title: "Build kvstore", summary: "a transactional key-value store with atomic rollback and WAL crash recovery", acceptanceTest: "kvstore.acceptance.test.mjs" },
+	{ id: "webnote", title: "Build webnote", summary: "a self-contained notes web app: zero-dependency HTTP server, offline single-page UI, JSON CRUD API with exact contracts, and restart-safe file persistence", acceptanceTest: "webnote.acceptance.test.mjs" },
 	{ id: "tickets", title: "Build a ticket system", summary: "a JSON-persisted ticket tracker with a status workflow (start/close/reopen), comments, assignment, priorities, and filtering", acceptanceTest: "tickets.acceptance.test.mjs" },
 ];
 

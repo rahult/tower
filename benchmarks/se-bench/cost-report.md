@@ -34,16 +34,18 @@ Generated 2026-09-30. DeepSeek cells priced at off-peak rates (input $0.15/M mis
 | sluglib | pi | 1.7m | 19 | 277,211 | n/a | 13,657 | $0.050 | rate card × tokens |
 | sluglib | tower | 6.7m | 65 | 1,916,206 | n/a | 78,160 | $0.334 | rate card × tokens |
 | tickets | tower | 9.1m | 80 | 2,730,906 | 2,594,048 (95%) | 108,494 | $0.093 | rate card × tokens |
-| **total** | | | | | | | **$1.352** | |
+| webnote | pi | 1m | 14 | 130,193 | 124,928 (96%) | 9,863 | $0.007 | rate card × tokens |
+| webnote | tower | 7.2m | 69 | 2,321,966 | 2,253,696 (97%) | 74,891 | $0.062 | rate card × tokens |
+| **total** | | | | | | | **$1.421** | |
 
 ## Judges and comparisons
 
-17 judge calls + 11 head-to-head comparisons: 93,905 prompt + 56,675 completion tokens.
-The deepseek-judged share prices at ~$0.048; the kimi-k3 comparisons are token-reported only (Moonshot native billing).
+19 judge calls + 13 head-to-head comparisons: 117,265 prompt + 62,960 completion tokens.
+The deepseek-judged share prices at ~$0.055; the kimi-k3 comparisons are token-reported only (Moonshot native billing).
 
 ## Grand total
 
 - cohere/north-mini-code:free: $0.000
 - qwen/qwen3-coder: $1.196
-- deepseek-flash: $1.352
-- **all models: $2.549**
+- deepseek-flash: $1.421
+- **all models: $2.618**
