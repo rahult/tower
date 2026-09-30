@@ -16,6 +16,8 @@ Implement the plan at the absolute path `{{planPath}}`. Read it first; it was wr
 
 {{> invariant-protocol}}
 
+{{> dfma}}
+
 {{> acceptance}}
 
 {{> annotations}}
@@ -36,7 +38,7 @@ One row per check, tagged with how it was actually verified:
 Never tag a by-hand check as a command. If you could not verify anything, say so here.
 
 ## Gaps
-What this change knowingly does not cover — untested paths, edge cases, follow-up work. Write "None that I know of" only when it is true.
+What this change knowingly does not cover — untested paths, edge cases, follow-up work. Write "None that I know of" only when it is true. If the change grew a public surface (new API, commands, options, files) and the README or docs still describe the old state — or are still a placeholder — that is a gap: either update them now or list the doc debt here explicitly.
 
 # What you learned
 

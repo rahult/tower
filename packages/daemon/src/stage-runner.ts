@@ -388,6 +388,8 @@ export class StageRunner {
 			partials["research"] = this.researchBlock(stage, cardDir);
 			partials["system-model"] = this.systemModelBlock(stage, project);
 			partials["acceptance"] = this.acceptanceBlock(stage, project, worktreePath);
+			// Custom prompts dirs (a person's overrides, a test harness) may not ship this partial; treat it as switched off.
+			partials["dfma"] = existsSync(join(config.promptsDir, "partials", "dfma.md")) ? read("partials", "dfma.md") : "";
 			// The person's margin notes, while any are open: requests, not observations.
 			partials["annotations"] = unresolvedAnnotationsBlock(cardDir);
 			return renderPrompt(
