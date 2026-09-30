@@ -553,8 +553,13 @@ export function pickNext(candidates, state) {
 					backlog before any of it. The pipeline itself: planning, the plan gate with its coach and margin notes, building — single-session, a parallel crew, or stacked on another
 					card — testing with the retry loop and your own deterministic gates, adversarial and SOLID reviews that fan out in parallel, the feedback gate, a spend budget that stops
 					the line, and two ways to land: pull requests with CI repair, or a local merge when there is no remote. Plans cut into queues of cards; schedules fire flows on a clock;
-					model checks and honest previews keep the plumbing true; a reachability walk proves the card machine has no stuck states. Tests run the whole daemon end to end — and the
-					discipline thesis was measured, not argued: the same small model run three ways against SE-bench tasks scored highest under Tower's harness. Planning, building, testing
+					model checks and honest previews keep the plumbing true; a reachability walk proves the card machine has no stuck states. Tests run the whole daemon end to end —
+					and the discipline thesis was measured three ways, not argued: on a free-tier model Tower's pipeline amplified the builder's failures and shipped nothing, while stock pi
+					worked; on paid coding models the pipeline won the deliverable on most tasks — documented, review-screened, tested — and an independent third-party judge agreed on
+					three of four head-to-heads, all of it in <code>benchmarks/se-bench</code> with the full verdict, per-task cost ledger, and every incident on record. What the measuring
+					exposed is now built in: the merge refuses empty branches and uncommitted work, stalled flows abort themselves, reviews probe encapsulation, mutation atomicity and
+					over-strictness, build prompts carry DFMA design constraints (fewest parts, no duplicated logic paths), planners may not forbid documentation the brief left open, and
+					every run shows its cost with the provider-cache savings beside it — the whole three-model benchmark, judges included, cost $2.55. Planning, building, testing
 					and questions have been run against real pi sessions.
 				</p>
 				<p>
