@@ -102,27 +102,52 @@ export class FlowRunner {
 		if (card && !card.worktreePath && !runsOnBacklogCard(flow)) {
 			throw new Error(`"${name}" runs commands or changes code, so it needs the card's worktree — start the card first.`);
 		}
-		let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
-		const visits = new Map<string, number>();
-		let step: FlowStep | null = flow.start ? (flow.steps.find((candidate) => candidate.name === flow.start) ?? null) : (flow.steps[0] ?? null);
-		while (step) {
-			const run = (visits.get(step.name) ?? 0) + 1;
-			visits.set(step.name, run);
-			const cap = step.maxRuns ?? DEFAULT_MAX_NODE_RUNS;
-			if (run > cap) {
-				return { kind: "settled", stage: "testing", result: "fail", summary: `"${step.name}" ran ${run - 1} times without passing — stopping the loop.`, hasQuestions: false };
+		// Stall watchdog: a flow step whose session stops producing any transcript activity (a hung
+		// session, a lost provider connection that never errors) would hold the card forever — observed
+		// live as an 84-minute feedback flow with zero model calls that only ended at the arm deadline.
+		// Any transcript entry on one of this card's runs counts as progress.
+		const stallMs = Number(process.env.TOWER_FLOW_STALL_MINUTES ?? 15) * 60_000;
+		let lastProgressAt = Date.now();
+		const runCard = new Map<string, string | null>();
+		const cardOf = (runId: string): string | null => {
+			if (!runCard.has(runId)) runCard.set(runId, getRun(this.deps.db, runId)?.cardId ?? null);
+			return runCard.get(runId) ?? null;
+		};
+		const unsubscribe = this.deps.bus.subscribe((event) => {
+			if (event.topic.startsWith("run:") && cardOf(event.topic.slice(4)) === cardId) lastProgressAt = Date.now();
+		});
+		const watchdog = setInterval(() => {
+			if (Date.now() - lastProgressAt < stallMs) return;
+			lastProgressAt = Date.now(); // fire once per stall, not every tick
+			console.error(`flow "${name}" on card ${cardId}: no transcript progress for ${Math.round(stallMs / 60000)} minutes — aborting the stalled run`);
+			this.deps.stages.abort(cardId).catch(() => {});
+		}, 60_000);
+		try {
+			let last: RunOutcome = { kind: "settled", stage: "testing", result: "pass", summary: "", hasQuestions: false };
+			const visits = new Map<string, number>();
+			let step: FlowStep | null = flow.start ? (flow.steps.find((candidate) => candidate.name === flow.start) ?? null) : (flow.steps[0] ?? null);
+			while (step) {
+				const run = (visits.get(step.name) ?? 0) + 1;
+				visits.set(step.name, run);
+				const cap = step.maxRuns ?? DEFAULT_MAX_NODE_RUNS;
+				if (run > cap) {
+					return { kind: "settled", stage: "testing", result: "fail", summary: `"${step.name}" ran ${run - 1} times without passing — stopping the loop.`, hasQuestions: false };
+				}
+				last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback, shared }));
+				if (last.kind !== "settled") return last;
+				// A step that stopped to ask has parked the work on a decision: the walk must not run past
+				// it, or the questions dangle while the flow reports success (observed live: a red gate
+				// "passed" while the spec writer waited for an answer).
+				if (last.result === "blocked" && last.hasQuestions) return last;
+				// The old stop-on-failed-gate rule, skipped only where an edge says where failure goes.
+				if (step.run !== undefined && last.result === "fail" && !step.on?.fail) return last;
+				step = nextStep(flow, step, last.result === "fail" ? "fail" : "pass");
 			}
-			last = step.run !== undefined ? await this.runStep(cardId, flow, step, shared) : await this.deps.stages.startCustom(cardId, this.request(cardId, step, { flow, requireResult: true, feedback, shared }));
-			if (last.kind !== "settled") return last;
-			// A step that stopped to ask has parked the work on a decision: the walk must not run past
-			// it, or the questions dangle while the flow reports success (observed live: a red gate
-			// "passed" while the spec writer waited for an answer).
-			if (last.result === "blocked" && last.hasQuestions) return last;
-			// The old stop-on-failed-gate rule, skipped only where an edge says where failure goes.
-			if (step.run !== undefined && last.result === "fail" && !step.on?.fail) return last;
-			step = nextStep(flow, step, last.result === "fail" ? "fail" : "pass");
+			return last;
+		} finally {
+			clearInterval(watchdog);
+			unsubscribe();
 		}
-		return last;
 	}
 
 	runAdhoc(cardId: string, request: AdhocRequest): Promise<RunOutcome> {
