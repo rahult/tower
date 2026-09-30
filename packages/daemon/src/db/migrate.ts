@@ -194,6 +194,11 @@ const MIGRATIONS: string[] = [
 	ALTER TABLE projects ADD COLUMN after_plan_flows_json TEXT;
 	ALTER TABLE projects ADD COLUMN after_build_flows_json TEXT;
 	`,
+	`
+	-- Pi environment discovery: when 1, Tower's pi agents discover the user's environment — extensions,
+	-- skills, prompt-templates. Locked down (0) by default: Tower ships its discipline in-repo.
+	ALTER TABLE projects ADD COLUMN pi_discovery INTEGER NOT NULL DEFAULT 0;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

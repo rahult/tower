@@ -45,6 +45,8 @@ export interface Project {
 	parallelReviews: boolean | null;
 	trustProjectPi: boolean;
 	extensions: string[];
+	/** When true, Tower's pi agents discover the user's environment — extensions, skills, prompt-templates. Default false = locked down. */
+	piDiscovery?: boolean;
 	concurrencyLimit: number;
 	stageConfig: StageConfigOverrides;
 	/** Review flows run after tests pass. null = Tower's default set; [] = none. */
@@ -176,5 +178,7 @@ export interface RunSpec {
 	tools: string[];
 	extensions: string[];
 	trustProject: boolean;
+	/** When true, pi discovers the user's environment (extensions, skills, prompt-templates); when false/undefined, all three are disabled. */
+	piDiscovery?: boolean;
 	appendSystemPromptFiles: string[];
 }

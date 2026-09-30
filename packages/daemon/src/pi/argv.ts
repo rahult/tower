@@ -4,8 +4,9 @@ import type { RunSpec } from "@tower/core";
  * RunSpec → pi CLI arguments (RpcClient adds `--mode rpc` itself). Pure and snapshot-tested:
  * this is the regression guard for pi CLI drift.
  *
- * Defaults are deliberately locked down: no extension discovery and no project trust, because pi has no
- * tool-approval gate and the user's global config loads many extensions. Both are opt-in per project.
+ * Defaults are deliberately locked down: no environment discovery (extensions, skills, prompt-templates)
+ * and no project trust, because pi has no tool-approval gate and the user's global config loads many
+ * extensions. Both are opt-in per project.
  */
 export function buildPiArgs(spec: RunSpec): string[] {
 	const args = [
@@ -19,8 +20,8 @@ export function buildPiArgs(spec: RunSpec): string[] {
 		spec.thinking,
 		"--tools",
 		spec.tools.join(","),
-		"--no-extensions",
 	];
+	if (!spec.piDiscovery) args.push("--no-extensions", "--no-skills", "--no-prompt-templates");
 	for (const extension of spec.extensions) args.push("-e", extension);
 	args.push(spec.trustProject ? "--approve" : "--no-approve");
 	for (const file of spec.appendSystemPromptFiles) args.push("--append-system-prompt", file);

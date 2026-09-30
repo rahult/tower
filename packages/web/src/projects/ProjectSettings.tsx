@@ -7,7 +7,7 @@ import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
 
-type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; afterPlanFlows: string[] | null; afterBuildFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null; sources: string[] };
+type Settings = { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; concurrencyLimit: number; reviewFlows: string[] | null; afterPlanFlows: string[] | null; afterBuildFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; parallelReviews: boolean | null; sources: string[]; piDiscovery: boolean };
 
 /**
  * A project's levers, laid out as setting rows: verify and setup commands, hands-on test and preview
@@ -35,9 +35,10 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 	const [acceptanceGates, setAcceptanceGates] = useState<boolean | null>(project.acceptanceGates);
 	const [parallelReviews, setParallelReviews] = useState<boolean | null>(project.parallelReviews);
 	const [sources, setSources] = useState<string[]>(project.sources ?? []);
+	const [piDiscovery, setPiDiscovery] = useState(project.piDiscovery ?? false);
 	const queryClient = useQueryClient();
 	const save = useMutation({
-		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, afterPlanFlows, afterBuildFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, sources }),
+		mutationFn: () => api.updateProject(project.id, { setupCommand, verifyCommand, testCommand, previewCommand, previewUrl, previewCheck, budgetUsd: budgetUsd.trim() === "" ? null : Number(budgetUsd), concurrencyLimit, reviewFlows, afterPlanFlows, afterBuildFlows, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, sources, piDiscovery }),
 		onSuccess: () => {
 			toast(`Saved ${project.name}'s settings.`);
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
@@ -402,6 +403,26 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 						<option value="on">On for this project</option>
 						<option value="off">Off for this project</option>
 					</select>
+				</div>
+			</div>
+			<div className="setting">
+				<div>
+					<div className="k">Pi environment discovery</div>
+					<div className="d">Let Tower's pi agents load your pi extensions, skills and prompt templates. Off by default: Tower ships its discipline in-repo and user-environment skills made benchmarked behavior unreproducible.</div>
+				</div>
+				<div className="v">
+					<label className="flex cursor-pointer items-center gap-2 text-[14px]">
+						<input
+							type="checkbox"
+							className="size-4 accent-[var(--primary)]"
+							checked={piDiscovery}
+							onChange={(event) => setPiDiscovery(event.target.checked)}
+						/>
+						<span>
+							Discover your pi environment
+							<span className="block text-[13px] text-slate">Explicit extension paths set per project keep working either way.</span>
+						</span>
+					</label>
 				</div>
 			</div>
 			<div className="setting">

@@ -19,6 +19,7 @@ function toProject(row: Row): Project {
 		parallelReviews: row.parallel_reviews == null ? null : row.parallel_reviews === 1,
 		trustProjectPi: row.trust_project_pi === 1,
 		extensions: JSON.parse(row.extensions_json as string),
+		piDiscovery: row.pi_discovery === 1,
 		concurrencyLimit: row.concurrency_limit as number,
 		stageConfig: JSON.parse(row.stage_config_json as string),
 		reviewFlows: row.review_flows_json ? JSON.parse(row.review_flows_json as string) : null,
@@ -37,8 +38,8 @@ function toProject(row: Row): Project {
 export function insertProject(db: Db, project: Project): void {
 	db.prepare(
 		`INSERT INTO projects (id, name, repo_path, default_branch, setup_command, verify_command, test_command, preview_command, preview_url, preview_check, budget_usd, parallel_reviews, trust_project_pi,
-			 extensions_json, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, sources_json, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 extensions_json, pi_discovery, concurrency_limit, stage_config_json, invariant_simulation, subagents, understand_before_plan, acceptance_gates, has_origin, sources_json, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		project.id,
 		project.name,
@@ -54,6 +55,7 @@ export function insertProject(db: Db, project: Project): void {
 		project.parallelReviews == null ? null : project.parallelReviews ? 1 : 0,
 		project.trustProjectPi ? 1 : 0,
 		JSON.stringify(project.extensions),
+		project.piDiscovery ? 1 : 0,
 		project.concurrencyLimit,
 		JSON.stringify(project.stageConfig),
 		project.invariantSimulation == null ? null : project.invariantSimulation ? 1 : 0,
@@ -80,7 +82,7 @@ export function getProject(db: Db, id: string): Project | null {
 	return row ? toProject(row) : null;
 }
 
-export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "afterPlanFlows" | "afterBuildFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates" | "sources">>;
+export type ProjectSettings = Partial<Pick<Project, "name" | "setupCommand" | "verifyCommand" | "testCommand" | "previewCommand" | "previewUrl" | "previewCheck" | "budgetUsd" | "parallelReviews" | "concurrencyLimit" | "reviewFlows" | "afterPlanFlows" | "afterBuildFlows" | "invariantSimulation" | "subagents" | "understandBeforePlan" | "acceptanceGates" | "sources" | "piDiscovery">>;
 
 const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCommand: "verify_command", testCommand: "test_command", previewCommand: "preview_command", previewUrl: "preview_url", previewCheck: "preview_check", budgetUsd: "budget_usd", concurrencyLimit: "concurrency_limit" } as const;
 
@@ -88,13 +90,15 @@ const SETTING_COLUMNS = { name: "name", setupCommand: "setup_command", verifyCom
 const TOGGLE_COLUMNS = { invariantSimulation: "invariant_simulation", subagents: "subagents", understandBeforePlan: "understand_before_plan", acceptanceGates: "acceptance_gates", parallelReviews: "parallel_reviews" } as const;
 
 export function updateProject(db: Db, id: string, settings: ProjectSettings): Project {
-	const { reviewFlows, afterPlanFlows, afterBuildFlows, sources, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
+	const { reviewFlows, afterPlanFlows, afterBuildFlows, sources, piDiscovery, invariantSimulation, subagents, understandBeforePlan, acceptanceGates, parallelReviews, ...plain } = settings;
 	// null reviewFlows means "Tower's default set" and must stay SQL NULL; sources are always a list.
 	if (reviewFlows !== undefined) db.prepare("UPDATE projects SET review_flows_json = ? WHERE id = ?").run(reviewFlows ? JSON.stringify(reviewFlows) : null, id);
 	// Same for the hook gates: null = every flow that declares the trigger, [] = none.
 	if (afterPlanFlows !== undefined) db.prepare("UPDATE projects SET after_plan_flows_json = ? WHERE id = ?").run(afterPlanFlows ? JSON.stringify(afterPlanFlows) : null, id);
 	if (afterBuildFlows !== undefined) db.prepare("UPDATE projects SET after_build_flows_json = ? WHERE id = ?").run(afterBuildFlows ? JSON.stringify(afterBuildFlows) : null, id);
 	if (sources !== undefined) db.prepare("UPDATE projects SET sources_json = ? WHERE id = ?").run(JSON.stringify(sources), id);
+	// Discovery is a plain boolean with a locked-down default, not a nullable toggle: no SQL NULL.
+	if (piDiscovery !== undefined) db.prepare("UPDATE projects SET pi_discovery = ? WHERE id = ?").run(piDiscovery ? 1 : 0, id);
 	for (const [key, column] of Object.entries(TOGGLE_COLUMNS)) {
 		const value = settings[key as keyof typeof TOGGLE_COLUMNS] as boolean | null | undefined;
 		if (value !== undefined) db.prepare(`UPDATE projects SET ${column} = ? WHERE id = ?`).run(value == null ? null : value ? 1 : 0, id);

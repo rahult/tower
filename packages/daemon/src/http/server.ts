@@ -162,6 +162,7 @@ export function createApp(deps: AppDeps): Hono {
 			parallelReviews: null,
 			trustProjectPi: false,
 			extensions: [],
+			piDiscovery: false,
 			concurrencyLimit: 1,
 			stageConfig: {},
 			reviewFlows: null,
@@ -388,6 +389,11 @@ export function createApp(deps: AppDeps): Hono {
 			if (body.acceptanceGates !== null && typeof body.acceptanceGates !== "boolean") throw new HttpError(400, '"acceptanceGates" must be a boolean, or null for the default');
 			settings.acceptanceGates = body.acceptanceGates as boolean | null;
 		}
+		if (body.piDiscovery !== undefined) {
+			// Environment discovery is off by default and never has a Tower default to fall back to.
+			if (typeof body.piDiscovery !== "boolean") throw new HttpError(400, '"piDiscovery" must be a boolean');
+			settings.piDiscovery = body.piDiscovery;
+		}
 		if (body.budgetUsd !== undefined) {
 			// Blank or null clears the budget; a number is dollars per card, so it stays human-sized.
 			if (body.budgetUsd === null || body.budgetUsd === "") {
@@ -485,6 +491,7 @@ export function createApp(deps: AppDeps): Hono {
 			parallelReviews: null,
 			trustProjectPi: false,
 			extensions: [],
+			piDiscovery: false,
 			concurrencyLimit: 1,
 			stageConfig: {},
 			reviewFlows: null,

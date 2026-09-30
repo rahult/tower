@@ -267,6 +267,7 @@ export class StageRunner {
 			tools: request.tools,
 			extensions: project.extensions,
 			trustProject: project.trustProjectPi,
+			piDiscovery: project.piDiscovery ?? false,
 			appendSystemPromptFiles: request.appendSystemPromptFiles ?? [],
 		};
 		insertRun(db, {
@@ -372,6 +373,7 @@ export class StageRunner {
 			tools: STAGE_SPECS[stage].tools,
 			extensions: project.extensions,
 			trustProject: project.trustProjectPi,
+			piDiscovery: project.piDiscovery ?? false,
 			appendSystemPromptFiles: [],
 		};
 	}
