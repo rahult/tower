@@ -88,6 +88,8 @@ export interface Card {
 	needsAttentionReason: string | null;
 	/** How the work ended, for a done card: merged locally, PR merged. An outcome, never an attention reason. */
 	finishNote: string | null;
+	/** Soft-hide flag: when set, the card leaves the default board view without touching git. */
+	archivedAt: number | null;
 	/** Stacked on another card: this card's branch starts from that card's branch, so it builds on unmerged work. */
 	baseCardId: string | null;
 	/** This card waits for that card to land before it is worth a slot; scheduling skips it until then. */

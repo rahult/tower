@@ -199,6 +199,11 @@ const MIGRATIONS: string[] = [
 	-- skills, prompt-templates. Locked down (0) by default: Tower ships its discipline in-repo.
 	ALTER TABLE projects ADD COLUMN pi_discovery INTEGER NOT NULL DEFAULT 0;
 	`,
+	`
+	-- Board hygiene, softer than delete: an archived card is hidden from the default board and never
+	-- scheduled. NULL means active.
+	ALTER TABLE cards ADD COLUMN archived_at INTEGER;
+	`,
 ];
 
 /** The schema version a fully migrated database carries (PRAGMA user_version). */

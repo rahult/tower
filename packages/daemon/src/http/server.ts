@@ -6,7 +6,7 @@ import { type Card, InvalidTransition, type Project } from "@tower/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
-import { deleteCard, getCard, insertCard, listCards } from "../db/repo-cards.ts";
+import { deleteCard, getCard, insertCard, listCards, updateCard } from "../db/repo-cards.ts";
 import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
 import { listGatesForCard, listPendingGates } from "../db/repo-gates.ts";
 import { markQuestionPromoted } from "../db/repo-research.ts";
@@ -91,7 +91,11 @@ export function createApp(deps: AppDeps): Hono {
 
 	// The gates ride the board payload, so a phone can carry the whole human job: pass-through review
 	// needs the list of decisions waiting, not a detail fetch per card.
-	app.get("/api/board", (c) => c.json({ projects: listProjects(db), cards: listCards(db), activeRuns: listActiveRuns(db), gates: listPendingGates(db) }));
+	app.get("/api/board", (c) => {
+		const archived = c.req.query("archived") === "1";
+		const cards = listCards(db).filter((card) => (archived ? card.archivedAt !== null : card.archivedAt === null));
+		return c.json({ projects: listProjects(db), cards, activeRuns: listActiveRuns(db), gates: listPendingGates(db) });
+	});
 
 	const settingsView = () => ({ models: describeModels(config.globalStageConfig), file: settingsFile(config.home), knownModels: knownModels(), invariantSimulation: config.invariantSimulation, subagents: config.subagents, understandBeforePlan: config.understandBeforePlan, acceptanceGates: config.acceptanceGates, maxCrew: config.maxCrew, feedbackRepo: config.feedbackRepo });
 
@@ -435,6 +439,7 @@ export function createApp(deps: AppDeps): Hono {
 			prState: null,
 			needsAttentionReason: null,
 			finishNote: null,
+			archivedAt: null,
 			baseCardId,
 			dependsOn,
 			issueUrl: null,
@@ -670,6 +675,26 @@ export function createApp(deps: AppDeps): Hono {
 		// A deleted card releases whatever waited on it: give the freed queue a chance to move now.
 		orchestrator.reschedule();
 		return c.json({ ok: true });
+	});
+
+	// Board hygiene, softer than delete: archiving hides a finished or never-started card from the board
+	// without touching its git, worktree or branch. Unarchiving clears the flag and is always allowed.
+	app.post("/api/cards/:id/archive", (c) => {
+		const card = cardOr404(c.req.param("id"));
+		if (orchestrator.isBusy(card.id)) throw new HttpError(409, "This card is busy — abort it first.");
+		if (!((card.stage === "done" || card.stage === "backlog") && card.status === "idle")) {
+			throw new HttpError(409, `Only a finished card or a backlog card can be archived — this one is ${card.stage}/${card.status}.`);
+		}
+		const archived = updateCard(db, card.id, { archivedAt: Date.now() });
+		bus.publish({ topic: "board", type: "card_upserted", data: archived });
+		return c.json(archived);
+	});
+
+	app.post("/api/cards/:id/unarchive", (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const restored = updateCard(db, card.id, { archivedAt: null });
+		bus.publish({ topic: "board", type: "card_upserted", data: restored });
+		return c.json(restored);
 	});
 
 	// Anyone running this Tower can say what is wrong or missing; it lands on the feedback repo as an

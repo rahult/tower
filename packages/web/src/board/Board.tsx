@@ -1,5 +1,7 @@
 import type { Card, Project, StageRun } from "@tower/core";
 import { Fragment, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "../api/client.ts";
 import { describeCard, isLive, needsYou, STAGE_COLUMNS, STAGE_DESCRIPTIONS, TONE_SUFFIX } from "./status.ts";
 import { useElapsed, useMediaQuery } from "../app/bits.tsx";
 import { Icon } from "../app/icons.tsx";
@@ -11,6 +13,9 @@ interface BoardProps {
 	cards: Card[];
 	activeRuns: StageRun[];
 	selectedCardId: string | null;
+	/** Archived shelf mode: cards are the archived ones and each carries an Unarchive action. */
+	archived: boolean;
+	onToggleArchived: () => void;
 	onOpen: (cardId: string) => void;
 }
 
@@ -35,13 +40,18 @@ function readFolded(): Set<string> {
  * Columns fold to a 40px spine with a vertical label; on a narrow window Testing and Pull request
  * share a column; on a phone the matrix becomes one stacked section per stage.
  */
-export function Board({ projects, cards, activeRuns, selectedCardId, onOpen }: BoardProps) {
+export function Board({ projects, cards, activeRuns, selectedCardId, archived, onToggleArchived, onOpen }: BoardProps) {
 	const doneCount = cards.filter((card) => card.stage === "done").length;
 	// Done is stored, not active work: folded away by default, one click when it is wanted.
 	const [showDone, setShowDone] = useState(false);
 	const [folded, setFolded] = useState<Set<string>>(readFolded);
 	const narrow = useMediaQuery("(max-width: 1400px)");
 	const phone = useMediaQuery("(max-width: 768px)");
+	const queryClient = useQueryClient();
+	const unarchive = useMutation({
+		mutationFn: (cardId: string) => api.unarchive(cardId),
+		onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["board"] }),
+	});
 
 	const persistFolded = (next: Set<string>) => {
 		setFolded(new Set(next));
@@ -77,7 +87,7 @@ export function Board({ projects, cards, activeRuns, selectedCardId, onOpen }: B
 
 	const count = (col: Column) => cards.filter((card) => col.stages.includes(card.stage)).length;
 	const foldedCount = columns.filter((col) => folded.has(col.id)).length;
-	const meta = `${showDone ? `${cards.length} cards` : `${cards.length - doneCount} open${doneCount > 0 ? ` · ${doneCount} done hidden` : ""}`}${foldedCount > 0 ? ` · ${foldedCount} ${foldedCount === 1 ? "column" : "columns"} collapsed` : ""}`;
+	const meta = archived ? `${cards.length} archived` : `${showDone ? `${cards.length} cards` : `${cards.length - doneCount} open${doneCount > 0 ? ` · ${doneCount} done hidden` : ""}`}${foldedCount > 0 ? ` · ${foldedCount} ${foldedCount === 1 ? "column" : "columns"} collapsed` : ""}`;
 
 	return (
 		<section className="view active" id="view-board" aria-label="Board">
@@ -85,13 +95,18 @@ export function Board({ projects, cards, activeRuns, selectedCardId, onOpen }: B
 				<h1>Board</h1>
 				<span className="meta">{meta}</span>
 				<span className="spacer" />
-				{foldedCount > 0 && (
+				{foldedCount > 0 && !archived && (
 					<button type="button" className="btn ghost sm" onClick={() => persistFolded(new Set())}>
 						Expand all columns
 					</button>
 				)}
-				<button type="button" className="btn sm" aria-pressed={showDone} onClick={() => setShowDone((on) => !on)}>
-					{showDone ? "Hide done" : `Show done (${doneCount})`}
+				{!archived && (
+					<button type="button" className="btn sm" aria-pressed={showDone} onClick={() => setShowDone((on) => !on)}>
+						{showDone ? "Hide done" : `Show done (${doneCount})`}
+					</button>
+				)}
+				<button type="button" className="btn sm" aria-pressed={archived} onClick={onToggleArchived}>
+					{archived ? "Back to active" : "Archived"}
 				</button>
 			</div>
 			<div className="board">
@@ -104,7 +119,7 @@ export function Board({ projects, cards, activeRuns, selectedCardId, onOpen }: B
 					}
 				>
 					{phone ? (
-						<BoardStacked columns={columns} cards={cards} names={names} folded={folded} selectedCardId={selectedCardId} onOpen={onOpen} onFold={fold} onUnfold={unfold} />
+						<BoardStacked columns={columns} cards={cards} names={names} folded={folded} archived={archived} onUnarchive={(cardId) => unarchive.mutate(cardId)} selectedCardId={selectedCardId} onOpen={onOpen} onFold={fold} onUnfold={unfold} />
 					) : (
 						<BoardMatrix
 							projects={projects}
@@ -113,6 +128,8 @@ export function Board({ projects, cards, activeRuns, selectedCardId, onOpen }: B
 							columns={columns}
 							folded={folded}
 							startedAt={startedAt}
+							archived={archived}
+							onUnarchive={(cardId) => unarchive.mutate(cardId)}
 							selectedCardId={selectedCardId}
 							onOpen={onOpen}
 							onFold={fold}
@@ -132,6 +149,8 @@ function BoardMatrix({
 	columns,
 	folded,
 	startedAt,
+	archived,
+	onUnarchive,
 	selectedCardId,
 	onOpen,
 	onFold,
@@ -143,6 +162,8 @@ function BoardMatrix({
 	columns: Column[];
 	folded: Set<string>;
 	startedAt: Map<string, number>;
+	archived: boolean;
+	onUnarchive: (cardId: string) => void;
 	selectedCardId: string | null;
 	onOpen: (cardId: string) => void;
 	onFold: (id: string) => void;
@@ -241,9 +262,18 @@ function BoardMatrix({
 							return (
 								<div key={col.id} className={`cell${wash ? " wash" : ""}`} style={edge} aria-label={`${project.name}, ${col.label}`}>
 									{col.id === "backlog" && addingThis && <NewCardInline projectId={project.id} onDone={() => setAdding(null)} />}
-									{cs.map((card) => (
-										<Mini key={card.id} card={card} projectName={names.get(card.projectId)} startedAt={startedAt.get(card.id)} selected={card.id === selectedCardId} onOpen={() => onOpen(card.id)} />
-									))}
+									{cs.map((card) =>
+										archived ? (
+											<div key={card.id} className="flex flex-col gap-1">
+												<Mini card={card} projectName={names.get(card.projectId)} startedAt={startedAt.get(card.id)} selected={card.id === selectedCardId} onOpen={() => onOpen(card.id)} />
+												<button type="button" className="btn sm" onClick={() => onUnarchive(card.id)}>
+													Unarchive
+												</button>
+											</div>
+										) : (
+											<Mini key={card.id} card={card} projectName={names.get(card.projectId)} startedAt={startedAt.get(card.id)} selected={card.id === selectedCardId} onOpen={() => onOpen(card.id)} />
+										),
+									)}
 									{col.id === "done" && cs.length === 0 && <span className="done-note">—</span>}
 								</div>
 							);
@@ -260,6 +290,8 @@ function BoardStacked({
 	cards,
 	names,
 	folded,
+	archived,
+	onUnarchive,
 	selectedCardId,
 	onOpen,
 	onFold,
@@ -269,6 +301,8 @@ function BoardStacked({
 	cards: Card[];
 	names: Map<string, string>;
 	folded: Set<string>;
+	archived: boolean;
+	onUnarchive: (cardId: string) => void;
 	selectedCardId: string | null;
 	onOpen: (cardId: string) => void;
 	onFold: (id: string) => void;
@@ -293,7 +327,18 @@ function BoardStacked({
 						{open && (
 							<div className="bsec-body">
 								{cs.length > 0 ? (
-									cs.map((card) => <Mini key={card.id} card={card} projectName={names.get(card.projectId)} withProject selected={card.id === selectedCardId} onOpen={() => onOpen(card.id)} />)
+									cs.map((card) =>
+										archived ? (
+											<div key={card.id} className="flex flex-col gap-1">
+												<Mini card={card} projectName={names.get(card.projectId)} withProject selected={card.id === selectedCardId} onOpen={() => onOpen(card.id)} />
+												<button type="button" className="btn sm" onClick={() => onUnarchive(card.id)}>
+													Unarchive
+												</button>
+											</div>
+										) : (
+											<Mini key={card.id} card={card} projectName={names.get(card.projectId)} withProject selected={card.id === selectedCardId} onOpen={() => onOpen(card.id)} />
+										),
+									)
 								) : (
 									<span className="done-note">Nothing in {col.label.toLowerCase()}</span>
 								)}

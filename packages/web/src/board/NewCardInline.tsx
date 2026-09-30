@@ -9,7 +9,7 @@ export function NewCardInline({ projectId, onDone }: { projectId: string; onDone
 	const [title, setTitle] = useState("");
 	const [brief, setBrief] = useState("");
 	const [baseCardId, setBaseCardId] = useState("");
-	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
+	const board = useQuery({ queryKey: ["board"], queryFn: () => api.board() });
 	const stackable = (board.data?.cards ?? []).filter((card) => card.projectId === projectId && card.branchName && card.stage !== "done" && card.stage !== "backlog");
 	const add = useMutation({ mutationFn: () => api.addCard(projectId, title, brief, baseCardId || undefined), onSuccess: onDone });
 	const submit = (event: FormEvent) => {

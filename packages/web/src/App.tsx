@@ -43,7 +43,10 @@ function readFilter(): string {
 }
 
 export function App() {
-	const board = useQuery({ queryKey: ["board"], queryFn: api.board });
+	const board = useQuery({ queryKey: ["board"], queryFn: () => api.board() });
+	// The archived shelf: same board payload shape, only archived cards. Fetched on demand.
+	const [showArchived, setShowArchived] = useState(false);
+	const archivedBoard = useQuery({ queryKey: ["board", "archived"], queryFn: () => api.board({ archived: true }), enabled: showArchived });
 	// Refetched with the board, so today's spend keeps up with finished sessions.
 	const usage = useQuery({ queryKey: ["board", "usage"], queryFn: api.usage });
 	// The Research lane: polled lightly while any question is being researched, SSE otherwise keeps it fresh.
@@ -328,7 +331,7 @@ export function App() {
 								onOpenModels={() => setModelsOpen(true)}
 							/>
 						)}
-						{board.data && route.view === "board" && <Board projects={projects} cards={cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} onOpen={openCard} />}
+						{board.data && route.view === "board" && <Board projects={projects} cards={showArchived ? (archivedBoard.data?.cards ?? []) : cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} archived={showArchived} onToggleArchived={() => setShowArchived((on) => !on)} onOpen={openCard} />}
 						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenProject={(project) => setEditing({ project })} />}
 						{board.data && route.view === "flows" && <Flows cards={cards} onOpenCard={openCard} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}

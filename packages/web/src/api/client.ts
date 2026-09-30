@@ -216,7 +216,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-	board: () => request<Board>("GET", "/api/board"),
+	board: (params: { archived?: boolean } = {}) => request<Board>("GET", `/api/board${params.archived ? "?archived=1" : ""}`),
 	card: (id: string) => request<CardDetail>("GET", `/api/cards/${id}`),
 	artifact: (cardId: string, name: string) => request<string>("GET", `/api/cards/${cardId}/artifacts/${encodeURIComponent(name)}`),
 	flows: () => request<{ flows: FlowInfo[]; defaults: string[] }>("GET", "/api/flows"),
@@ -254,6 +254,8 @@ export const api = {
 	understand: (id: string) => request<Card>("POST", `/api/projects/${id}/understand`),
 	resume: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/resume`),
 	deleteCard: (cardId: string) => request<{ ok: true }>("DELETE", `/api/cards/${cardId}`),
+	archive: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/archive`),
+	unarchive: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/unarchive`),
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; parallelReviews: boolean | null; concurrencyLimit: number; reviewFlows: string[] | null; afterPlanFlows: string[] | null; afterBuildFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; sources: string[]; piDiscovery: boolean }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
 	addCard: (projectId: string, title: string, brief: string, baseCardId?: string, dependsOn?: string) =>
 		request<Card>("POST", "/api/cards", { projectId, title, brief, ...(baseCardId ? { baseCardId } : {}), ...(dependsOn ? { dependsOn } : {}) }),

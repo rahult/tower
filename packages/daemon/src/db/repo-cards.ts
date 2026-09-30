@@ -22,6 +22,7 @@ function toCard(row: Row): Card {
 		prState: row.pr_state as string | null,
 		needsAttentionReason: row.needs_attention_reason as string | null,
 		finishNote: row.finish_note as string | null,
+		archivedAt: row.archived_at as number | null,
 		baseCardId: row.base_card_id as string | null,
 		dependsOn: row.depends_on as string | null,
 		issueUrl: row.issue_url as string | null,
@@ -34,8 +35,8 @@ function toCard(row: Row): Card {
 
 export function insertCard(db: Db, card: Card): void {
 	db.prepare(
-		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at, issue_url, issue_number, issue_author, base_card_id, depends_on)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cards (id, project_id, title, brief, stage, status, priority, position, attempt, stage_config_json, created_at, updated_at, issue_url, issue_number, issue_author, base_card_id, depends_on, archived_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 	).run(
 		card.id,
 		card.projectId,
@@ -54,6 +55,7 @@ export function insertCard(db: Db, card: Card): void {
 		card.issueAuthor,
 		card.baseCardId,
 		card.dependsOn,
+		card.archivedAt,
 	);
 }
 
@@ -66,6 +68,7 @@ const COLUMNS = {
 	baseCommit: "base_commit",
 	needsAttentionReason: "needs_attention_reason",
 	finishNote: "finish_note",
+	archivedAt: "archived_at",
 	baseCardId: "base_card_id",
 	dependsOn: "depends_on",
 	prUrl: "pr_url",
@@ -124,7 +127,7 @@ export function setQueuedEffect(db: Db, id: string, effect: Effect | null): void
 }
 
 export function listQueued(db: Db): QueuedCard[] {
-	const rows = db.prepare("SELECT * FROM cards WHERE queued_effect_json IS NOT NULL ORDER BY queued_at").all() as Row[];
+	const rows = db.prepare("SELECT * FROM cards WHERE queued_effect_json IS NOT NULL AND archived_at IS NULL ORDER BY queued_at").all() as Row[];
 	return rows.map((row) => ({ card: toCard(row), effect: JSON.parse(row.queued_effect_json as string), queuedAt: row.queued_at as number }));
 }
 
