@@ -249,3 +249,7 @@ Both arms on **truly stock, extension-free pi** (daemon already ships `--no-exte
 ### Speed optimization 1 — parallel review flows (2026-10-01)
 
 Reviews were the slowest serial segment (~half the calls and wall time per cell). They now run concurrently by default (`parallelReviews: false` opts out). Making parallel the default exposed and fixed two real bugs in the pre-existing concurrent path: verdicts were always aggregated to pass (blocking findings never reached the gate's acknowledgeBlocking protection), and concurrent flow steps clobbered each other's `stage-result.json` (now a per-flow `${label}.result.json`, threaded through CustomRun → RunSpec). Measured on webnote: both review sessions interleave and finish together (~3.3 min for both vs ~5+ sequential); judge dimensions identical (9.1 Σ), hidden tests 11/11 — accuracy unchanged. 383/383 tests green.
+
+### Speed optimization 2 — planning economy (2026-10-01)
+
+planning.md now bills exploration to the card and has the planner pin the brief's open decisions early. A/B on webnote: plan stage 17 calls → 6, 2.5 min → 65 s; cell wall 7.8 → 7.0 min (with parallel reviews from optimization 1); judge dimensions unchanged (correctness 10, Σ 9.1). The sharper first wording ("a handful of reads suffices") over-corrected and cost a build retry — the shipped wording keeps the budget framing without prescribing call counts.
