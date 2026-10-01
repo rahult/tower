@@ -30,7 +30,7 @@ export function Projects({ projects, cards, usage, onAddWork, onAddProject, onNe
 			<div className="page">
 				<div className="page-in">
 					<div className="flex flex-wrap items-start gap-x-6 gap-y-3">
-						<div className="flex min-w-0 flex-1">
+						<div className="min-w-0 flex-1">
 							<h1>Projects</h1>
 							<p className="lead">A project is a git repository on this machine — or an idea scaffolded from an archetype. Click one to edit how its builds are judged.</p>
 						</div>
