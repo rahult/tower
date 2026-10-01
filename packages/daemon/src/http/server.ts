@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { type Card, InvalidTransition, type Project } from "@tower/core";
+import { type Card, InvalidTransition, type Project, renderSystemModel } from "@tower/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
@@ -230,6 +230,20 @@ export function createApp(deps: AppDeps): Hono {
 		const proposals = readProposals(config, project.id);
 		const graph = readGraph(config, project.id);
 		return c.json({ proposals: proposals.proposals, graph: { nodes: graph?.nodes.length ?? 0, edges: graph?.edges.length ?? 0 } });
+	});
+
+	// The memory graph itself: nodes, edges and the exact system-model text planners read,
+	// beside the pending count so the view can point at what is still undecided.
+	app.get("/api/projects/:id/graph", (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const graph = readGraph(config, project.id);
+		const proposals = readProposals(config, project.id);
+		return c.json({
+			graph,
+			systemModel: graph ? renderSystemModel(graph) : null,
+			pendingProposals: proposals.proposals.filter((p) => p.status === "pending").length,
+		});
 	});
 
 	// Confirm or reject one pending proposal. Accepting applies it to the graph and re-renders the

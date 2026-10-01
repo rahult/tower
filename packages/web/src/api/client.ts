@@ -1,4 +1,4 @@
-import type { Annotation, Card, GraphProposal, Project, ResearchQuestion, StageRun } from "@tower/core";
+import type { Annotation, Card, GraphProposal, MemoryGraph, Project, ResearchQuestion, StageRun } from "@tower/core";
 
 /** A human decision the pipeline is parked on, as the board payload carries it. */
 export interface GateInfo {
@@ -203,6 +203,13 @@ export interface ProjectProposals {
 	graph: { nodes: number; edges: number };
 }
 
+/** A project's memory graph as the Memory view renders it: the graph, the planners' projection of it, and what is still undecided. */
+export interface ProjectMemory {
+	graph: MemoryGraph | null;
+	systemModel: string | null;
+	pendingProposals: number;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
 	const response = await fetch(path, {
 		method,
@@ -249,6 +256,7 @@ export const api = {
 	fromIdea: (body: { name: string; idea: string; archetype: string }) => request<FromIdeaResult>("POST", "/api/projects/from-idea", body),
 	projectModel: (id: string) => request<ProjectModel>("GET", `/api/projects/${id}/model`),
 	projectProposals: (id: string) => request<ProjectProposals>("GET", `/api/projects/${id}/proposals`),
+	projectMemory: (id: string) => request<ProjectMemory>("GET", `/api/projects/${id}/graph`),
 	decideProposal: (projectId: string, proposalId: string, decision: "accept" | "reject") =>
 		request<{ proposal: GraphProposal; applied: boolean; reason: string | null }>("POST", `/api/projects/${projectId}/proposals/${proposalId}/decide`, { decision }),
 	understand: (id: string) => request<Card>("POST", `/api/projects/${id}/understand`),

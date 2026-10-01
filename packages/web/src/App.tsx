@@ -18,6 +18,7 @@ import { Drawer } from "./card/Drawer.tsx";
 import { Focus } from "./focus/Focus.tsx";
 import { Flows } from "./flows/Flows.tsx";
 import { AddProject } from "./projects/AddProject.tsx";
+import { Memory } from "./projects/Memory.tsx";
 import { NewFromIdea } from "./projects/NewFromIdea.tsx";
 import { PlanToBacklog } from "./projects/PlanToBacklog.tsx";
 import { ProjectSettings } from "./projects/ProjectSettings.tsx";
@@ -29,8 +30,8 @@ import { Usage } from "./usage/Usage.tsx";
 import { useDensity, usePrefersDark, useTheme, type Theme } from "./theme.ts";
 
 const VIEW_ORDER: View[] = ["focus", "board", "projects", "flows", "usage", "review", "research"];
-const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", flows: "flow", usage: "chart", review: "check", research: "spark" } as const;
-const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", flows: "Flows", usage: "Usage", review: "Review", research: "Research" };
+const VIEW_ICON = { focus: "focus", board: "board", projects: "folder", memory: "flow", flows: "flow", usage: "chart", review: "check", research: "spark" } as const;
+const VIEW_LABEL: Record<View, string> = { focus: "Tower", board: "Board", projects: "Projects", memory: "Memory", flows: "Flows", usage: "Usage", review: "Review", research: "Research" };
 
 const FILTER_KEY = "tower-filter";
 
@@ -83,6 +84,8 @@ export function App() {
 	const pendingGates = (board.data?.gates ?? []).filter((gate) => gate.kind !== "budget").length;
 	const names = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
 	const titles = useMemo(() => new Map(cards.map((card) => [card.id, card.title])), [cards]);
+	// The memory view is a per-project drill-in: resolve which project's graph is on screen.
+	const memoryProject = route.view === "memory" ? projects.find((project) => project.id === route.projectId) : undefined;
 
 	// A pinned tab should say what the board wants, without being opened.
 	useEffect(() => setTabUrgency(waiting), [waiting]);
@@ -332,7 +335,13 @@ export function App() {
 							/>
 						)}
 						{board.data && route.view === "board" && <Board projects={projects} cards={showArchived ? (archivedBoard.data?.cards ?? []) : cards} activeRuns={board.data.activeRuns} selectedCardId={route.cardId} archived={showArchived} onToggleArchived={() => setShowArchived((on) => !on)} onOpen={openCard} />}
-						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenProject={(project) => setEditing({ project })} />}
+						{board.data && route.view === "projects" && <Projects projects={projects} cards={cards} usage={usage.data} onAddWork={(projectId) => openAddWork(projectId)} onAddProject={() => setAddingProject(true)} onNewIdea={openNewIdea} onPlanToBacklog={setPlanningBacklog} onOpenMemory={(project) => navigate({ view: "memory", projectId: project.id, cardId: null })} onOpenProject={(project) => setEditing({ project })} />}
+						{board.data && route.view === "memory" &&
+							(memoryProject ? (
+								<Memory project={memoryProject} onBack={() => navigate({ view: "projects", projectId: null, cardId: null })} onReviewProposals={() => setEditing({ project: memoryProject })} />
+							) : (
+								<p className="p-4 text-[14px] text-slate">Pick a project on the Projects view to see its memory.</p>
+							))}
 						{board.data && route.view === "flows" && <Flows cards={cards} onOpenCard={openCard} />}
 						{board.data && route.view === "usage" && <Usage onOpenCard={openCard} cardTitles={titles} projectNames={names} />}
 						{board.data && route.view === "review" && <PassThrough gates={board.data.gates} projects={projects} cards={cards} onOpen={openCard} />}
