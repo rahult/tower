@@ -1,6 +1,6 @@
 {
   "name": "tower",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "A control tower for pi coding-agent sessions: a swimlane board that plans, builds and tests work across projects.",
   "keywords": [
