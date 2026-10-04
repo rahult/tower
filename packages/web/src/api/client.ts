@@ -265,6 +265,7 @@ export const api = {
 	archive: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/archive`),
 	unarchive: (cardId: string) => request<Card>("POST", `/api/cards/${cardId}/unarchive`),
 	updateProject: (id: string, settings: { setupCommand: string; verifyCommand: string; testCommand: string; previewCommand: string; previewUrl: string; previewCheck: string; budgetUsd: number | null; parallelReviews: boolean | null; concurrencyLimit: number; reviewFlows: string[] | null; afterPlanFlows: string[] | null; afterBuildFlows: string[] | null; invariantSimulation: boolean | null; subagents: boolean | null; understandBeforePlan: boolean | null; acceptanceGates: boolean | null; sources: string[]; piDiscovery: boolean }) => request<Project>("PATCH", `/api/projects/${id}`, settings),
+	deleteProject: (id: string) => request<{ ok: true; cards: number }>("DELETE", `/api/projects/${id}`),
 	addCard: (projectId: string, title: string, brief: string, baseCardId?: string, dependsOn?: string) =>
 		request<Card>("POST", "/api/cards", { projectId, title, brief, ...(baseCardId ? { baseCardId } : {}), ...(dependsOn ? { dependsOn } : {}) }),
 	similarCards: (projectId: string, q: string) =>

@@ -142,8 +142,11 @@ and where existing repositories are understood before they are changed.
 - **Card dependencies** [shipped]: `dependsOn` on a card (set at creation from Add work) —
   the scheduler holds the dependent's queue place until the dependency lands; deleting the
   dependency releases it, never strands it.
-- **Archive/delete** [shipped 2026-09-25]: finished and backlog cards delete from the board;
-  deleting also clears dependents' waits.
+- **Archive/delete** [shipped 2026-09-25]: any card that is not actively working deletes from the
+  board — a stuck or abandoned card is the person's to discard — taking its worktree with it and
+  clearing dependents' waits. Archive stays the softer shelf for finished and unstarted cards.
+- **Delete a project** [shipped]: deleting a project takes its cards, runs and worktrees with it;
+  the repository, its branches and the card folders stay, as they do for a single deleted card.
 
 ## P6 — Product surface
 

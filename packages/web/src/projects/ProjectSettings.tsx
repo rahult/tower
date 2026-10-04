@@ -2,7 +2,7 @@ import type { Project } from "@tower/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../api/client.ts";
-import { formatTokens } from "../app/bits.tsx";
+import { ConfirmButton, formatTokens } from "../app/bits.tsx";
 import { Icon } from "../app/icons.tsx";
 import { toast } from "../app/toasts.tsx";
 import { field, monoField } from "../ui.ts";
@@ -14,7 +14,7 @@ type Settings = { setupCommand: string; verifyCommand: string; testCommand: stri
  * commands, review flows, invariant simulation and the concurrency cap. `autoSuggest` sends the agent
  * in the moment the form opens — the flow right after a project was added.
  */
-export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { project: Project; onDone?: () => void; showSpend?: { runs: number; tokens: number; costUsd: number }; autoSuggest?: boolean }) {
+export function ProjectSettings({ project, onDone, onDeleted, cardCount = 0, showSpend, autoSuggest }: { project: Project; onDone?: () => void; onDeleted?: () => void; cardCount?: number; showSpend?: { runs: number; tokens: number; costUsd: number }; autoSuggest?: boolean }) {
 	const [setupCommand, setSetupCommand] = useState(project.setupCommand ?? "");
 	const [verifyCommand, setVerifyCommand] = useState(project.verifyCommand ?? "");
 	const [testCommand, setTestCommand] = useState(project.testCommand ?? "");
@@ -44,6 +44,16 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 			void queryClient.invalidateQueries({ queryKey: ["board"] });
 			onDone?.();
 		},
+	});
+	// Deleting a project takes its cards with it; the repository itself is never touched.
+	const remove = useMutation({
+		mutationFn: () => api.deleteProject(project.id),
+		onSuccess: (result) => {
+			toast(`Deleted ${project.name}${result.cards > 0 ? ` and ${result.cards} ${result.cards === 1 ? "card" : "cards"}` : ""}.`);
+			void queryClient.invalidateQueries({ queryKey: ["board"] });
+			(onDeleted ?? onDone)?.();
+		},
+		onError: (error: Error) => toast(error.message),
 	});
 
 	// The system model: what a planner reads about this codebase before planning. Fresh, stale, or not
@@ -451,6 +461,23 @@ export function ProjectSettings({ project, onDone, showSpend, autoSuggest }: { p
 					</div>
 				</div>
 			)}
+			<div className="setting danger">
+				<div>
+					<div className="k">Delete project</div>
+					<div className="d">
+						Takes {project.name} off the board and deletes its {cardCount === 0 ? "cards" : cardCount === 1 ? "one card" : `${cardCount} cards`}, along with their runs and worktrees. Branches and card history stay in the repository and in Tower's data folder.
+					</div>
+				</div>
+				<div className="v">
+					<ConfirmButton
+						label="Delete project"
+						confirmLabel={cardCount > 0 ? `Delete project and ${cardCount} ${cardCount === 1 ? "card" : "cards"}?` : "Delete this project?"}
+						onConfirm={() => remove.mutate()}
+						busy={remove.isPending}
+					/>
+					{remove.error && <span className="error">{remove.error.message}</span>}
+				</div>
+			</div>
 			<div className="flex items-center gap-3 px-4 py-3">
 				<button type="submit" disabled={save.isPending} className="btn primary sm">
 					{save.isPending ? "Saving…" : "Save settings"}

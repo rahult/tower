@@ -125,8 +125,10 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 		);
 	if (!detail.data) return null;
 	const { card, artifacts, annotations } = detail.data;
-	const removable = (card.stage === "done" || card.stage === "backlog") && card.status === "idle";
-	const archivable = removable && card.archivedAt === null;
+	// Delete discards work, so it is offered whenever the card is not actively working — a stuck or
+	// abandoned card is the person's to remove. Archive stays the softer shelf for finished or unstarted cards.
+	const removable = !isLive(card) && card.status !== "queued";
+	const archivable = (card.stage === "done" || card.stage === "backlog") && card.status === "idle" && card.archivedAt === null;
 	const project = projects.find((p) => p.id === card.projectId);
 	const { stage, status, tone } = describeCard(card);
 	const live = run?.id === runs.at(-1)?.id && (isLive(card) || run?.status === "running" || run?.status === "starting");
@@ -206,8 +208,11 @@ export function Drawer({ cardId, projects, onClose, onRunOpen }: DrawerProps) {
 					{archivable && <ConfirmButton small label="Archive" confirmLabel="Archive this card?" onConfirm={() => archive.mutate(card.id)} busy={archive.isPending} />}
 					{removable && <ConfirmButton small label="Delete" confirmLabel="Delete from the board?" onConfirm={() => remove.mutate(card.id)} busy={remove.isPending} />}
 				</div>
-				{(archive.error || unarchive.error) && (
-					<ErrorNote error={archive.error ?? unarchive.error} onRetry={() => (archive.reset(), unarchive.reset())} />
+				{(archive.error || unarchive.error || remove.error) && (
+					<ErrorNote
+						error={archive.error ?? unarchive.error ?? remove.error}
+						onRetry={() => (archive.reset(), unarchive.reset(), remove.reset())}
+					/>
 				)}
 				{card.brief && (
 					<details className="text-[14px]">

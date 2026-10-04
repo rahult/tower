@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { type Card, InvalidTransition, type Project, renderSystemModel } from "@tower/core";
 import { Hono } from "hono";
 import { type Config, paths } from "../config.ts";
 import type { Db } from "../db/open.ts";
 import { deleteCard, getCard, insertCard, listCards, updateCard } from "../db/repo-cards.ts";
-import { getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
+import { deleteProject, getProject, insertProject, listProjects, type ProjectSettings, updateProject } from "../db/repo-projects.ts";
 import { listGatesForCard, listPendingGates } from "../db/repo-gates.ts";
 import { markQuestionPromoted } from "../db/repo-research.ts";
 import { listActiveRuns, listRunsForCard, usageBy } from "../db/repo-runs.ts";
@@ -22,7 +22,7 @@ import { deleteFlow, flowSource, flowsTriggered, loadFlows, runsOnBacklogCard, s
 import { composeFlow } from "../flow-composer.ts";
 import { listArchetypes, scaffoldFromArchetype, targetDir } from "../greenfield.ts";
 import { cardDiff } from "../git/diff.ts";
-import { detectDefaultBranch, ensureBaseBranch, isGitRepo } from "../git/worktree-manager.ts";
+import { detectDefaultBranch, ensureBaseBranch, isGitRepo, removeWorktree, streamWorktreePaths } from "../git/worktree-manager.ts";
 import { listRemotes } from "../pr/gh.ts";
 import { type Orchestrator } from "../orchestrator.ts";
 import { ConflictError } from "../errors.ts";
@@ -432,6 +432,36 @@ export function createApp(deps: AppDeps): Hono {
 		return c.json(project);
 	});
 
+	// Deleting a project takes its cards with it — a project with no work left is just a repository Tower
+	// no longer watches. Nothing live may be running; a card resting at a gate is the person's to discard.
+	// Worktrees go, because the repository's own worktree registry must not dangle; card folders, branches
+	// and the checkout stay, as they do when a single card is deleted.
+	app.delete("/api/projects/:id", async (c) => {
+		const project = getProject(db, c.req.param("id"));
+		if (!project) throw new HttpError(404, "Project not found");
+		const cards = listCards(db).filter((card) => card.projectId === project.id);
+		const busy = cards.find((card) => orchestrator.isBusy(card.id));
+		if (busy) throw new HttpError(409, `"${busy.title}" is busy — abort it first.`);
+		for (const card of cards) {
+			// A preview is a live process, not a run, so isBusy does not see it.
+			if (bench.previewFor(card.id).running) bench.stopPreview(card.id);
+			if (!card.worktreePath) continue;
+			try {
+				const streams = streamWorktreePaths(dirname(card.worktreePath), card.id);
+				await removeWorktree(project.repoPath, card.worktreePath);
+				await Promise.all(streams.map((path) => removeWorktree(project.repoPath, path)));
+			} catch (error) {
+				console.error(`could not remove the worktree of card ${card.id}:`, error instanceof Error ? error.message : error);
+			}
+		}
+		const removed = deleteProject(db, project.id);
+		for (const cardId of removed) bus.publish({ topic: "board", type: "card_deleted", data: { id: cardId } });
+		bus.publish({ topic: "board", type: "project_deleted", data: { id: project.id } });
+		// Cards that waited on the deleted ones can take the freed queue now.
+		orchestrator.reschedule();
+		return c.json({ ok: true, cards: removed.length });
+	});
+
 	// One factory, so cards made by the form and cards made by the ask look exactly the same.
 	const createCard = (projectId: string, title: string, brief: string, stageConfig: Card["stageConfig"] = {}, baseCardId: string | null = null, dependsOn: string | null = null): Card => {
 		const now = Date.now();
@@ -677,12 +707,22 @@ export function createApp(deps: AppDeps): Hono {
 
 	app.post("/api/cards/:id/enqueue", async (c) => c.json(await orchestrator.enqueueCard(cardOr404(c.req.param("id")).id), 202));
 
-	// Board hygiene: a finished or never-started card can leave the board. Nothing live may be deleted.
+	// Board hygiene: any card that is not actively working can leave the board — a stuck or abandoned card
+	// is the person's to discard. Nothing live may be deleted, and a card that has a worktree takes it with
+	// it, so the repository's worktree registry does not dangle. Branches and card folders stay, as ever.
 	app.delete("/api/cards/:id", async (c) => {
 		const card = cardOr404(c.req.param("id"));
 		if (orchestrator.isBusy(card.id)) throw new HttpError(409, "This card is busy — abort it first.");
-		if (!((card.stage === "done" || card.stage === "backlog") && card.status === "idle")) {
-			throw new HttpError(409, `Only a finished card or a backlog card can be deleted — this one is ${card.stage}/${card.status}.`);
+		if (bench.previewFor(card.id).running) bench.stopPreview(card.id);
+		const project = getProject(db, card.projectId);
+		if (card.worktreePath && project) {
+			try {
+				const streams = streamWorktreePaths(dirname(card.worktreePath), card.id);
+				await removeWorktree(project.repoPath, card.worktreePath);
+				await Promise.all(streams.map((path) => removeWorktree(project.repoPath, path)));
+			} catch (error) {
+				console.error(`could not remove the worktree of card ${card.id}:`, error instanceof Error ? error.message : error);
+			}
 		}
 		deleteCard(db, card.id);
 		bus.publish({ topic: "board", type: "card_deleted", data: { id: card.id } });

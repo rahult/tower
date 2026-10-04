@@ -1,5 +1,6 @@
 import type { Project } from "@tower/core";
 import type { Db } from "./open.ts";
+import { deleteCard, listCards } from "./repo-cards.ts";
 
 type Row = Record<string, string | number | null>;
 
@@ -70,6 +71,20 @@ export function insertProject(db: Db, project: Project): void {
 
 export function listProjects(db: Db): Project[] {
 	return (db.prepare("SELECT * FROM projects ORDER BY created_at").all() as Row[]).map(toProject);
+}
+
+/**
+ * Removes a project and every card filed under it. Cards go first — the foreign key is one-directional —
+ * and through deleteCard, so each releases whichever card waited on it. Worktrees, card folders and
+ * branches live on disk, not here; the caller cleans those up with the returned card ids.
+ */
+export function deleteProject(db: Db, id: string): string[] {
+	const cardIds = listCards(db).filter((card) => card.projectId === id).map((card) => card.id);
+	for (const cardId of cardIds) deleteCard(db, cardId);
+	// A research question promoted into this project keeps its brief; only the project link would dangle.
+	db.prepare("UPDATE research_questions SET promoted_project_id = NULL WHERE promoted_project_id = ?").run(id);
+	db.prepare("DELETE FROM projects WHERE id = ?").run(id);
+	return cardIds;
 }
 
 /** Observed, not chosen: the probe result from boot (and from when the project was added). */

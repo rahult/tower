@@ -213,7 +213,7 @@ function BoardMatrix({
 				return configuringThis ? (
 					// The project's own cells are replaced by one full-width row, so every lane stays aligned.
 					<div key={project.id} className="bg-sheet p-4" style={{ gridColumn: "1 / -1", ...edge }}>
-						<ProjectSettings project={project} onDone={() => setConfiguring(null)} />
+						<ProjectSettings project={project} cardCount={pc.length} onDone={() => setConfiguring(null)} onDeleted={() => setConfiguring(null)} />
 					</div>
 				) : (
 					<Fragment key={project.id}>

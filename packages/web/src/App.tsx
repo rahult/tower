@@ -390,7 +390,16 @@ export function App() {
 			)}
 			{editing && (
 				<Modal wide title={editing.project.name} onClose={() => setEditing(null)}>
-					<ProjectSettings project={editing.project} autoSuggest={editing.autoSuggest} onDone={() => setEditing(null)} />
+					<ProjectSettings
+						project={editing.project}
+						autoSuggest={editing.autoSuggest}
+						cardCount={cards.filter((card) => card.projectId === editing.project.id).length}
+						onDone={() => setEditing(null)}
+						onDeleted={() => {
+							setEditing(null);
+							if (route.view === "memory" && route.projectId === editing.project.id) navigate({ view: "projects", projectId: null, cardId: null });
+						}}
+					/>
 				</Modal>
 			)}
 			{feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}

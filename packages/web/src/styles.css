@@ -1820,6 +1820,13 @@ textarea.input {
 .setting:last-child {
 	border-bottom: 0;
 }
+/* The one destructive row in a project's settings: legible as danger before it is read. */
+.setting.danger {
+	background: var(--danger-soft);
+}
+.setting.danger .k {
+	color: var(--danger);
+}
 .setting .k {
 	font-weight: 510;
 }
