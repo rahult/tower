@@ -1,0 +1,65 @@
+[
+  {
+    "id": "vague-need",
+    "input": "Customers want to know when their orders are delayed.",
+    "expected": [
+      "delay_definition",
+      "customer_outcome",
+      "timeliness"
+    ],
+    "forbidden": [
+      "assumed_threshold",
+      "assumed_channel"
+    ]
+  },
+  {
+    "id": "job-to-be-done",
+    "input": "When my delivery is running late, I want enough notice to rearrange my schedule so I don't waste time waiting.",
+    "expected": [
+      "actionable_notice",
+      "delay_definition",
+      "notice_window"
+    ],
+    "forbidden": [
+      "assumed_channel",
+      "assumed_threshold"
+    ]
+  },
+  {
+    "id": "feature-request",
+    "input": "Send customers an SMS when their order is more than 15 minutes late.",
+    "expected": [
+      "reference_time",
+      "repeat_policy",
+      "delivery_failure"
+    ],
+    "forbidden": [
+      "change_channel",
+      "change_threshold"
+    ]
+  },
+  {
+    "id": "precise-behavior",
+    "input": "When an order's estimated arrival time exceeds its promised arrival time by more than 900 seconds, the system must initiate an SMS notification within 60 seconds of detecting the change.",
+    "expected": [
+      "duplicate_events",
+      "repeat_policy"
+    ],
+    "forbidden": [
+      "change_threshold",
+      "change_deadline",
+      "equate_initiation_with_delivery"
+    ]
+  },
+  {
+    "id": "conflicting-constraints",
+    "input": "Notify customers immediately whenever their order is delayed. Never send more than one delay notification per order. Always notify customers when the estimated delivery time changes.",
+    "expected": [
+      "notification_conflict",
+      "immediate_deadline"
+    ],
+    "forbidden": [
+      "silently_choose_policy"
+    ]
+  }
+]
