@@ -45,6 +45,8 @@ export interface Config {
 	/** Builds allowed per card before a failing test stops the loop and asks the human. */
 	maxBuildAttempts: number;
 	verifyTimeoutMs: number;
+	/** A Nostr relay that sealed Change records are published to. null: records stay in the card folder. */
+	relayUrl: string | null;
 }
 
 export const repoRoot = join(import.meta.dirname, "..", "..", "..");
@@ -78,6 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		maxConcurrent: Number(env.TOWER_MAX_CONCURRENT ?? 3),
 		maxBuildAttempts: Number(env.TOWER_MAX_BUILD_ATTEMPTS ?? 3),
 		verifyTimeoutMs: Number(env.TOWER_VERIFY_TIMEOUT_MS ?? 20 * 60_000),
+		relayUrl: env.TOWER_RELAY_URL?.trim() || null,
 	};
 }
 

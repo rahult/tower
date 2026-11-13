@@ -25,6 +25,7 @@ import { cardDiff } from "../git/diff.ts";
 import { detectDefaultBranch, ensureBaseBranch, isGitRepo, removeWorktree, streamWorktreePaths } from "../git/worktree-manager.ts";
 import { listRemotes } from "../pr/gh.ts";
 import { type Orchestrator } from "../orchestrator.ts";
+import { exportCardChange, ProvenanceError } from "../provenance.ts";
 import { ConflictError } from "../errors.ts";
 import { BenchError, type BenchRunner } from "../bench.ts";
 import type { ResearchRunner } from "../research.ts";
@@ -75,6 +76,7 @@ export function createApp(deps: AppDeps): Hono {
 		if (error instanceof HttpError) return c.json({ error: error.message }, error.status);
 		if (error instanceof AnnotationError) return c.json({ error: error.message }, 400);
 		if (error instanceof BenchError) return c.json({ error: error.message }, error.status);
+		if (error instanceof ProvenanceError) return c.json({ error: error.message }, 409);
 		if (error instanceof SettingsError) return c.json({ error: error.message }, 400);
 		if (error instanceof InvalidTransition || error instanceof ConflictError) return c.json({ error: error.message }, 409);
 		console.error(error);
@@ -919,6 +921,17 @@ export function createApp(deps: AppDeps): Hono {
 		const card = cardOr404(c.req.param("id"));
 		if (!card.worktreePath || !card.baseCommit) return c.json({ diff: "", untracked: [] });
 		return c.json(await cardDiff(card.worktreePath, card.baseCommit));
+	});
+
+	// Seals the card into a Change record: every run's transcript, every verdict and the brief, signed and bound
+	// to the branch head. Sealing again rewrites the same events, so it is safe to repeat as the card moves on.
+	app.post("/api/cards/:id/change", async (c) => {
+		const card = cardOr404(c.req.param("id"));
+		const project = getProject(db, card.projectId);
+		if (!project) throw new HttpError(404, `Project not found: ${card.projectId}`);
+		const body = (await c.req.json().catch(() => ({}))) as { relay?: unknown };
+		const relay = typeof body.relay === "string" && body.relay.trim() !== "" ? body.relay.trim() : config.relayUrl;
+		return c.json(await exportCardChange({ config, db }, card, project, relay ? { relay } : {}));
 	});
 
 	app.post("/api/cards/:id/steer", async (c) => {

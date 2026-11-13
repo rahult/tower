@@ -122,6 +122,7 @@ Environment variables, read when the daemon starts:
 | `TOWER_REVIEW_FLOWS` | `adversarial-review,solid-review` | Review flows a project runs unless its Settings say otherwise. Empty turns them off |
 | `TOWER_MAX_CI_FIX_ATTEMPTS` | `2` | Times a failing pull request is repaired before the card asks for you |
 | `TOWER_PR_POLL_MS` | `120000` | How often open pull requests are checked |
+| `TOWER_RELAY_URL` | unset | A Nostr relay that sealed Change records are published to. Unset: records stay in the card folder |
 
 ### Models
 
@@ -218,6 +219,20 @@ Reading is judging, and judging should stick to the text. Select any passage on 
 
 Two ways back to the agents: **a gate rejection always carries the open notes** — you can send work back having typed nothing, because the notes are the what-should-change — and **open notes appear in every planning, building and testing prompt** (a "Margin notes" block) until you resolve them. Resolved notes leave the agents alone but stay on the record.
 
+### Change records
+
+A commit says what changed. It does not say which prompt caused it, what you sent back, or what the work was for. Sealing a card writes that down and signs it:
+
+```sh
+curl -X POST http://127.0.0.1:4700/api/cards/<id>/change
+```
+
+The card's folder gains `change/events.jsonl`: every run's transcript as hash-chained turns, each gate verdict as a decision citing what the agent had just said, your steers and margin notes signed as yours, the brief the card served, and a Change event binding all of it to the branch head. Each line is a signed [Nostr](https://github.com/nostr-protocol/nips) event, so the record is yours and travels over any relay: set `TOWER_RELAY_URL`, or pass `{"relay": "ws://..."}` in the request body, and the events are published as well as written. An unreachable relay is reported in the response; the file is written either way. Sealing again as the card moves on rewrites the same events: ids depend only on what was recorded.
+
+Two keys are created in `~/.tower/keys.json` on first use. The **human** key signs what only you can say (verdicts, steers, notes, the seal); the **scribe** key signs what Tower saw an agent say. The format is shared with [fulcrum](https://github.com/rahult/fulcrum), which records sessions Tower does not run; its `docs/SPEC.md` is the reference, and either tool verifies the other's events.
+
+What a record does not hold yet: the answers to an agent's questions are recorded inside the prompt Tower writes from them, signed by the scribe rather than by you; streamed text is recorded as whole messages, because deltas are never persisted; and line-level attribution is not computed, though every file an agent wrote is recorded as an `edit` turn so that it can be. Events are plaintext: publish only to a relay you control.
+
 ### Sub-agent crews
 
 When a plan genuinely decomposes, the planner may append two optional sections to it, and Tower fans the build out to parallel sub-agents:
@@ -262,6 +277,7 @@ pnpm build && node packages/daemon/test/demo.ts   # seeded board on the fake dri
 
 - `packages/core`: pure domain with no IO. The card lifecycle is one function, `transition(card, event)` in `card-machine.ts`; the daemon's orchestrator is its only caller.
 - `packages/daemon`: Hono API and SSE, SQLite (`node:sqlite`), scheduler, stage runner, verifier. Only `src/pi/` knows pi exists; everything else talks to the `SessionDriver` interface, and the tests run the whole daemon against a scripted fake.
+- `packages/provenance`: the Change record. Signed Nostr events, their hash chains and their verification; no IO beyond an optional relay publish. `packages/daemon/src/provenance.ts` maps a card onto it.
 - `packages/web`: the React board.
 - `pi/tower.ts`: the pi extension.
 - `site/`: the static project site (plain HTML, CSS and one script; no build step). Pushing changes under `site/` to `main` deploys it to GitHub Pages.
