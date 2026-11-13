@@ -1,0 +1,99 @@
+[
+	{
+		"id": "1a1876f182df762564dfafaf5e0de4f9cb27be51dde6750a46e4bc063e09ae3f",
+		"pubkey": "53836ca9bd353107022b0cf5d8240304c1dec23b1cef93e18291c7f38af4d169",
+		"created_at": 1763000000,
+		"kind": 4680,
+		"tags": [
+			[
+				"session",
+				"s\"1"
+			],
+			[
+				"seq",
+				"1"
+			],
+			[
+				"role",
+				"agent"
+			]
+		],
+		"content": "plain text",
+		"sig": "1930a21a402d7ece63dd9412224a11541157365387a04b0e521d992e0f0dfd5a6fd2ce55a9a2207b63da565d76b3247f7fb1a25616f4136446dc0c4e8b6a8493"
+	},
+	{
+		"id": "20b989d7ccb8f46c64ce0fbba737f81917231c54cf7b50c9ca1a9bc41650c961",
+		"pubkey": "53836ca9bd353107022b0cf5d8240304c1dec23b1cef93e18291c7f38af4d169",
+		"created_at": 1763000001,
+		"kind": 4680,
+		"tags": [
+			[
+				"session",
+				"s\"1"
+			],
+			[
+				"seq",
+				"1"
+			],
+			[
+				"role",
+				"agent"
+			]
+		],
+		"content": "line one\nline two\ttabbed \"quoted\" back\\slash\r\n",
+		"sig": "9fc18e057a4e03d725f1f21bdd55abdd599736a3101cafd9b7a0dd86589b1f75c77289edaffebf3c16e50d7b2b2e41be027dc0e250d78bc27d439f50b4feb71d"
+	},
+	{
+		"id": "47681873215b5ca08eb56bada1dbd0d07d4af3cc7817bf179e1ca187ebcd6c8d",
+		"pubkey": "53836ca9bd353107022b0cf5d8240304c1dec23b1cef93e18291c7f38af4d169",
+		"created_at": 1763000002,
+		"kind": 4680,
+		"tags": [
+			[
+				"session",
+				"s\"1"
+			],
+			[
+				"seq",
+				"1"
+			],
+			[
+				"role",
+				"agent"
+			]
+		],
+		"content": "\u003cscript\u003e\u0026amp; html-ish\u003c/script\u003e",
+		"sig": "d0498ac635b10fa74c231acdcd2b2dfd3105174db40e49f0e9d1e76030fa0f99af7532f7173ad67595837f57d9116b39de4421d11efd8e16217605b1e8173ee6"
+	},
+	{
+		"id": "b97edeedd46369e640c5ca06fd2a1c919376f261afaa310be46ee8832d32dc50",
+		"pubkey": "53836ca9bd353107022b0cf5d8240304c1dec23b1cef93e18291c7f38af4d169",
+		"created_at": 1763000003,
+		"kind": 4680,
+		"tags": [
+			[
+				"session",
+				"s\"1"
+			],
+			[
+				"seq",
+				"1"
+			],
+			[
+				"role",
+				"agent"
+			]
+		],
+		"content": "unicode: café 世界 🧭 separators \u2028 \u2029 control \u0001 \b \f",
+		"sig": "7012eab0d4e9040542e0ae9e0572ddc3a8e583fc8eb1981576aa1a1ec648e0d3440d91251f672a5174b280205c96d379d3c58afbbbbf0cd092ee036c232a142b"
+	},
+	{
+		"id": "e30f07f53c0bf1915086fadd5c732559e0b8bbc03180095627ddfe8f5dd98716",
+		"pubkey": "53836ca9bd353107022b0cf5d8240304c1dec23b1cef93e18291c7f38af4d169",
+		"created_at": 1763000004,
+		"kind": 4680,
+		"tags": [],
+		"content": "",
+		"sig": "23bf3cd0e9449ef724a679a4c5c2e35b77428728a8d3df9df20dab095904a821fd2e64696f8dc633aaa2ad9962ab23cf5cff810113b78e58a5874bbada2038d0"
+	}
+]

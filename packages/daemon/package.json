@@ -11,6 +11,7 @@
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@hono/node-server": "^1.19.0",
     "@tower/core": "*",
+    "@tower/provenance": "*",
     "hono": "^4.10.0"
   }
 }
